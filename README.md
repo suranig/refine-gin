@@ -2,6 +2,15 @@
 
 Refine-Gin is a library that integrates the Gin framework with Refine.js, enabling rapid development of RESTful APIs compatible with Refine.js conventions.
 
+## Dependencies
+
+This library integrates the following technologies:
+
+- [Gin](https://github.com/gin-gonic/gin) - A high-performance HTTP web framework written in Go
+- [Refine](https://refine.dev/) - A React-based framework for building data-intensive applications
+- [JWT-Go](https://github.com/golang-jwt/jwt) - A Go implementation of JSON Web Tokens
+- [GORM](https://gorm.io/) - The fantastic ORM library for Go
+
 ## Features
 
 - Automatic generation of REST endpoints based on resource definitions
@@ -182,3 +191,9 @@ The library supports all Refine.js query parameters:
 ## License
 
 MIT
+
+## Contributing
+
+Please see [CONTRIBUTORS.md](CONTRIBUTORS.md) for details on how to contribute to this project.
+
+We welcome contributions from the community!

@@ -134,7 +134,8 @@ func TestGenerateJWTWithStandardClaims(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, token.Valid)
 
-	parsedClaims := token.Claims.(jwt.MapClaims)
+	parsedClaims, ok := token.Claims.(jwt.MapClaims)
+	assert.True(t, ok)
 	assert.Equal(t, "1", parsedClaims["sub"])
 	assert.Equal(t, "John Doe", parsedClaims["name"])
 	assert.Equal(t, "refine-gin", parsedClaims["iss"])
