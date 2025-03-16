@@ -26,8 +26,8 @@ func GenerateListHandler(res resource.Resource, repo repository.Repository) gin.
 		c.JSON(http.StatusOK, gin.H{
 			"data":     data,
 			"total":    total,
-			"page":     options.Paginate.Page,
-			"per_page": options.Paginate.PerPage,
+			"page":     options.Page,
+			"per_page": options.PerPage,
 		})
 	}
 }
