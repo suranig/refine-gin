@@ -23,6 +23,11 @@ type Resource interface {
 	GetFilters() []Filter
 
 	GetMiddlewares() []interface{}
+
+	// Nowe metody związane z relacjami
+	GetRelations() []Relation
+	HasRelation(name string) bool
+	GetRelation(name string) *Relation
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -34,6 +39,7 @@ type ResourceConfig struct {
 	DefaultSort *Sort
 	Filters     []Filter
 	Middlewares []interface{}
+	Relations   []Relation
 }
 
 // DefaultResource implements the Resource interface
@@ -45,6 +51,7 @@ type DefaultResource struct {
 	DefaultSort *Sort
 	Filters     []Filter
 	Middlewares []interface{}
+	Relations   []Relation
 }
 
 func (r *DefaultResource) GetName() string {
@@ -92,6 +99,12 @@ func NewResource(config ResourceConfig) Resource {
 		fields = GenerateFieldsFromModel(config.Model)
 	}
 
+	// Extract relations from model if not provided
+	relations := config.Relations
+	if len(relations) == 0 {
+		relations = ExtractRelationsFromModel(config.Model)
+	}
+
 	return &DefaultResource{
 		Name:        config.Name,
 		Model:       config.Model,
@@ -100,6 +113,7 @@ func NewResource(config ResourceConfig) Resource {
 		DefaultSort: config.DefaultSort,
 		Filters:     config.Filters,
 		Middlewares: config.Middlewares,
+		Relations:   relations,
 	}
 }
 
@@ -192,4 +206,26 @@ func ParseFieldTag(field *Field, tag string) {
 
 func ExtractFieldsFromModel(model interface{}) []Field {
 	return GenerateFieldsFromModel(model)
+}
+
+func (r *DefaultResource) GetRelations() []Relation {
+	return r.Relations
+}
+
+func (r *DefaultResource) HasRelation(name string) bool {
+	for _, relation := range r.Relations {
+		if relation.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *DefaultResource) GetRelation(name string) *Relation {
+	for _, relation := range r.Relations {
+		if relation.Name == name {
+			return &relation
+		}
+	}
+	return nil
 }

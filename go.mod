@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.15.5
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/stretchr/testify v1.8.4
 	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gorm v1.25.5
