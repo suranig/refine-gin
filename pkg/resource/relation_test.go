@@ -231,13 +231,13 @@ func TestInferRelationFromField(t *testing.T) {
 }
 
 func TestIncludeRelations(t *testing.T) {
-	// Skip this test for now
-	t.Skip("Skipping TestIncludeRelations until we can fix the mock setup")
-
 	// Create a mock gin context
 	gin.SetMode(gin.TestMode)
+
+	// Test with no include parameter (should return default includes)
 	c, _ := gin.CreateTestContext(nil)
-	c.Request, _ = http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequest("GET", "/", nil)
+	c.Request = req
 
 	// Create a mock resource
 	res := new(MockResource)
@@ -260,24 +260,50 @@ func TestIncludeRelations(t *testing.T) {
 
 	// Setup expectations
 	res.On("GetRelations").Return(relations)
-	res.On("HasRelation", mock.Anything).Return(func(name string) bool {
-		return name == "Posts" || name == "Profile"
-	})
+
+	// Ważne: HasRelation musi być wywoływane z dokładnymi parametrami, które będą używane w funkcji
+	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
+		return name == "Posts"
+	})).Return(true)
+
+	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
+		return name == "Profile"
+	})).Return(true)
+
+	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
+		return name == "Invalid"
+	})).Return(false)
 
 	// Test with no include parameter (should return default includes)
 	includes := IncludeRelations(c, res)
+	t.Logf("Default includes: %v", includes)
 	assert.Len(t, includes, 1)
 	assert.Equal(t, "Profile", includes[0])
 
 	// Test with include parameter
-	c.Request, _ = http.NewRequest("GET", "/?include=Posts,Profile", nil)
-	includes = IncludeRelations(c, res)
+	c2, _ := gin.CreateTestContext(nil)
+	req2, _ := http.NewRequest("GET", "/?include=Posts,Profile", nil)
+	c2.Request = req2
+	c2.Request.URL.RawQuery = "include=Posts,Profile"
+
+	includes = IncludeRelations(c2, res)
+	t.Logf("Includes with parameter 'Posts,Profile': %v", includes)
+	t.Logf("Query parameter 'include': %v", c2.Query("include"))
+
 	assert.Len(t, includes, 2)
-	assert.ElementsMatch(t, []string{"Posts", "Profile"}, includes)
+	assert.Contains(t, includes, "Posts")
+	assert.Contains(t, includes, "Profile")
 
 	// Test with invalid include parameter
-	c.Request, _ = http.NewRequest("GET", "/?include=Invalid,Profile", nil)
-	includes = IncludeRelations(c, res)
+	c3, _ := gin.CreateTestContext(nil)
+	req3, _ := http.NewRequest("GET", "/?include=Invalid,Profile", nil)
+	c3.Request = req3
+	c3.Request.URL.RawQuery = "include=Invalid,Profile"
+
+	includes = IncludeRelations(c3, res)
+	t.Logf("Includes with parameter 'Invalid,Profile': %v", includes)
+	t.Logf("Query parameter 'include': %v", c3.Query("include"))
+
 	assert.Len(t, includes, 1)
 	assert.Equal(t, "Profile", includes[0])
 }
