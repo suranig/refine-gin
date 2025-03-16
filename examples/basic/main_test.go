@@ -1,4 +1,4 @@
-package main
+package main_test
 
 import (
 	"bytes"
@@ -72,11 +72,12 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Setup integration test environment
 func setupIntegrationTest() (*gin.Engine, *gorm.DB) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 
-	// Setup in-memory SQLite database
+	// Setup SQLite in-memory database
 	db, _ := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	db.AutoMigrate(&User{})
 
@@ -90,7 +91,10 @@ func setupIntegrationTest() (*gin.Engine, *gorm.DB) {
 		db.Create(&user)
 	}
 
-	// Setup resource and repository
+	// Create repository
+	userRepo := &UserRepository{db: db}
+
+	// Create resource
 	userResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "users",
 		Model: User{},
@@ -101,9 +105,11 @@ func setupIntegrationTest() (*gin.Engine, *gorm.DB) {
 			resource.OperationUpdate,
 			resource.OperationDelete,
 		},
+		DefaultSort: &resource.Sort{
+			Field: "id",
+			Order: string(query.SortOrderAsc),
+		},
 	})
-
-	userRepo := &UserRepository{db: db}
 
 	// Register resource
 	api := r.Group("/api")
@@ -154,6 +160,7 @@ func TestIntegrationGetUser(t *testing.T) {
 	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "1", data["id"])
 	assert.Equal(t, "John Doe", data["name"])
+	assert.Equal(t, "john@example.com", data["email"])
 }
 
 func TestIntegrationCreateUser(t *testing.T) {
@@ -161,9 +168,8 @@ func TestIntegrationCreateUser(t *testing.T) {
 
 	// Create request
 	newUser := User{
-		ID:    "3",
-		Name:  "Bob Johnson",
-		Email: "bob@example.com",
+		Name:  "New User",
+		Email: "new@example.com",
 	}
 
 	body, _ := json.Marshal(newUser)
@@ -181,14 +187,9 @@ func TestIntegrationCreateUser(t *testing.T) {
 
 	assert.Contains(t, response, "data")
 	data := response["data"].(map[string]interface{})
-	assert.Equal(t, "3", data["id"])
-	assert.Equal(t, "Bob Johnson", data["name"])
-
-	// Verify user was created
-	req, _ = http.NewRequest("GET", "/api/users/3", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, data["id"])
+	assert.Equal(t, "New User", data["name"])
+	assert.Equal(t, "new@example.com", data["email"])
 }
 
 func TestIntegrationUpdateUser(t *testing.T) {

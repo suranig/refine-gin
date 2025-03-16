@@ -45,12 +45,6 @@ func (m *MockRepository) Delete(ctx context.Context, id interface{}) error {
 	return args.Error(0)
 }
 
-// Test model
-type TestModel struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 // Mock resource for testing
 type MockResource struct {
 	mock.Mock
@@ -99,33 +93,70 @@ func (m *MockResource) GetMiddlewares() []interface{} {
 	return args.Get(0).([]interface{})
 }
 
-func setupTest() (*gin.Engine, *MockRepository, *MockResource) {
+// Mock DTO provider for testing
+type MockDTOProvider struct {
+	mock.Mock
+}
+
+func (m *MockDTOProvider) GetCreateDTO() interface{} {
+	args := m.Called()
+	return args.Get(0)
+}
+
+func (m *MockDTOProvider) GetUpdateDTO() interface{} {
+	args := m.Called()
+	return args.Get(0)
+}
+
+func (m *MockDTOProvider) GetResponseDTO() interface{} {
+	args := m.Called()
+	return args.Get(0)
+}
+
+func (m *MockDTOProvider) TransformToModel(dto interface{}) (interface{}, error) {
+	args := m.Called(dto)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockDTOProvider) TransformFromModel(model interface{}) (interface{}, error) {
+	args := m.Called(model)
+	return args.Get(0), args.Error(1)
+}
+
+// Test model
+type TestModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Setup test environment
+func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	mockRepo := new(MockRepository)
 	mockResource := new(MockResource)
+	mockDTOProvider := new(MockDTOProvider)
 
-	// Setup default resource behavior
+	// Setup resource
 	mockResource.On("GetName").Return("tests")
 	mockResource.On("GetModel").Return(TestModel{})
 	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "string", Filterable: true},
-		{Name: "name", Type: "string", Filterable: true, Searchable: true},
+		{Name: "id", Type: "string"},
+		{Name: "name", Type: "string"},
 	})
-	mockResource.On("GetDefaultSort").Return(nil)
 
-	return r, mockRepo, mockResource
+	return r, mockRepo, mockResource, mockDTOProvider
 }
 
-func TestGenerateListHandler(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+func TestListHandler(t *testing.T) {
+	r, mockRepo, mockResource, _ := setupTest()
 
-	// Setup mock repository response
-	testData := []TestModel{
+	// Setup mock response
+	mockData := []TestModel{
 		{ID: "1", Name: "Test 1"},
 		{ID: "2", Name: "Test 2"},
 	}
-	mockRepo.On("List", mock.Anything, mock.Anything).Return(testData, int64(2), nil)
+	mockRepo.On("List", mock.Anything, mock.Anything).Return(mockData, int64(2), nil)
 
 	// Register handler
 	r.GET("/tests", GenerateListHandler(mockResource, mockRepo))
@@ -147,12 +178,12 @@ func TestGenerateListHandler(t *testing.T) {
 	assert.Equal(t, float64(2), response["total"])
 }
 
-func TestGenerateGetHandler(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+func TestGetHandler(t *testing.T) {
+	r, mockRepo, mockResource, _ := setupTest()
 
-	// Setup mock repository response
-	testData := TestModel{ID: "1", Name: "Test 1"}
-	mockRepo.On("Get", mock.Anything, "1").Return(testData, nil)
+	// Setup mock response
+	mockData := TestModel{ID: "1", Name: "Test 1"}
+	mockRepo.On("Get", mock.Anything, "1").Return(mockData, nil)
 
 	// Register handler
 	r.GET("/tests/:id", GenerateGetHandler(mockResource, mockRepo))
@@ -170,18 +201,30 @@ func TestGenerateGetHandler(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Contains(t, response, "data")
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "1", data["id"])
+	assert.Equal(t, "Test 1", data["name"])
 }
 
-func TestGenerateCreateHandler(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+func TestCreateHandler(t *testing.T) {
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
 
-	// Setup mock repository response
+	// Setup test input
 	testInput := TestModel{Name: "New Test"}
-	testOutput := TestModel{ID: "3", Name: "New Test"}
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(testOutput, nil)
+
+	// Setup mock response
+	mockResult := TestModel{ID: "3", Name: "New Test"}
+
+	// Setup DTO provider
+	mockDTOProvider.On("GetCreateDTO").Return(&TestModel{})
+	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testInput, nil)
+	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(mockResult, nil)
+
+	// Setup repository
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(mockResult, nil)
 
 	// Register handler
-	r.POST("/tests", GenerateCreateHandler(mockResource, mockRepo))
+	r.POST("/tests", GenerateCreateHandler(mockResource, mockRepo, mockDTOProvider))
 
 	// Create request
 	body, _ := json.Marshal(testInput)
@@ -198,18 +241,30 @@ func TestGenerateCreateHandler(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Contains(t, response, "data")
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "3", data["id"])
+	assert.Equal(t, "New Test", data["name"])
 }
 
-func TestGenerateUpdateHandler(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+func TestUpdateHandler(t *testing.T) {
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
 
-	// Setup mock repository response
+	// Setup test input
 	testInput := TestModel{Name: "Updated Test"}
-	testOutput := TestModel{ID: "1", Name: "Updated Test"}
-	mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(testOutput, nil)
+
+	// Setup mock response
+	mockResult := TestModel{ID: "1", Name: "Updated Test"}
+
+	// Setup DTO provider
+	mockDTOProvider.On("GetUpdateDTO").Return(&TestModel{})
+	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testInput, nil)
+	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(mockResult, nil)
+
+	// Setup repository
+	mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(mockResult, nil)
 
 	// Register handler
-	r.PUT("/tests/:id", GenerateUpdateHandler(mockResource, mockRepo))
+	r.PUT("/tests/:id", GenerateUpdateHandler(mockResource, mockRepo, mockDTOProvider))
 
 	// Create request
 	body, _ := json.Marshal(testInput)
@@ -226,12 +281,15 @@ func TestGenerateUpdateHandler(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Contains(t, response, "data")
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "1", data["id"])
+	assert.Equal(t, "Updated Test", data["name"])
 }
 
-func TestGenerateDeleteHandler(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+func TestDeleteHandler(t *testing.T) {
+	r, mockRepo, mockResource, _ := setupTest()
 
-	// Setup mock repository response
+	// Setup repository
 	mockRepo.On("Delete", mock.Anything, "1").Return(nil)
 
 	// Register handler
@@ -254,7 +312,7 @@ func TestGenerateDeleteHandler(t *testing.T) {
 }
 
 func TestRegisterResource(t *testing.T) {
-	r, mockRepo, mockResource := setupTest()
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
 
 	// Setup resource operations
 	mockResource.On("HasOperation", resource.OperationList).Return(true)
@@ -263,16 +321,9 @@ func TestRegisterResource(t *testing.T) {
 	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
 	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
 
-	// Setup mock repository responses
-	mockRepo.On("List", mock.Anything, mock.Anything).Return([]TestModel{}, int64(0), nil)
-	mockRepo.On("Get", mock.Anything, mock.Anything).Return(TestModel{}, nil)
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(TestModel{}, nil)
-	mockRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(TestModel{}, nil)
-	mockRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
-
 	// Register resource
 	api := r.Group("/api")
-	RegisterResource(api, mockResource, mockRepo)
+	RegisterResourceWithDTO(api, mockResource, mockRepo, mockDTOProvider)
 
 	// Test routes exist
 	routes := r.Routes()
