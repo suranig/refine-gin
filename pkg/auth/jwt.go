@@ -113,24 +113,24 @@ func GenerateJWT(config JWTConfig, claims jwt.Claims) (string, error) {
 func GenerateJWTWithStandardClaims(config JWTConfig, subject string, customClaims map[string]interface{}) (string, error) {
 	now := time.Now()
 
-	// Create standard claims
-	claims := jwt.RegisteredClaims{
-		Subject:   subject,
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(config.ExpirationTime)),
-		Issuer:    config.Issuer,
-		Audience:  jwt.ClaimStrings{config.Audience},
+	// Utwórz MapClaims zamiast RegisteredClaims
+	claims := jwt.MapClaims{
+		"sub": subject,
+		"iat": now.Unix(),
+		"exp": now.Add(config.ExpirationTime).Unix(),
+		"iss": config.Issuer,
+		"aud": config.Audience,
 	}
 
-	// Create token with standard claims
+	// Dodaj niestandardowe claims
+	for key, value := range customClaims {
+		claims[key] = value
+	}
+
+	// Utwórz token z claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Add custom claims
-	for key, value := range customClaims {
-		token.Claims.(jwt.MapClaims)[key] = value
-	}
-
-	// Sign token with secret
+	// Podpisz token kluczem tajnym
 	tokenString, err := token.SignedString([]byte(config.Secret))
 	if err != nil {
 		return "", err
