@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -24,7 +25,6 @@ type Resource interface {
 
 	GetMiddlewares() []interface{}
 
-	// Nowe metody związane z relacjami
 	GetRelations() []Relation
 	HasRelation(name string) bool
 	GetRelation(name string) *Relation
@@ -227,5 +227,74 @@ func (r *DefaultResource) GetRelation(name string) *Relation {
 			return &relation
 		}
 	}
+	return nil
+}
+
+// CreateSliceOfType tworzy pustą tablicę elementów tego samego typu co model
+func CreateSliceOfType(model interface{}) interface{} {
+	modelType := reflect.TypeOf(model)
+
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	sliceType := reflect.SliceOf(modelType)
+	slice := reflect.MakeSlice(sliceType, 0, 0)
+
+	slicePtr := reflect.New(sliceType)
+	slicePtr.Elem().Set(slice)
+
+	return slicePtr.Interface()
+}
+
+// CreateInstanceOfType tworzy nowy element tego samego typu co model
+func CreateInstanceOfType(model interface{}) interface{} {
+	modelType := reflect.TypeOf(model)
+
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	instance := reflect.New(modelType)
+
+	return instance.Interface()
+}
+
+func SetID(obj interface{}, id interface{}) error {
+	val := reflect.ValueOf(obj)
+
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	idField := val.FieldByName("ID")
+	if !idField.IsValid() {
+		return nil
+	}
+
+	idValue := reflect.ValueOf(id)
+	if idValue.Type() != idField.Type() {
+		switch idField.Kind() {
+		case reflect.String:
+			idField.SetString(fmt.Sprintf("%v", id))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			intVal, err := strconv.ParseInt(fmt.Sprintf("%v", id), 10, 64)
+			if err != nil {
+				return err
+			}
+			idField.SetInt(intVal)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			uintVal, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
+			if err != nil {
+				return err
+			}
+			idField.SetUint(uintVal)
+		default:
+			return fmt.Errorf("nie można skonwertować ID do typu %s", idField.Type())
+		}
+	} else {
+		idField.Set(idValue)
+	}
+
 	return nil
 }
