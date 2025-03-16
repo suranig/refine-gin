@@ -6,16 +6,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// QueryOptions zawiera wszystkie opcje zapytania
+// QueryOptions zawiera opcje zapytania
 type QueryOptions struct {
 	Filters  []FilterOption
 	Sort     SortOption
 	Paginate PaginateOption
+	Resource resource.Resource
 }
 
-// NewQueryOptions tworzy nowe opcje zapytania z kontekstu Gin i zasobu
+// NewQueryOptions tworzy nowe opcje zapytania na podstawie kontekstu Gin
 func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
-	// Przygotowanie konfiguracji filtrów
+	// Pobierz filtry
+	var filters []FilterOption
+
+	// Pobierz pola, które można filtrować
 	var filterFields []string
 	for _, field := range res.GetFields() {
 		if field.Filterable {
@@ -23,35 +27,26 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 		}
 	}
 
-	// Znajdź domyślne pole wyszukiwania
-	defaultField := ""
+	// Pobierz domyślne pole wyszukiwania
+	var defaultSearchField string
 	for _, field := range res.GetFields() {
 		if field.Searchable {
-			defaultField = field.Name
+			defaultSearchField = field.Name
 			break
 		}
 	}
 
-	// Przygotowanie konfiguracji filtrów
+	// Utwórz konfigurację filtrów
 	filterConfig := ResourceFilterConfig{
-		Fields: filterFields,
-		Operators: map[string]string{
-			"eq":         "=",
-			"neq":        "!=",
-			"gt":         ">",
-			"gte":        ">=",
-			"lt":         "<",
-			"lte":        "<=",
-			"like":       "LIKE",
-			"contains":   "LIKE",
-			"startswith": "LIKE",
-			"endswith":   "LIKE",
-			"null":       "IS NULL",
-		},
-		DefaultField: defaultField,
+		Fields:       filterFields,
+		Operators:    map[string]string{}, // Można dodać mapowanie operatorów
+		DefaultField: defaultSearchField,
 	}
 
-	// Przygotowanie domyślnego sortowania
+	// Ekstrahuj filtry z parametrów zapytania
+	filters = ExtractFilters(c, filterConfig)
+
+	// Pobierz sortowanie
 	var defaultSort *SortOption
 	if res.GetDefaultSort() != nil {
 		defaultSort = &SortOption{
@@ -59,37 +54,57 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 			Order: res.GetDefaultSort().Order,
 		}
 	}
+	sort := ExtractSort(c, defaultSort)
+
+	// Pobierz paginację
+	paginate := ExtractPaginate(c)
 
 	return QueryOptions{
-		Filters:  ExtractFilters(c, filterConfig),
-		Sort:     ExtractSort(c, defaultSort),
-		Paginate: ExtractPaginate(c),
+		Filters:  filters,
+		Sort:     sort,
+		Paginate: paginate,
+		Resource: res,
 	}
 }
 
-// Apply stosuje wszystkie opcje zapytania do zapytania GORM
-func (qo QueryOptions) Apply(query *gorm.DB) *gorm.DB {
-	query = ApplyFilters(query, qo.Filters)
-	query = ApplySort(query, qo.Sort)
+// Apply stosuje opcje zapytania do zapytania GORM
+func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
+	// Zastosuj filtry
+	query = ApplyFilters(query, o.Filters)
+
+	// Zastosuj sortowanie
+	query = ApplySort(query, o.Sort)
+
+	// Zastosuj paginację
+	query = ApplyPaginate(query, o.Paginate)
+
 	return query
 }
 
-// ApplyWithPagination stosuje opcje zapytania wraz z paginacją i zwraca wyniki
-func (qo QueryOptions) ApplyWithPagination(query *gorm.DB, result interface{}) (int64, error) {
+// ApplyWithPagination stosuje opcje zapytania do zapytania GORM i zwraca całkowitą liczbę rekordów
+func (o QueryOptions) ApplyWithPagination(query *gorm.DB, dest interface{}) (int64, error) {
 	var total int64
 
-	// Zastosuj filtry i sortowanie
-	query = ApplyFilters(query, qo.Filters)
-	query = ApplySort(query, qo.Sort)
+	// Klonuj zapytanie do liczenia
+	countQuery := query
 
-	// Pobierz całkowitą liczbę wyników
-	if err := query.Count(&total).Error; err != nil {
+	// Zastosuj filtry do obu zapytań
+	query = ApplyFilters(query, o.Filters)
+	countQuery = ApplyFilters(countQuery, o.Filters)
+
+	// Policz całkowitą liczbę rekordów
+	if err := countQuery.Count(&total).Error; err != nil {
 		return 0, err
 	}
 
-	// Zastosuj paginację i pobierz wyniki
-	query = ApplyPaginate(query, qo.Paginate)
-	if err := query.Find(result).Error; err != nil {
+	// Zastosuj sortowanie
+	query = ApplySort(query, o.Sort)
+
+	// Zastosuj paginację
+	query = ApplyPaginate(query, o.Paginate)
+
+	// Wykonaj zapytanie
+	if err := query.Find(dest).Error; err != nil {
 		return 0, err
 	}
 

@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/suranig/refine-gin/pkg/dto"
 	"github.com/suranig/refine-gin/pkg/handler"
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/resource"
@@ -52,6 +55,12 @@ func (r *UserRepository) Get(ctx context.Context, id interface{}) (interface{}, 
 
 func (r *UserRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
 	user := data.(*User)
+
+	// Generuj ID, jeśli nie zostało podane
+	if user.ID == "" {
+		user.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+
 	if err := r.db.Create(user).Error; err != nil {
 		return nil, err
 	}
@@ -73,12 +82,13 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 }
 
 // Setup integration test environment
-func setupIntegrationTest() (*gin.Engine, *gorm.DB) {
+func setupIntegrationTest(t *testing.T) (*gin.Engine, *gorm.DB) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 
 	// Setup SQLite in-memory database
-	db, _ := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	dbName := fmt.Sprintf("file::memory:test_%d", time.Now().UnixNano())
+	db, _ := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
 	db.AutoMigrate(&User{})
 
 	// Create test data
@@ -111,15 +121,20 @@ func setupIntegrationTest() (*gin.Engine, *gorm.DB) {
 		},
 	})
 
+	// Create dto provider
+	dtoProvider := &dto.DefaultDTOProvider{
+		Model: &User{},
+	}
+
 	// Register resource
 	api := r.Group("/api")
-	handler.RegisterResource(api, userResource, userRepo)
+	handler.RegisterResourceWithDTO(api, userResource, userRepo, dtoProvider)
 
 	return r, db
 }
 
 func TestIntegrationListUsers(t *testing.T) {
-	r, _ := setupIntegrationTest()
+	r, _ := setupIntegrationTest(t)
 
 	// Create request
 	req, _ := http.NewRequest("GET", "/api/users", nil)
@@ -142,7 +157,7 @@ func TestIntegrationListUsers(t *testing.T) {
 }
 
 func TestIntegrationGetUser(t *testing.T) {
-	r, _ := setupIntegrationTest()
+	r, _ := setupIntegrationTest(t)
 
 	// Create request
 	req, _ := http.NewRequest("GET", "/api/users/1", nil)
@@ -164,10 +179,13 @@ func TestIntegrationGetUser(t *testing.T) {
 }
 
 func TestIntegrationCreateUser(t *testing.T) {
-	r, _ := setupIntegrationTest()
+	r, _ := setupIntegrationTest(t)
 
 	// Create request
-	newUser := User{
+	newUser := struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}{
 		Name:  "New User",
 		Email: "new@example.com",
 	}
@@ -193,7 +211,7 @@ func TestIntegrationCreateUser(t *testing.T) {
 }
 
 func TestIntegrationUpdateUser(t *testing.T) {
-	r, _ := setupIntegrationTest()
+	r, _ := setupIntegrationTest(t)
 
 	// Create request
 	updatedUser := User{
@@ -225,7 +243,7 @@ func TestIntegrationUpdateUser(t *testing.T) {
 }
 
 func TestIntegrationDeleteUser(t *testing.T) {
-	r, _ := setupIntegrationTest()
+	r, _ := setupIntegrationTest(t)
 
 	// Create request
 	req, _ := http.NewRequest("DELETE", "/api/users/1", nil)

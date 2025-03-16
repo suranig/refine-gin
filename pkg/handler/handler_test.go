@@ -144,6 +144,8 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 		{Name: "id", Type: "string"},
 		{Name: "name", Type: "string"},
 	})
+	mockResource.On("GetDefaultSort").Return(nil)
+	mockResource.On("GetFilters").Return([]resource.Filter{})
 
 	return r, mockRepo, mockResource, mockDTOProvider
 }
