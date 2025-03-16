@@ -9,7 +9,7 @@ bin/
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool
+# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 coverage.html
 
@@ -19,7 +19,7 @@ vendor/
 # Go workspace file
 go.work
 
-# IDE specific files
+# IDE files
 .idea/
 .vscode/
 *.swp
@@ -29,6 +29,12 @@ go.work
 # SQLite database files
 *.db
 *.db-journal
+
+# SQLite memory test files
+:memory:test_*
+
+# Dodatkowe pliki testowe w pamięci
+file::memory:*
 
 # Log files
 *.log
