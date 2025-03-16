@@ -16,11 +16,11 @@ build:
 
 test:
 	@echo "Running tests..."
-	@$(GOTEST) -v $(GO_PACKAGES)
+	@$(GOTEST) -count=1 $(GO_PACKAGES)
 
 test-coverage:
 	@echo "Running tests with coverage..."
-	@$(GOTEST) -coverprofile=$(COVERAGE_FILE) $(GO_PACKAGES)
+	@$(GOTEST) -count=1 -coverprofile=$(COVERAGE_FILE) $(GO_PACKAGES)
 	@$(GOCOVER) -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
 	@echo "Coverage report generated at $(COVERAGE_HTML)"
 	@$(GOCOVER) -func=$(COVERAGE_FILE)
