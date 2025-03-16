@@ -27,7 +27,8 @@ test-coverage:
 
 lint:
 	@echo "Running linter..."
-	@$(GOLINT) run
+	@go vet ./pkg/... ./examples/...
+	@go fmt ./pkg/... ./examples/...
 
 clean:
 	@echo "Cleaning build artifacts..."
