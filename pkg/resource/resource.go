@@ -2,36 +2,30 @@ package resource
 
 import (
 	"reflect"
+	"strconv"
+	"strings"
 )
 
-// Resource reprezentuje zasób API
+// Resource defines the interface for API resources
 type Resource interface {
-	// GetName zwraca nazwę zasobu
 	GetName() string
 
-	// GetModel zwraca model zasobu
 	GetModel() interface{}
 
-	// GetFields zwraca definicje pól zasobu
 	GetFields() []Field
 
-	// GetOperations zwraca dozwolone operacje na zasobie
 	GetOperations() []Operation
 
-	// HasOperation sprawdza, czy zasób obsługuje daną operację
 	HasOperation(op Operation) bool
 
-	// GetDefaultSort zwraca domyślne sortowanie
 	GetDefaultSort() *Sort
 
-	// GetFilters zwraca dozwolone filtry
 	GetFilters() []Filter
 
-	// GetMiddlewares zwraca middleware dla zasobu
-	GetMiddlewares() []interface{} // gin.HandlerFunc
+	GetMiddlewares() []interface{}
 }
 
-// ResourceConfig zawiera konfigurację zasobu
+// ResourceConfig contains configuration for creating a resource
 type ResourceConfig struct {
 	Name        string
 	Model       interface{}
@@ -39,66 +33,38 @@ type ResourceConfig struct {
 	Operations  []Operation
 	DefaultSort *Sort
 	Filters     []Filter
-	Middlewares []interface{} // gin.HandlerFunc
+	Middlewares []interface{}
 }
 
-// resource implementuje interfejs Resource
-type resource struct {
-	name        string
-	model       interface{}
-	fields      []Field
-	operations  []Operation
-	defaultSort *Sort
-	filters     []Filter
-	middlewares []interface{}
+// DefaultResource implements the Resource interface
+type DefaultResource struct {
+	Name        string
+	Model       interface{}
+	Fields      []Field
+	Operations  []Operation
+	DefaultSort *Sort
+	Filters     []Filter
+	Middlewares []interface{}
 }
 
-// NewResource tworzy nowy zasób
-func NewResource(config ResourceConfig) Resource {
-	// Walidacja konfiguracji
-	if config.Name == "" {
-		panic("Resource name cannot be empty")
-	}
-
-	if config.Model == nil {
-		panic("Resource model cannot be nil")
-	}
-
-	// Jeśli nie podano pól, wygeneruj je automatycznie z modelu
-	fields := config.Fields
-	if len(fields) == 0 {
-		fields = generateFieldsFromModel(config.Model)
-	}
-
-	return &resource{
-		name:        config.Name,
-		model:       config.Model,
-		fields:      fields,
-		operations:  config.Operations,
-		defaultSort: config.DefaultSort,
-		filters:     config.Filters,
-		middlewares: config.Middlewares,
-	}
+func (r *DefaultResource) GetName() string {
+	return r.Name
 }
 
-func (r *resource) GetName() string {
-	return r.name
+func (r *DefaultResource) GetModel() interface{} {
+	return r.Model
 }
 
-func (r *resource) GetModel() interface{} {
-	return r.model
+func (r *DefaultResource) GetFields() []Field {
+	return r.Fields
 }
 
-func (r *resource) GetFields() []Field {
-	return r.fields
+func (r *DefaultResource) GetOperations() []Operation {
+	return r.Operations
 }
 
-func (r *resource) GetOperations() []Operation {
-	return r.operations
-}
-
-func (r *resource) HasOperation(op Operation) bool {
-	for _, operation := range r.operations {
+func (r *DefaultResource) HasOperation(op Operation) bool {
+	for _, operation := range r.Operations {
 		if operation == op {
 			return true
 		}
@@ -106,20 +72,39 @@ func (r *resource) HasOperation(op Operation) bool {
 	return false
 }
 
-func (r *resource) GetDefaultSort() *Sort {
-	return r.defaultSort
+func (r *DefaultResource) GetDefaultSort() *Sort {
+	return r.DefaultSort
 }
 
-func (r *resource) GetFilters() []Filter {
-	return r.filters
+func (r *DefaultResource) GetFilters() []Filter {
+	return r.Filters
 }
 
-func (r *resource) GetMiddlewares() []interface{} {
-	return r.middlewares
+func (r *DefaultResource) GetMiddlewares() []interface{} {
+	return r.Middlewares
 }
 
-// generateFieldsFromModel generuje definicje pól na podstawie modelu
-func generateFieldsFromModel(model interface{}) []Field {
+// NewResource creates a new resource from configuration
+func NewResource(config ResourceConfig) Resource {
+	// Extract fields from model if not provided
+	fields := config.Fields
+	if len(fields) == 0 {
+		fields = GenerateFieldsFromModel(config.Model)
+	}
+
+	return &DefaultResource{
+		Name:        config.Name,
+		Model:       config.Model,
+		Fields:      fields,
+		Operations:  config.Operations,
+		DefaultSort: config.DefaultSort,
+		Filters:     config.Filters,
+		Middlewares: config.Middlewares,
+	}
+}
+
+// GenerateFieldsFromModel generates field definitions based on the model
+func GenerateFieldsFromModel(model interface{}) []Field {
 	var fields []Field
 
 	modelType := reflect.TypeOf(model)
@@ -130,23 +115,20 @@ func generateFieldsFromModel(model interface{}) []Field {
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
 
-		// Pomijaj pola nieeksportowane
 		if field.PkgPath != "" {
 			continue
 		}
 
-		// Tworzenie definicji pola
 		fieldDef := Field{
 			Name:       field.Name,
 			Type:       field.Type.String(),
-			Filterable: true,  // Domyślnie wszystkie pola są filtrowalne
-			Sortable:   true,  // Domyślnie wszystkie pola są sortowalne
-			Searchable: false, // Domyślnie pola nie są przeszukiwalne
+			Filterable: true,  // By default, all fields are filterable
+			Sortable:   true,  // By default, all fields are sortable
+			Searchable: false, // By default, fields are not searchable
 		}
 
-		// Sprawdzanie tagów
 		if tag, ok := field.Tag.Lookup("refine"); ok {
-			parseFieldTag(&fieldDef, tag)
+			ParseFieldTag(&fieldDef, tag)
 		}
 
 		fields = append(fields, fieldDef)
@@ -155,7 +137,59 @@ func generateFieldsFromModel(model interface{}) []Field {
 	return fields
 }
 
-// parseFieldTag parsuje tag pola
-func parseFieldTag(field *Field, tag string) {
-	// TODO: Implementacja parsowania tagów
+// ParseFieldTag parses the field tag and updates the field definition
+func ParseFieldTag(field *Field, tag string) {
+	parts := strings.Split(tag, ";")
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+
+		switch part {
+		case "filterable":
+			field.Filterable = true
+		case "!filterable":
+			field.Filterable = false
+		case "sortable":
+			field.Sortable = true
+		case "!sortable":
+			field.Sortable = false
+		case "searchable":
+			field.Searchable = true
+		case "!searchable":
+			field.Searchable = false
+		case "required":
+			field.Required = true
+		case "!required":
+			field.Required = false
+		case "unique":
+			field.Unique = true
+		case "!unique":
+			field.Unique = false
+		}
+
+		if strings.HasPrefix(part, "min=") {
+			if value, err := strconv.Atoi(part[4:]); err == nil {
+				if field.Type == "string" {
+					field.Validators = append(field.Validators, StringValidator{MinLength: value})
+				} else if strings.HasPrefix(field.Type, "int") || strings.HasPrefix(field.Type, "float") {
+					field.Validators = append(field.Validators, NumberValidator{Min: float64(value)})
+				}
+			}
+		} else if strings.HasPrefix(part, "max=") {
+			if value, err := strconv.Atoi(part[4:]); err == nil {
+				if field.Type == "string" {
+					field.Validators = append(field.Validators, StringValidator{MaxLength: value})
+				} else if strings.HasPrefix(field.Type, "int") || strings.HasPrefix(field.Type, "float") {
+					field.Validators = append(field.Validators, NumberValidator{Max: float64(value)})
+				}
+			}
+		} else if strings.HasPrefix(part, "pattern=") {
+			pattern := part[8:]
+			field.Validators = append(field.Validators, StringValidator{Pattern: pattern})
+		}
+	}
+}
+
+func ExtractFieldsFromModel(model interface{}) []Field {
+	return GenerateFieldsFromModel(model)
 }

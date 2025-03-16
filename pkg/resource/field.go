@@ -1,6 +1,6 @@
 package resource
 
-// Field reprezentuje pole zasobu
+// Field represents a resource field
 type Field struct {
 	Name       string
 	Type       string
@@ -12,12 +12,12 @@ type Field struct {
 	Validators []Validator
 }
 
-// Validator reprezentuje walidator pola
+// Validator represents a field validator
 type Validator interface {
 	Validate(value interface{}) error
 }
 
-// StringValidator waliduje wartość string
+// StringValidator validates string values
 type StringValidator struct {
 	MinLength int
 	MaxLength int
@@ -25,30 +25,30 @@ type StringValidator struct {
 }
 
 func (v StringValidator) Validate(value interface{}) error {
-	// TODO: Implementacja walidacji
+	// TODO: Implement validation
 	return nil
 }
 
-// NumberValidator waliduje wartość liczbową
+// NumberValidator validates numeric values
 type NumberValidator struct {
 	Min float64
 	Max float64
 }
 
 func (v NumberValidator) Validate(value interface{}) error {
-	// TODO: Implementacja walidacji
+	// TODO: Implement validation
 	return nil
 }
 
-// Filter reprezentuje filtr dla pola
+// Filter defines a filter configuration
 type Filter struct {
 	Field    string
 	Operator string
 	Value    interface{}
 }
 
-// Sort reprezentuje sortowanie po polu
+// Sort defines a sort configuration
 type Sort struct {
 	Field string
-	Order string // "asc" lub "desc"
+	Order string
 }
