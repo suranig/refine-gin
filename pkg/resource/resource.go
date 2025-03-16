@@ -263,13 +263,19 @@ func CreateInstanceOfType(model interface{}) interface{} {
 func SetID(obj interface{}, id interface{}) error {
 	val := reflect.ValueOf(obj)
 
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
+	if val.Kind() != reflect.Ptr {
+		return fmt.Errorf("object must be a pointer")
 	}
+
+	val = val.Elem()
 
 	idField := val.FieldByName("ID")
 	if !idField.IsValid() {
-		return nil
+		return fmt.Errorf("ID field does not exist")
+	}
+
+	if !idField.CanSet() {
+		return fmt.Errorf("ID field cannot be set")
 	}
 
 	idValue := reflect.ValueOf(id)
@@ -290,7 +296,7 @@ func SetID(obj interface{}, id interface{}) error {
 			}
 			idField.SetUint(uintVal)
 		default:
-			return fmt.Errorf("nie można skonwertować ID do typu %s", idField.Type())
+			return fmt.Errorf("cannot convert ID to type %s", idField.Type())
 		}
 	} else {
 		idField.Set(idValue)

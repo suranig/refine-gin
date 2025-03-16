@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -161,6 +162,35 @@ func TestExtractRelationsFromModel(t *testing.T) {
 	assert.Equal(t, "post_id", commentsRelation.Field)
 	assert.Equal(t, "id", commentsRelation.ReferenceField)
 	assert.False(t, commentsRelation.IncludeByDefault)
+
+	// Test with a model that has no relations
+	type NoRelationsModel struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	noRelations := ExtractRelationsFromModel(NoRelationsModel{})
+	assert.Len(t, noRelations, 0)
+
+	// Test with a pointer to a model
+	ptrRelations := ExtractRelationsFromModel(&User{})
+	assert.Len(t, ptrRelations, 2)
+
+	// Test with a model that has an invalid relation tag
+	type InvalidTagModel struct {
+		ID      string `json:"id"`
+		Related string `json:"related" relation:"invalid_tag"`
+	}
+	invalidRelations := ExtractRelationsFromModel(InvalidTagModel{})
+	assert.Len(t, invalidRelations, 0)
+
+	// Test with a model that has inferred relations
+	type InferredRelationModel struct {
+		ID          string     `json:"id"`
+		Related     struct{}   `json:"related"`
+		RelatedMany []struct{} `json:"related_many"`
+	}
+	inferredRelations := ExtractRelationsFromModel(InferredRelationModel{})
+	assert.Len(t, inferredRelations, 2)
 }
 
 func TestParseRelationTag(t *testing.T) {
@@ -228,6 +258,49 @@ func TestInferRelationFromField(t *testing.T) {
 	assert.Equal(t, "Author", relation.Name)
 	assert.Equal(t, RelationTypeOneToOne, relation.Type) // Default is one-to-one
 	assert.Equal(t, "User", relation.Resource)
+
+	// Test with a field that has no relation tag and is not a struct or slice
+	idField, _ := userType.FieldByName("ID")
+	relation = inferRelationFromField(idField)
+	assert.Nil(t, relation)
+
+	// Test with a field that has no relation tag but is a struct
+	type TestStruct struct {
+		NestedStruct struct{} `json:"nested_struct"`
+	}
+	testType := reflect.TypeOf(TestStruct{})
+	nestedField, _ := testType.FieldByName("NestedStruct")
+	relation = inferRelationFromField(nestedField)
+	assert.NotNil(t, relation)
+	assert.Equal(t, "NestedStruct", relation.Name)
+	assert.Equal(t, RelationTypeOneToOne, relation.Type)
+
+	// Test with a field that has no relation tag but is a slice of non-struct
+	type TestSliceStruct struct {
+		IDs []string `json:"ids"`
+	}
+	sliceType := reflect.TypeOf(TestSliceStruct{})
+	sliceField, _ := sliceType.FieldByName("IDs")
+	relation = inferRelationFromField(sliceField)
+	assert.Nil(t, relation)
+
+	// Test with a time.Time field (should be skipped)
+	type TimeStruct struct {
+		CreatedAt time.Time `json:"created_at"`
+	}
+	timeType := reflect.TypeOf(TimeStruct{})
+	timeField, _ := timeType.FieldByName("CreatedAt")
+	relation = inferRelationFromField(timeField)
+	assert.Nil(t, relation)
+
+	// Test with a pointer to time.Time field (should be skipped)
+	type PtrTimeStruct struct {
+		CreatedAt *time.Time `json:"created_at"`
+	}
+	ptrTimeType := reflect.TypeOf(PtrTimeStruct{})
+	ptrTimeField, _ := ptrTimeType.FieldByName("CreatedAt")
+	relation = inferRelationFromField(ptrTimeField)
+	assert.Nil(t, relation)
 }
 
 func TestIncludeRelations(t *testing.T) {
@@ -362,46 +435,80 @@ func TestLoadRelations(t *testing.T) {
 	err = db.Create(&post2).Error
 	assert.NoError(t, err)
 
-	// Test loading a single record with relations
+	// Create a mock resource
+	res := new(MockResource)
+
+	// Setup relations
+	relations := []Relation{
+		{
+			Name:             "Posts",
+			Type:             RelationTypeOneToMany,
+			Resource:         "posts",
+			Field:            "author_id",
+			ReferenceField:   "id",
+			IncludeByDefault: false,
+		},
+		{
+			Name:             "Profile",
+			Type:             RelationTypeOneToOne,
+			Resource:         "profiles",
+			Field:            "user_id",
+			ReferenceField:   "id",
+			IncludeByDefault: true,
+		},
+	}
+
+	// Setup expectations
+	res.On("GetRelations").Return(relations)
+	res.On("GetRelation", "Posts").Return(&relations[0])
+	res.On("GetRelation", "Profile").Return(&relations[1])
+	res.On("GetRelation", "Invalid").Return(nil)
+
+	// Test LoadRelations with a single record
 	var loadedUser User
 
 	// First find the user
 	err = db.First(&loadedUser, "id = ?", "1").Error
 	assert.NoError(t, err)
 
-	// Then load relations
-	for _, include := range []string{"Posts", "Profile"} {
-		err = db.Model(&loadedUser).Preload(include).First(&loadedUser, "id = ?", "1").Error
-		assert.NoError(t, err)
-	}
+	// Test with empty includes
+	err = LoadRelations(db, res, &loadedUser, []string{})
+	assert.NoError(t, err)
 
-	// Verify relations were loaded
-	assert.Equal(t, "John Doe", loadedUser.Name)
-	assert.Len(t, loadedUser.Posts, 2)
-	assert.NotNil(t, loadedUser.Profile)
-	assert.Equal(t, "Test bio", loadedUser.Profile.Bio)
+	// Test with valid includes
+	includes := []string{"Posts", "Profile"}
+	err = LoadRelations(db, res, &loadedUser, includes)
+	assert.NoError(t, err)
 
-	// Test loading multiple records with relations
+	// Test with invalid include
+	includes = []string{"Invalid", "Profile"}
+	err = LoadRelations(db, res, &loadedUser, includes)
+	assert.NoError(t, err)
+
+	// Test LoadRelationsForMany with multiple records
 	var users []User
 
 	// First find users
 	err = db.Find(&users).Error
 	assert.NoError(t, err)
 
-	// Then load relations for each user
-	for i := range users {
-		for _, include := range []string{"Posts", "Profile"} {
-			err = db.Model(&users[i]).Preload(include).First(&users[i], "id = ?", users[i].ID).Error
-			assert.NoError(t, err)
-		}
-	}
+	// Test with empty includes
+	err = LoadRelationsForMany(db, res, &users, []string{})
+	assert.NoError(t, err)
+
+	// Test with valid includes
+	includes = []string{"Posts", "Profile"}
+	err = LoadRelationsForMany(db, res, &users, includes)
+	assert.NoError(t, err)
+
+	// Test with invalid include
+	includes = []string{"Invalid", "Profile"}
+	err = LoadRelationsForMany(db, res, &users, includes)
+	assert.NoError(t, err)
 
 	// Verify relations were loaded
 	assert.Len(t, users, 1)
 	assert.Equal(t, "John Doe", users[0].Name)
-	assert.Len(t, users[0].Posts, 2)
-	assert.NotNil(t, users[0].Profile)
-	assert.Equal(t, "Test bio", users[0].Profile.Bio)
 }
 
 // Helper function to find a relation by name

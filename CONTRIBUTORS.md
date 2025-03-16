@@ -4,7 +4,7 @@ This project exists thanks to all the people who contribute.
 
 ## Core Team
 
-- [Paweł Pilichowski](https://github.com/ppilichowski) - Project Lead & Main Developer
+- [Paweł Pilichowski](https://github.com/suranig) - Project Lead & Main Developer
 
 ## Contributors
 
