@@ -1,0 +1,31 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gosec
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/suranig/refine-gin
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+
+run:
+  timeout: 5m
+  tests: true
+  
