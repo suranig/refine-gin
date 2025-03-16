@@ -93,6 +93,28 @@ func (m *MockResource) GetMiddlewares() []interface{} {
 	return args.Get(0).([]interface{})
 }
 
+func (m *MockResource) GetRelations() []resource.Relation {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []resource.Relation{}
+	}
+	return args.Get(0).([]resource.Relation)
+}
+
+func (m *MockResource) HasRelation(name string) bool {
+	args := m.Called(name)
+	return args.Bool(0)
+}
+
+func (m *MockResource) GetRelation(name string) *resource.Relation {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	relation := args.Get(0).(resource.Relation)
+	return &relation
+}
+
 // Mock DTO provider for testing
 type MockDTOProvider struct {
 	mock.Mock
@@ -146,6 +168,9 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	})
 	mockResource.On("GetDefaultSort").Return(nil)
 	mockResource.On("GetFilters").Return([]resource.Filter{})
+	mockResource.On("GetRelations").Return([]resource.Relation{})
+	mockResource.On("HasRelation", mock.Anything).Return(false)
+	mockResource.On("GetRelation", mock.Anything).Return(nil)
 
 	return r, mockRepo, mockResource, mockDTOProvider
 }
