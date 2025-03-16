@@ -28,29 +28,77 @@ type DTOProvider interface {
 
 // DefaultDTOProvider implements DTOProvider using the same model for all operations
 type DefaultDTOProvider struct {
-	Model interface{}
+	Model       interface{}
+	CreateDTO   interface{}
+	UpdateDTO   interface{}
+	ResponseDTO interface{}
 }
 
 func (p *DefaultDTOProvider) GetCreateDTO() interface{} {
-	return p.Model
+	if p.CreateDTO != nil {
+		return reflect.New(reflect.TypeOf(p.CreateDTO).Elem()).Interface()
+	}
+	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
 }
 
 func (p *DefaultDTOProvider) GetUpdateDTO() interface{} {
-	return p.Model
+	if p.UpdateDTO != nil {
+		return reflect.New(reflect.TypeOf(p.UpdateDTO).Elem()).Interface()
+	}
+	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
 }
 
 func (p *DefaultDTOProvider) GetResponseDTO() interface{} {
-	return p.Model
+	if p.ResponseDTO != nil {
+		return reflect.New(reflect.TypeOf(p.ResponseDTO).Elem()).Interface()
+	}
+	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
 }
 
 func (p *DefaultDTOProvider) TransformToModel(dto interface{}) (interface{}, error) {
-	// For the default provider, DTO is already the model
-	return dto, nil
+	// If DTO is already the model type, return it
+	if reflect.TypeOf(dto) == reflect.TypeOf(p.Model) {
+		return dto, nil
+	}
+
+	// Create a new instance of the model
+	model := reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
+
+	// Copy fields from DTO to model
+	dtoVal := reflect.ValueOf(dto).Elem()
+	modelVal := reflect.ValueOf(model).Elem()
+
+	for i := 0; i < dtoVal.NumField(); i++ {
+		fieldName := dtoVal.Type().Field(i).Name
+		if modelField := modelVal.FieldByName(fieldName); modelField.IsValid() && modelField.CanSet() {
+			modelField.Set(dtoVal.Field(i))
+		}
+	}
+
+	return model, nil
 }
 
 func (p *DefaultDTOProvider) TransformFromModel(model interface{}) (interface{}, error) {
-	// For the default provider, model is already the DTO
-	return model, nil
+	// If no response DTO is defined, return the model
+	if p.ResponseDTO == nil {
+		return model, nil
+	}
+
+	// Create a new instance of the response DTO
+	dto := reflect.New(reflect.TypeOf(p.ResponseDTO).Elem()).Interface()
+
+	// Copy fields from model to DTO
+	modelVal := reflect.ValueOf(model).Elem()
+	dtoVal := reflect.ValueOf(dto).Elem()
+
+	for i := 0; i < dtoVal.NumField(); i++ {
+		fieldName := dtoVal.Type().Field(i).Name
+		if modelField := modelVal.FieldByName(fieldName); modelField.IsValid() {
+			dtoVal.Field(i).Set(modelField)
+		}
+	}
+
+	return dto, nil
 }
 
 // CustomDTOProvider implements DTOProvider with different structures for different operations
