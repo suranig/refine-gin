@@ -49,8 +49,8 @@ const (
 	// Ends with operator (LIKE %value)
 	OperatorEndsWith FilterOperator = "endswith"
 
-	// Is null operator (IS NULL)
-	OperatorIsNull FilterOperator = "null"
+	// Is null operator (IS NULL or IS NOT NULL)
+	OperatorIsNull FilterOperator = "isnull"
 )
 
 // ResourceFilterConfig defines filter configuration for a resource
@@ -61,7 +61,7 @@ type ResourceFilterConfig struct {
 }
 
 // ApplyFilters applies filters to a GORM query
-func ApplyFilters(query *gorm.DB, filters []FilterOption) *gorm.DB {
+func ApplyFilters(query *gorm.DB, filters []Filter) *gorm.DB {
 	for _, filter := range filters {
 		switch filter.Operator {
 		case string(OperatorEqual), "":

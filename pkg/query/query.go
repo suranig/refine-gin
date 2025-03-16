@@ -1,82 +1,112 @@
 package query
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 
-// QueryOptions zawiera opcje zapytania
+// QueryOptions contains options for querying data
 type QueryOptions struct {
-	Filters  []FilterOption
-	Sort     SortOption
-	Paginate PaginateOption
 	Resource resource.Resource
+	Page     int
+	PerPage  int
+	Sort     *resource.Sort
+	Filters  []Filter
+	Search   string
 }
 
-// NewQueryOptions tworzy nowe opcje zapytania na podstawie kontekstu Gin
-func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
-	// Pobierz filtry
-	var filters []FilterOption
+// Filter represents a filter condition
+type Filter struct {
+	Field    string
+	Operator string
+	Value    interface{}
+}
 
-	// Pobierz pola, które można filtrować
-	var filterFields []string
+// ParseQueryOptions parses query options from the request
+func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
+	// Parse pagination
+	page := 1
+	perPage := 10
+
+	if pageStr := c.Query("page"); pageStr != "" {
+		if pageInt, err := strconv.Atoi(pageStr); err == nil && pageInt > 0 {
+			page = pageInt
+		}
+	}
+
+	if perPageStr := c.Query("per_page"); perPageStr != "" {
+		if perPageInt, err := strconv.Atoi(perPageStr); err == nil && perPageInt > 0 {
+			perPage = perPageInt
+		}
+	}
+
+	// Parse sorting
+	sort := res.GetDefaultSort()
+	if sortField := c.Query("sort"); sortField != "" {
+		sortOrder := c.DefaultQuery("order", "asc")
+		sort = &resource.Sort{
+			Field: sortField,
+			Order: sortOrder,
+		}
+	}
+
+	// Parse filters
+	var filters []Filter
 	for _, field := range res.GetFields() {
-		if field.Filterable {
-			filterFields = append(filterFields, field.Name)
+		if !field.Filterable {
+			continue
 		}
-	}
 
-	// Pobierz domyślne pole wyszukiwania
-	var defaultSearchField string
-	for _, field := range res.GetFields() {
-		if field.Searchable {
-			defaultSearchField = field.Name
-			break
+		value := c.Query(field.Name)
+		if value == "" {
+			continue
 		}
+
+		operator := c.DefaultQuery(field.Name+"_operator", "eq")
+		filters = append(filters, Filter{
+			Field:    field.Name,
+			Operator: operator,
+			Value:    value,
+		})
 	}
 
-	// Utwórz konfigurację filtrów
-	filterConfig := ResourceFilterConfig{
-		Fields:       filterFields,
-		Operators:    map[string]string{}, // Można dodać mapowanie operatorów
-		DefaultField: defaultSearchField,
-	}
-
-	// Ekstrahuj filtry z parametrów zapytania
-	filters = ExtractFilters(c, filterConfig)
-
-	// Pobierz sortowanie
-	var defaultSort *SortOption
-	if res.GetDefaultSort() != nil {
-		defaultSort = &SortOption{
-			Field: res.GetDefaultSort().Field,
-			Order: res.GetDefaultSort().Order,
-		}
-	}
-	sort := ExtractSort(c, defaultSort)
-
-	// Pobierz paginację
-	paginate := ExtractPaginate(c)
+	// Parse search
+	search := c.Query("q")
 
 	return QueryOptions{
-		Filters:  filters,
-		Sort:     sort,
-		Paginate: paginate,
 		Resource: res,
+		Page:     page,
+		PerPage:  perPage,
+		Sort:     sort,
+		Filters:  filters,
+		Search:   search,
 	}
 }
 
 // Apply stosuje opcje zapytania do zapytania GORM
 func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
-	// Zastosuj filtry
 	query = ApplyFilters(query, o.Filters)
 
-	// Zastosuj sortowanie
-	query = ApplySort(query, o.Sort)
+	if o.Search != "" {
+		query = ApplySearch(query, o.Resource, o.Search)
+	}
 
-	// Zastosuj paginację
-	query = ApplyPaginate(query, o.Paginate)
+	if o.Sort != nil {
+		sortOption := SortOption{
+			Field: o.Sort.Field,
+			Order: o.Sort.Order,
+		}
+		query = ApplySort(query, sortOption)
+	}
+
+	paginateOption := PaginateOption{
+		Page:    o.Page,
+		PerPage: o.PerPage,
+	}
+	query = ApplyPaginate(query, paginateOption)
 
 	return query
 }
@@ -85,28 +115,74 @@ func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
 func (o QueryOptions) ApplyWithPagination(query *gorm.DB, dest interface{}) (int64, error) {
 	var total int64
 
-	// Klonuj zapytanie do liczenia
 	countQuery := query
 
-	// Zastosuj filtry do obu zapytań
-	query = ApplyFilters(query, o.Filters)
 	countQuery = ApplyFilters(countQuery, o.Filters)
 
-	// Policz całkowitą liczbę rekordów
+	if o.Search != "" {
+		countQuery = ApplySearch(countQuery, o.Resource, o.Search)
+	}
+
 	if err := countQuery.Count(&total).Error; err != nil {
 		return 0, err
 	}
 
-	// Zastosuj sortowanie
-	query = ApplySort(query, o.Sort)
+	query = ApplyFilters(query, o.Filters)
 
-	// Zastosuj paginację
-	query = ApplyPaginate(query, o.Paginate)
+	if o.Search != "" {
+		query = ApplySearch(query, o.Resource, o.Search)
+	}
 
-	// Wykonaj zapytanie
+	if o.Sort != nil {
+		sortOption := SortOption{
+			Field: o.Sort.Field,
+			Order: o.Sort.Order,
+		}
+		query = ApplySort(query, sortOption)
+	}
+
+	paginateOption := PaginateOption{
+		Page:    o.Page,
+		PerPage: o.PerPage,
+	}
+	query = ApplyPaginate(query, paginateOption)
+
 	if err := query.Find(dest).Error; err != nil {
 		return 0, err
 	}
 
 	return total, nil
+}
+
+func ApplySearch(query *gorm.DB, res resource.Resource, search string) *gorm.DB {
+	if search == "" {
+		return query
+	}
+
+	var searchableFields []string
+	for _, field := range res.GetFields() {
+		if field.Searchable {
+			searchableFields = append(searchableFields, field.Name)
+		}
+	}
+
+	if len(searchableFields) == 0 {
+		return query
+	}
+
+	searchValue := "%" + search + "%"
+	for i, field := range searchableFields {
+		if i == 0 {
+			query = query.Where(field+" LIKE ?", searchValue)
+		} else {
+			query = query.Or(field+" LIKE ?", searchValue)
+		}
+	}
+
+	return query
+}
+
+// NewQueryOptions creates a new QueryOptions from a Gin context and resource
+func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
+	return ParseQueryOptions(c, res)
 }
