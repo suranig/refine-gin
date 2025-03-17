@@ -28,6 +28,9 @@ type Resource interface {
 	GetRelations() []Relation
 	HasRelation(name string) bool
 	GetRelation(name string) *Relation
+
+	// Zwraca nazwę pola identyfikatora (domyślnie "ID")
+	GetIDFieldName() string
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -40,6 +43,7 @@ type ResourceConfig struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
+	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
 }
 
 // DefaultResource implements the Resource interface
@@ -52,6 +56,7 @@ type DefaultResource struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
+	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
 }
 
 func (r *DefaultResource) GetName() string {
@@ -91,6 +96,13 @@ func (r *DefaultResource) GetMiddlewares() []interface{} {
 	return r.Middlewares
 }
 
+func (r *DefaultResource) GetIDFieldName() string {
+	if r.IDFieldName == "" {
+		return "ID" // Domyślna nazwa pola identyfikatora
+	}
+	return r.IDFieldName
+}
+
 // NewResource creates a new resource from configuration
 func NewResource(config ResourceConfig) Resource {
 	// Extract fields from model if not provided
@@ -105,6 +117,12 @@ func NewResource(config ResourceConfig) Resource {
 		relations = ExtractRelationsFromModel(config.Model)
 	}
 
+	// Ustaw domyślną nazwę pola identyfikatora, jeśli nie podano
+	idFieldName := config.IDFieldName
+	if idFieldName == "" {
+		idFieldName = "ID"
+	}
+
 	return &DefaultResource{
 		Name:        config.Name,
 		Model:       config.Model,
@@ -114,6 +132,7 @@ func NewResource(config ResourceConfig) Resource {
 		Filters:     config.Filters,
 		Middlewares: config.Middlewares,
 		Relations:   relations,
+		IDFieldName: idFieldName,
 	}
 }
 
@@ -297,6 +316,52 @@ func SetID(obj interface{}, id interface{}) error {
 			idField.SetUint(uintVal)
 		default:
 			return fmt.Errorf("cannot convert ID to type %s", idField.Type())
+		}
+	} else {
+		idField.Set(idValue)
+	}
+
+	return nil
+}
+
+// SetCustomID ustawia wartość pola identyfikatora o podanej nazwie
+func SetCustomID(obj interface{}, id interface{}, idFieldName string) error {
+	val := reflect.ValueOf(obj)
+
+	if val.Kind() != reflect.Ptr {
+		return fmt.Errorf("object must be a pointer")
+	}
+
+	val = val.Elem()
+
+	idField := val.FieldByName(idFieldName)
+	if !idField.IsValid() {
+		return fmt.Errorf("%s field does not exist", idFieldName)
+	}
+
+	if !idField.CanSet() {
+		return fmt.Errorf("%s field cannot be set", idFieldName)
+	}
+
+	idValue := reflect.ValueOf(id)
+	if idValue.Type() != idField.Type() {
+		switch idField.Kind() {
+		case reflect.String:
+			idField.SetString(fmt.Sprintf("%v", id))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			intVal, err := strconv.ParseInt(fmt.Sprintf("%v", id), 10, 64)
+			if err != nil {
+				return err
+			}
+			idField.SetInt(intVal)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			uintVal, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
+			if err != nil {
+				return err
+			}
+			idField.SetUint(uintVal)
+		default:
+			return fmt.Errorf("cannot convert %s to type %s", idFieldName, idField.Type())
 		}
 	} else {
 		idField.Set(idValue)
