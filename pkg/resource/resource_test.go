@@ -577,7 +577,6 @@ func TestGetIDFieldName(t *testing.T) {
 }
 
 func TestSetCustomID(t *testing.T) {
-	// Test dla pola identyfikatora typu string
 	type CustomStringIDStruct struct {
 		UID  string
 		Name string
@@ -587,7 +586,6 @@ func TestSetCustomID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "123", stringObj.UID)
 
-	// Test dla pola identyfikatora typu int
 	type CustomIntIDStruct struct {
 		UID  int
 		Name string
@@ -597,7 +595,6 @@ func TestSetCustomID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 123, intObj.UID)
 
-	// Test dla pola identyfikatora typu uint
 	type CustomUintIDStruct struct {
 		UID  uint
 		Name string
@@ -607,7 +604,6 @@ func TestSetCustomID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint(123), uintObj.UID)
 
-	// Test dla nieistniejącego pola identyfikatora
 	type NoUIDStruct struct {
 		Name string
 	}
@@ -616,7 +612,6 @@ func TestSetCustomID(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "UID field does not exist")
 
-	// Test dla nieprawidłowego typu identyfikatora
 	type InvalidIDStruct struct {
 		UID  []string
 		Name string
