@@ -41,6 +41,7 @@ func TestDefaultAuthorizationProvider(t *testing.T) {
 	// Create a mock resource
 	mockResource := new(MockResource)
 	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetIDFieldName").Return("ID")
 
 	// Create a test context
 	gin.SetMode(gin.TestMode)
@@ -86,6 +87,7 @@ func TestJWTAuthorizationProvider(t *testing.T) {
 	// Create a mock resource
 	mockResource := new(MockResource)
 	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetIDFieldName").Return("ID")
 
 	// Create a test context with claims
 	gin.SetMode(gin.TestMode)
@@ -300,4 +302,9 @@ func (m *MockResource) GetRelation(name string) *resource.Relation {
 	}
 	relation := args.Get(0).(resource.Relation)
 	return &relation
+}
+
+func (m *MockResource) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
 }

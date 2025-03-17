@@ -558,3 +558,66 @@ func TestDefaultResourceHasOperation(t *testing.T) {
 	}
 	assert.False(t, nilResource.HasOperation(OperationList))
 }
+
+func TestGetIDFieldName(t *testing.T) {
+	// Test z domyślną nazwą pola identyfikatora
+	res := NewResource(ResourceConfig{
+		Name:  "tests",
+		Model: TestModel{},
+	})
+	assert.Equal(t, "ID", res.GetIDFieldName())
+
+	// Test z niestandardową nazwą pola identyfikatora
+	res = NewResource(ResourceConfig{
+		Name:        "tests",
+		Model:       TestModel{},
+		IDFieldName: "UID",
+	})
+	assert.Equal(t, "UID", res.GetIDFieldName())
+}
+
+func TestSetCustomID(t *testing.T) {
+	type CustomStringIDStruct struct {
+		UID  string
+		Name string
+	}
+	stringObj := &CustomStringIDStruct{Name: "Test"}
+	err := SetCustomID(stringObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, "123", stringObj.UID)
+
+	type CustomIntIDStruct struct {
+		UID  int
+		Name string
+	}
+	intObj := &CustomIntIDStruct{Name: "Test"}
+	err = SetCustomID(intObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, 123, intObj.UID)
+
+	type CustomUintIDStruct struct {
+		UID  uint
+		Name string
+	}
+	uintObj := &CustomUintIDStruct{Name: "Test"}
+	err = SetCustomID(uintObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, uint(123), uintObj.UID)
+
+	type NoUIDStruct struct {
+		Name string
+	}
+	noIDObj := &NoUIDStruct{Name: "Test"}
+	err = SetCustomID(noIDObj, "123", "UID")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "UID field does not exist")
+
+	type InvalidIDStruct struct {
+		UID  []string
+		Name string
+	}
+	invalidObj := &InvalidIDStruct{Name: "Test"}
+	err = SetCustomID(invalidObj, "123", "UID")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert UID to type")
+}
