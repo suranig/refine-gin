@@ -25,8 +25,10 @@ type RepositoryFactory interface {
 }
 
 type GormRepository struct {
-	DB    *gorm.DB
-	Model interface{}
+	DB          *gorm.DB
+	Model       interface{}
+	Resource    resource.Resource
+	IDFieldName string // Nazwa pola identyfikatora
 }
 
 func (r *GormRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
@@ -43,7 +45,7 @@ func (r *GormRepository) List(ctx context.Context, options query.QueryOptions) (
 func (r *GormRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
 	item := resource.CreateInstanceOfType(r.Model)
 
-	if err := r.DB.First(item, "id = ?", id).Error; err != nil {
+	if err := r.DB.First(item, r.IDFieldName+" = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -60,7 +62,7 @@ func (r *GormRepository) Create(ctx context.Context, data interface{}) (interfac
 
 func (r *GormRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
 	// Ustaw ID w danych, jeśli to możliwe
-	if err := resource.SetID(data, id); err != nil {
+	if err := resource.SetCustomID(data, id, r.IDFieldName); err != nil {
 		return nil, err
 	}
 
@@ -74,7 +76,7 @@ func (r *GormRepository) Update(ctx context.Context, id interface{}, data interf
 func (r *GormRepository) Delete(ctx context.Context, id interface{}) error {
 	item := resource.CreateInstanceOfType(r.Model)
 
-	if err := resource.SetID(item, id); err != nil {
+	if err := resource.SetCustomID(item, id, r.IDFieldName); err != nil {
 		return err
 	}
 
@@ -83,7 +85,18 @@ func (r *GormRepository) Delete(ctx context.Context, id interface{}) error {
 
 func NewGormRepository(db *gorm.DB, model interface{}) Repository {
 	return &GormRepository{
-		DB:    db,
-		Model: model,
+		DB:          db,
+		Model:       model,
+		IDFieldName: "ID", // Domyślna nazwa pola identyfikatora
+	}
+}
+
+// NewGormRepositoryWithResource tworzy nowe repozytorium GORM z zasobem
+func NewGormRepositoryWithResource(db *gorm.DB, res resource.Resource) Repository {
+	return &GormRepository{
+		DB:          db,
+		Model:       res.GetModel(),
+		Resource:    res,
+		IDFieldName: res.GetIDFieldName(),
 	}
 }

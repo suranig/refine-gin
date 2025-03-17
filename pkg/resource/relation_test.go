@@ -79,6 +79,11 @@ func (m *MockResource) GetRelation(name string) *Relation {
 	return args.Get(0).(*Relation)
 }
 
+func (m *MockResource) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 // TestModels for relation tests
 type User struct {
 	ID      string   `json:"id" gorm:"primaryKey"`
@@ -333,6 +338,7 @@ func TestIncludeRelations(t *testing.T) {
 
 	// Setup expectations
 	res.On("GetRelations").Return(relations)
+	res.On("GetIDFieldName").Return("ID")
 
 	// Ważne: HasRelation musi być wywoływane z dokładnymi parametrami, które będą używane w funkcji
 	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
@@ -463,6 +469,7 @@ func TestLoadRelations(t *testing.T) {
 	res.On("GetRelation", "Posts").Return(&relations[0])
 	res.On("GetRelation", "Profile").Return(&relations[1])
 	res.On("GetRelation", "Invalid").Return(nil)
+	res.On("GetIDFieldName").Return("ID")
 
 	// Test LoadRelations with a single record
 	var loadedUser User

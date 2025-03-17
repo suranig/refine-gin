@@ -38,21 +38,36 @@ func (p *DefaultDTOProvider) GetCreateDTO() interface{} {
 	if p.CreateDTO != nil {
 		return reflect.New(reflect.TypeOf(p.CreateDTO).Elem()).Interface()
 	}
-	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
+
+	modelType := reflect.TypeOf(p.Model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+	return reflect.New(modelType).Interface()
 }
 
 func (p *DefaultDTOProvider) GetUpdateDTO() interface{} {
 	if p.UpdateDTO != nil {
 		return reflect.New(reflect.TypeOf(p.UpdateDTO).Elem()).Interface()
 	}
-	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
+
+	modelType := reflect.TypeOf(p.Model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+	return reflect.New(modelType).Interface()
 }
 
 func (p *DefaultDTOProvider) GetResponseDTO() interface{} {
 	if p.ResponseDTO != nil {
 		return reflect.New(reflect.TypeOf(p.ResponseDTO).Elem()).Interface()
 	}
-	return reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
+
+	modelType := reflect.TypeOf(p.Model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+	return reflect.New(modelType).Interface()
 }
 
 func (p *DefaultDTOProvider) TransformToModel(dto interface{}) (interface{}, error) {
@@ -62,7 +77,11 @@ func (p *DefaultDTOProvider) TransformToModel(dto interface{}) (interface{}, err
 	}
 
 	// Create a new instance of the model
-	model := reflect.New(reflect.TypeOf(p.Model).Elem()).Interface()
+	modelType := reflect.TypeOf(p.Model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+	model := reflect.New(modelType).Interface()
 
 	// Copy fields from DTO to model
 	dtoVal := reflect.ValueOf(dto).Elem()
@@ -85,7 +104,11 @@ func (p *DefaultDTOProvider) TransformFromModel(model interface{}) (interface{},
 	}
 
 	// Create a new instance of the response DTO
-	dto := reflect.New(reflect.TypeOf(p.ResponseDTO).Elem()).Interface()
+	dtoType := reflect.TypeOf(p.ResponseDTO)
+	if dtoType.Kind() == reflect.Ptr {
+		dtoType = dtoType.Elem()
+	}
+	dto := reflect.New(dtoType).Interface()
 
 	// Copy fields from model to DTO
 	modelVal := reflect.ValueOf(model).Elem()

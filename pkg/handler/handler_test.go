@@ -115,6 +115,11 @@ func (m *MockResource) GetRelation(name string) *resource.Relation {
 	return &relation
 }
 
+func (m *MockResource) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 // Mock DTO provider for testing
 type MockDTOProvider struct {
 	mock.Mock
@@ -171,6 +176,7 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	mockResource.On("GetRelations").Return([]resource.Relation{})
 	mockResource.On("HasRelation", mock.Anything).Return(false)
 	mockResource.On("GetRelation", mock.Anything).Return(nil)
+	mockResource.On("GetIDFieldName").Return("ID")
 
 	return r, mockRepo, mockResource, mockDTOProvider
 }
@@ -362,6 +368,141 @@ func TestRegisterResource(t *testing.T) {
 		"POST /api/tests":       false,
 		"PUT /api/tests/:id":    false,
 		"DELETE /api/tests/:id": false,
+	}
+
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		if _, exists := foundRoutes[key]; exists {
+			foundRoutes[key] = true
+		}
+	}
+
+	// Assert all routes are registered
+	for route, found := range foundRoutes {
+		assert.True(t, found, "Route %s not found", route)
+	}
+}
+
+func TestGetHandlerWithParam(t *testing.T) {
+	r, mockRepo, mockResource, _ := setupTest()
+
+	// Setup mock response
+	mockData := TestModel{ID: "1", Name: "Test 1"}
+	mockRepo.On("Get", mock.Anything, "1").Return(mockData, nil)
+
+	// Register handler with custom parameter name
+	r.GET("/tests/:uid", GenerateGetHandlerWithParam(mockResource, mockRepo, "uid"))
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/tests/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response, "data")
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "1", data["id"])
+	assert.Equal(t, "Test 1", data["name"])
+}
+
+func TestUpdateHandlerWithParam(t *testing.T) {
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
+
+	// Setup test input
+	testInput := TestModel{Name: "Updated Test"}
+
+	// Setup mock response
+	mockResult := TestModel{ID: "1", Name: "Updated Test"}
+
+	// Setup DTO provider
+	mockDTOProvider.On("GetUpdateDTO").Return(&TestModel{})
+	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testInput, nil)
+	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(mockResult, nil)
+
+	// Setup repository
+	mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(mockResult, nil)
+
+	// Register handler with custom parameter name
+	r.PUT("/tests/:uid", GenerateUpdateHandlerWithParam(mockResource, mockRepo, mockDTOProvider, "uid"))
+
+	// Create request
+	body, _ := json.Marshal(testInput)
+	req, _ := http.NewRequest("PUT", "/tests/1", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response, "data")
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "1", data["id"])
+	assert.Equal(t, "Updated Test", data["name"])
+}
+
+func TestDeleteHandlerWithParam(t *testing.T) {
+	r, mockRepo, mockResource, _ := setupTest()
+
+	// Setup repository
+	mockRepo.On("Delete", mock.Anything, "1").Return(nil)
+
+	// Register handler with custom parameter name
+	r.DELETE("/tests/:uid", GenerateDeleteHandlerWithParam(mockResource, mockRepo, "uid"))
+
+	// Create request
+	req, _ := http.NewRequest("DELETE", "/tests/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Assert response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response, "success")
+	assert.Equal(t, true, response["success"])
+}
+
+func TestRegisterResourceWithOptions(t *testing.T) {
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
+
+	// Setup resource operations
+	mockResource.On("HasOperation", resource.OperationList).Return(true)
+	mockResource.On("HasOperation", resource.OperationRead).Return(true)
+	mockResource.On("HasOperation", resource.OperationCreate).Return(true)
+	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
+	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
+
+	// Register resource with custom ID parameter name
+	api := r.Group("/api")
+	RegisterResourceWithOptions(api, mockResource, mockRepo, RegisterOptions{
+		DTOProvider: mockDTOProvider,
+		IDParamName: "uid",
+	})
+
+	// Test routes exist
+	routes := r.Routes()
+
+	// Check if all routes are registered with custom ID parameter
+	foundRoutes := map[string]bool{
+		"GET /api/tests":         false,
+		"GET /api/tests/:uid":    false,
+		"POST /api/tests":        false,
+		"PUT /api/tests/:uid":    false,
+		"DELETE /api/tests/:uid": false,
 	}
 
 	for _, route := range routes {
