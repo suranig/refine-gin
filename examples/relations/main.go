@@ -142,23 +142,104 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 // Count returns the total number of resources matching the query options
 func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
 	var count int64
-	query := r.db.Model(&User{})
+	db := r.db.Model(&User{})
 
-	// Apply filters
-	for field, value := range options.Filters {
-		query = query.Where(field+" = ?", value)
-	}
+	// Apply filters from options
+	db = options.Apply(db)
 
-	// Apply search
-	if options.Search != "" {
-		query = query.Where("name LIKE ?", "%"+options.Search+"%")
-	}
-
-	if err := query.Count(&count).Error; err != nil {
+	// Get count
+	if err := db.Count(&count).Error; err != nil {
 		return 0, err
 	}
 
 	return count, nil
+}
+
+// CreateMany creates multiple users
+func (r *UserRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	users, ok := data.([]User)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type, expected []User")
+	}
+
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Create(&users).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// UpdateMany updates multiple users
+func (r *UserRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	user, ok := data.(User)
+	if !ok {
+		return 0, fmt.Errorf("invalid data type, expected User")
+	}
+
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result := tx.Model(&User{}).Where("id IN ?", ids).Updates(user)
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
+}
+
+// DeleteMany deletes multiple users
+func (r *UserRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result := tx.Where("id IN ?", ids).Delete(&User{})
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
 }
 
 // Similar repositories for Post, Comment, and Profile...

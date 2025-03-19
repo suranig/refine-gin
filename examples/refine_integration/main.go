@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -82,24 +83,75 @@ func (r *ProductRepository) Delete(ctx context.Context, id interface{}) error {
 }
 
 func (r *ProductRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	// For this example we return a mock count
+	return int64(len(products)), nil
+}
+
+// CreateMany creates multiple products at once
+func (r *ProductRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	productsData, ok := data.([]Product)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type, expected []Product")
+	}
+
+	// Generate IDs for new products
+	for i := range productsData {
+		productsData[i].ID = fmt.Sprintf("%d", len(products)+i+1)
+		products = append(products, productsData[i])
+	}
+
+	return productsData, nil
+}
+
+// UpdateMany updates multiple products at once
+func (r *ProductRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	productData, ok := data.(Product)
+	if !ok {
+		return 0, fmt.Errorf("invalid data type, expected Product")
+	}
+
 	var count int64
-	query := r.db.Model(&Product{})
-
-	// Apply filters
-	for field, value := range options.Filters {
-		query = query.Where(field+" = ?", value)
+	for _, id := range ids {
+		idStr := fmt.Sprintf("%v", id)
+		for i, p := range products {
+			if p.ID == idStr {
+				// Preserve ID and update other fields
+				products[i].Name = productData.Name
+				products[i].Price = productData.Price
+				products[i].Category = productData.Category
+				products[i].Description = productData.Description
+				products[i].Material = productData.Material
+				products[i].Condition = productData.Condition
+				count++
+				break
+			}
+		}
 	}
 
-	// Apply search
-	if options.Search != "" {
-		query = query.Where("name LIKE ? OR description LIKE ?",
-			"%"+options.Search+"%", "%"+options.Search+"%")
+	return count, nil
+}
+
+// DeleteMany deletes multiple products at once
+func (r *ProductRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	var newProducts []Product
+	var count int64
+
+	for _, p := range products {
+		keep := true
+		for _, id := range ids {
+			idStr := fmt.Sprintf("%v", id)
+			if p.ID == idStr {
+				keep = false
+				count++
+				break
+			}
+		}
+		if keep {
+			newProducts = append(newProducts, p)
+		}
 	}
 
-	if err := query.Count(&count).Error; err != nil {
-		return 0, err
-	}
-
+	products = newProducts
 	return count, nil
 }
 
