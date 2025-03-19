@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
+	"github.com/suranig/refine-gin/pkg/middleware"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
@@ -46,76 +47,71 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 // RegisterResourceWithDTO registers resource handlers with custom DTO provider
 func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, dtoProvider dto.DTOProvider) {
-	// Określ nazwę parametru URL dla identyfikatora (domyślnie "id")
-	idParamName := "id"
+	// Use default options with DTO provider
+	opts := resource.DefaultOptions()
+
+	// Create resource router with naming convention middleware
+	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(opts.NamingConvention))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
-		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
-	}
-
-	if res.HasOperation(resource.OperationRead) {
-		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
+		resourceRouter.GET("", GenerateListHandlerWithDTO(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
-		router.POST("/"+res.GetName(), GenerateCreateHandler(res, repo, dtoProvider))
+		resourceRouter.POST("", GenerateCreateHandler(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationRead) {
+		resourceRouter.GET("/:id", GenerateGetHandlerWithDTO(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		router.PUT("/"+res.GetName()+"/:"+idParamName, GenerateUpdateHandler(res, repo, dtoProvider))
+		resourceRouter.PUT("/:id", GenerateUpdateHandler(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
-		router.DELETE("/"+res.GetName()+"/:"+idParamName, GenerateDeleteHandler(res, repo))
+		resourceRouter.DELETE("/:id", GenerateDeleteHandler(res, repo))
 	}
 
-	// Register count handler if the operation is allowed
 	if res.HasOperation(resource.OperationCount) {
-		router.GET("/"+res.GetName()+"/count", GenerateCountHandler(res, repo))
+		resourceRouter.GET("/count", GenerateCountHandler(res, repo))
 	}
 }
 
-// RegisterResourceWithOptions registers resource handlers with custom options
-func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, options RegisterOptions) {
-	// Create default DTO provider if not specified
-	dtoProvider := options.DTOProvider
-	if dtoProvider == nil {
-		dtoProvider = &dto.DefaultDTOProvider{
-			Model: res.GetModel(),
-		}
-	}
+// RegisterResourceWithOptions registers a resource with custom options
+func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, opts resource.Options) {
+	// Create resource router with naming convention middleware
+	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(opts.NamingConvention))
 
-	// Określ nazwę parametru URL dla identyfikatora
-	idParamName := options.IDParamName
-	if idParamName == "" {
-		idParamName = "id"
+	// Use default DTO provider for this resource
+	dtoProvider := &dto.DefaultDTOProvider{
+		Model: res.GetModel(),
 	}
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
-		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
-	}
-
-	if res.HasOperation(resource.OperationRead) {
-		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
+		resourceRouter.GET("", GenerateListHandler(res, repo))
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
-		router.POST("/"+res.GetName(), GenerateCreateHandler(res, repo, dtoProvider))
+		resourceRouter.POST("", GenerateCreateHandler(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationRead) {
+		resourceRouter.GET("/:id", GenerateGetHandler(res, repo))
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		router.PUT("/"+res.GetName()+"/:"+idParamName, GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		resourceRouter.PUT("/:id", GenerateUpdateHandler(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
-		router.DELETE("/"+res.GetName()+"/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
+		resourceRouter.DELETE("/:id", GenerateDeleteHandler(res, repo))
 	}
 
-	// Register count handler if the operation is allowed
 	if res.HasOperation(resource.OperationCount) {
-		router.GET("/"+res.GetName()+"/count", GenerateCountHandler(res, repo))
+		resourceRouter.GET("/count", GenerateCountHandler(res, repo))
 	}
 }
 
