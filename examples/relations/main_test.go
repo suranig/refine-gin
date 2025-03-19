@@ -217,8 +217,8 @@ func TestUserRepository_List(t *testing.T) {
 	// Create query options
 	options := query.QueryOptions{
 		Resource: userResource,
-		Filters:  []query.Filter{},
-		Sort:     nil,
+		Filters:  make(map[string]interface{}),
+		Sort:     "",
 		Page:     1,
 		PerPage:  10,
 	}

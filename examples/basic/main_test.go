@@ -81,6 +81,28 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Count returns the number of resources matching the query options
+func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&User{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search if present
+	if options.Search != "" {
+		query = query.Where("name LIKE ? OR email LIKE ?", "%"+options.Search+"%", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
 // Setup integration test environment
 func setupIntegrationTest(t *testing.T) (*gin.Engine, *gorm.DB) {
 	gin.SetMode(gin.TestMode)
