@@ -67,6 +67,28 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Count returns the total number of resources matching the query options
+func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&User{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search
+	if options.Search != "" {
+		query = query.Where("name LIKE ?", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
 type Post struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	Title     string    `json:"title" refine:"filterable;searchable"`
@@ -120,6 +142,28 @@ func (r *PostRepository) Update(ctx context.Context, id interface{}, data interf
 
 func (r *PostRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&Post{}, "id = ?", id).Error
+}
+
+// Count returns the total number of resources matching the query options
+func (r *PostRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&Post{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search
+	if options.Search != "" {
+		query = query.Where("title LIKE ?", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func main() {

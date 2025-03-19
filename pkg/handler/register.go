@@ -89,6 +89,14 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 		Model: res.GetModel(),
 	}
 
+	// Determine ID parameter name (use default "id" if not specified)
+	idParamName := "id"
+	if idParam, ok := opts.QueryOptions["IDParamName"]; ok {
+		if idParamStr, ok := idParam.(string); ok && idParamStr != "" {
+			idParamName = idParamStr
+		}
+	}
+
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
 		resourceRouter.GET("", GenerateListHandler(res, repo))
@@ -99,15 +107,15 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 	}
 
 	if res.HasOperation(resource.OperationRead) {
-		resourceRouter.GET("/:id", GenerateGetHandler(res, repo))
+		resourceRouter.GET("/:"+idParamName, GenerateGetHandlerWithParam(res, repo, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		resourceRouter.PUT("/:id", GenerateUpdateHandler(res, repo, dtoProvider))
+		resourceRouter.PUT("/:"+idParamName, GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
-		resourceRouter.DELETE("/:id", GenerateDeleteHandler(res, repo))
+		resourceRouter.DELETE("/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationCount) {
@@ -162,4 +170,16 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 type RegisterOptions struct {
 	DTOProvider dto.DTOProvider // Dostawca DTO (opcjonalny)
 	IDParamName string          // Nazwa parametru URL dla identyfikatora (domyślnie "id")
+}
+
+// RegisterOptionsToResourceOptions converts RegisterOptions to resource.Options
+func RegisterOptionsToResourceOptions(regOpts RegisterOptions) resource.Options {
+	opts := resource.DefaultOptions()
+
+	// Set IDParamName as a query option
+	if regOpts.IDParamName != "" {
+		opts = opts.WithQueryOption("IDParamName", regOpts.IDParamName)
+	}
+
+	return opts
 }

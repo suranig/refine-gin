@@ -83,9 +83,10 @@ func main() {
 	userRepo := repoFactory.CreateRepository(userResource)
 
 	// Register User resource with custom ID parameter
-	handler.RegisterResourceWithOptions(api, userResource, userRepo, handler.RegisterOptions{
-		IDParamName: "uid", // Specify custom URL parameter name
-	})
+	handler.RegisterResourceWithOptions(api, userResource, userRepo,
+		handler.RegisterOptionsToResourceOptions(handler.RegisterOptions{
+			IDParamName: "uid", // Specify custom URL parameter name
+		}))
 
 	// Create and register Product resource with custom ID field
 	productResource := resource.NewResource(resource.ResourceConfig{
@@ -105,9 +106,10 @@ func main() {
 	productRepo := repoFactory.CreateRepository(productResource)
 
 	// Register Product resource with custom ID parameter
-	handler.RegisterResourceWithOptions(api, productResource, productRepo, handler.RegisterOptions{
-		IDParamName: "guid", // Specify custom URL parameter name
-	})
+	handler.RegisterResourceWithOptions(api, productResource, productRepo,
+		handler.RegisterOptionsToResourceOptions(handler.RegisterOptions{
+			IDParamName: "guid", // Specify custom URL parameter name
+		}))
 
 	// Start server
 	r.Run(":8080")
