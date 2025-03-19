@@ -25,6 +25,8 @@ This library integrates the following technologies:
 - Support for relationships between resources
 - JWT authentication and authorization
 - Customizable validation rules
+- Flexible JSON naming convention control (snake_case, camelCase, PascalCase)
+- Count endpoint for resources
 
 ## Installation
 
@@ -192,6 +194,62 @@ The library supports all Refine.js query parameters:
 - Pagination: `?page=1&per_page=10`
 - Search: `?q=searchterm`
 - Including relations: `?include=posts,profile`
+
+### Naming Conventions
+
+Refine-Gin supports different naming conventions for JSON fields in requests and responses:
+
+```go
+// Configure resource with snake_case naming (default)
+opts := resource.DefaultOptions().WithNamingConvention(naming.SnakeCase)
+handler.RegisterResourceWithOptions(api, userResource, userRepo, opts)
+
+// Configure resource with camelCase naming
+optsCamel := resource.DefaultOptions().WithNamingConvention(naming.CamelCase)
+handler.RegisterResourceWithOptions(api, userResource, userRepo, optsCamel)
+
+// Configure resource with PascalCase naming
+optsPascal := resource.DefaultOptions().WithNamingConvention(naming.PascalCase)
+handler.RegisterResourceWithOptions(api, userResource, userRepo, optsPascal)
+```
+
+You can also apply the naming convention middleware directly to any router group:
+
+```go
+api := r.Group("/api", middleware.NamingConventionMiddleware(naming.SnakeCase))
+```
+
+### Count Endpoint
+
+Refine-Gin automatically generates a count endpoint for each resource, which returns the total number of records for the given filters:
+
+```
+GET /api/users/count?status=active
+```
+
+Response:
+```json
+{
+  "count": 42
+}
+```
+
+To enable the count endpoint, include the `OperationCount` operation in your resource definition:
+
+```go
+userResource := resource.NewResource(resource.ResourceConfig{
+    Name: "users",
+    Model: User{},
+    Operations: []resource.Operation{
+        resource.OperationList, 
+        resource.OperationCreate, 
+        resource.OperationRead, 
+        resource.OperationUpdate, 
+        resource.OperationDelete,
+        resource.OperationCount, // Enable count endpoint
+    },
+})
+```
 
 ## License
 
