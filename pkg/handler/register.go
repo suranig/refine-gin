@@ -81,8 +81,25 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 // RegisterResourceWithOptions registers a resource with custom options
 func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, opts resource.Options) {
-	// Create resource router with naming convention middleware
-	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(opts.NamingConvention))
+	// Przygotuj middleware dla cache
+	var middlewares []gin.HandlerFunc
+
+	// Zawsze dodaj middleware konwencji nazewnictwa
+	middlewares = append(middlewares, middleware.NamingConventionMiddleware(opts.NamingConvention))
+
+	// Dodaj middleware cache jeśli jest włączone
+	if opts.Cache.Enabled {
+		cacheConfig := middleware.CacheConfig{
+			MaxAge:       opts.Cache.MaxAge,
+			DisableCache: !opts.Cache.Enabled,
+			Methods:      []string{"GET", "HEAD"},
+			VaryHeaders:  opts.Cache.VaryHeaders,
+		}
+		middlewares = append(middlewares, middleware.CacheByResource(res.GetName(), cacheConfig))
+	}
+
+	// Create resource router with middlewares
+	resourceRouter := router.Group("/"+res.GetName(), middlewares...)
 
 	// Use default DTO provider for this resource
 	dtoProvider := &dto.DefaultDTOProvider{
@@ -103,7 +120,8 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
-		resourceRouter.POST("", GenerateCreateHandler(res, repo, dtoProvider))
+		// Dla operacji modyfikujących dane, wyłącz cache
+		resourceRouter.POST("", middleware.NoCacheMiddleware(), GenerateCreateHandler(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationRead) {
@@ -111,11 +129,11 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		resourceRouter.PUT("/:"+idParamName, GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
-		resourceRouter.DELETE("/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
+		resourceRouter.DELETE("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateDeleteHandlerWithParam(res, repo, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationCount) {
@@ -137,8 +155,13 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 		idParamName = "id"
 	}
 
+	cacheConfig := middleware.DefaultCacheConfig()
+
 	// Create resource router with naming convention middleware - default to camelCase for Refine.dev
-	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention))
+	resourceRouter := router.Group("/"+res.GetName(),
+		middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention),
+		middleware.CacheByResource(res.GetName(), cacheConfig), // Dodaj middleware cache dla całego zasobu
+	)
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -146,7 +169,8 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
-		resourceRouter.POST("", GenerateCreateHandler(res, repo, dtoProvider))
+		// Operacje POST, PUT, DELETE nie powinny być cachowane
+		resourceRouter.POST("", middleware.NoCacheMiddleware(), GenerateCreateHandler(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationRead) {
@@ -154,11 +178,11 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		resourceRouter.PUT("/:"+idParamName, GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
-		resourceRouter.DELETE("/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
+		resourceRouter.DELETE("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateDeleteHandlerWithParam(res, repo, idParamName))
 	}
 
 	if res.HasOperation(resource.OperationCount) {

@@ -8,6 +8,7 @@ import (
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 // GenerateListHandler generates a handler for LIST operations
@@ -31,6 +32,16 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 		// Create query options
 		options := query.ParseQueryOptions(c, res)
 
+		// Generate ETag based on query parameters for cache validation
+		etag := utils.GenerateQueryETag(c.Request.URL.RawQuery)
+		ifNoneMatch := c.GetHeader("If-None-Match")
+
+		// Check if client's cached version is still valid
+		if utils.IsETagMatch(etag, ifNoneMatch) {
+			c.Status(http.StatusNotModified)
+			return
+		}
+
 		// Call repository
 		data, total, err := repo.List(c.Request.Context(), options)
 		if err != nil {
@@ -51,6 +62,9 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 			}
 			data = dtoItems
 		}
+
+		// Set cache headers
+		utils.SetCacheHeaders(c.Writer, 60, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
 
 		// Return results in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{

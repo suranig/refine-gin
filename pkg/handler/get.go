@@ -2,11 +2,14 @@ package handler
 
 import (
 	"net/http"
+	"reflect"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 // GenerateGetHandler generates a handler for READ operations
@@ -45,6 +48,16 @@ func generateGetHandlerWithDTO(idParamName string, res resource.Resource, repo r
 		// Get ID from URL parameters using custom parameter name
 		id := c.Param(idParamName)
 
+		// Generate ETag for cache validation
+		etag := utils.GenerateResourceETag(res.GetName(), id)
+		ifNoneMatch := c.GetHeader("If-None-Match")
+
+		// Check if client's cached version is still valid
+		if utils.IsETagMatch(etag, ifNoneMatch) {
+			c.Status(http.StatusNotModified)
+			return
+		}
+
 		// Call repository
 		data, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
@@ -62,9 +75,48 @@ func generateGetHandlerWithDTO(idParamName string, res resource.Resource, repo r
 			data = dtoData
 		}
 
+		// Set cache headers
+		// Try to get last modified time from the data
+		var lastModified *time.Time
+		if hasUpdatedAt, timestamp := getLastModifiedTimestamp(data); hasUpdatedAt {
+			lastModified = &timestamp
+		}
+
+		utils.SetCacheHeaders(c.Writer, 120, etag, lastModified, []string{"Accept", "Accept-Encoding", "Authorization"})
+
 		// Return result
 		c.JSON(http.StatusOK, gin.H{
 			"data": data,
 		})
 	}
+}
+
+// getLastModifiedTimestamp attempts to extract updated_at or created_at from model
+func getLastModifiedTimestamp(data interface{}) (bool, time.Time) {
+	// Try to access UpdatedAt or CreatedAt field using reflection
+	val := reflect.ValueOf(data)
+
+	// Handle pointer indirection
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	// Check if it's a struct
+	if val.Kind() != reflect.Struct {
+		return false, time.Time{}
+	}
+
+	// Try to get UpdatedAt first
+	updatedField := val.FieldByName("UpdatedAt")
+	if updatedField.IsValid() && updatedField.Type().AssignableTo(reflect.TypeOf(time.Time{})) {
+		return true, updatedField.Interface().(time.Time)
+	}
+
+	// Fall back to CreatedAt if available
+	createdField := val.FieldByName("CreatedAt")
+	if createdField.IsValid() && createdField.Type().AssignableTo(reflect.TypeOf(time.Time{})) {
+		return true, createdField.Interface().(time.Time)
+	}
+
+	return false, time.Time{}
 }
