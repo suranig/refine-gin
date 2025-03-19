@@ -9,96 +9,6 @@ import (
 )
 
 // QueryOptions contains options for querying data
-type QueryOptions struct {
-	Resource          resource.Resource
-	Page              int
-	PerPage           int
-	Sort              string
-	Order             string
-	Filters           map[string]interface{}
-	Search            string
-	DisablePagination bool
-}
-
-// Filter represents a filter condition
-type Filter struct {
-	Field    string
-	Operator string
-	Value    interface{}
-}
-
-// SortOption represents a sort option
-type SortOption struct {
-	Field string
-	Order string
-}
-
-// PaginateOption represents pagination options
-type PaginateOption struct {
-	Page    int
-	PerPage int
-}
-
-// ParseQueryOptions parses query options from the request
-func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
-	// Parse pagination
-	page := 1
-	perPage := 10
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		if pageInt, err := strconv.Atoi(pageStr); err == nil && pageInt > 0 {
-			page = pageInt
-		}
-	}
-
-	if perPageStr := c.Query("per_page"); perPageStr != "" {
-		if perPageInt, err := strconv.Atoi(perPageStr); err == nil && perPageInt > 0 {
-			perPage = perPageInt
-		}
-	}
-
-	// Parse sorting
-	var sort string
-	var order string
-
-	if sortField := c.Query("sort"); sortField != "" {
-		sort = sortField
-		order = c.DefaultQuery("order", "asc")
-	} else if defaultSort := res.GetDefaultSort(); defaultSort != nil {
-		sort = defaultSort.Field
-		order = defaultSort.Order
-	}
-
-	// Parse filters
-	filters := make(map[string]interface{})
-	for _, field := range res.GetFields() {
-		if !field.Filterable {
-			continue
-		}
-
-		value := c.Query(field.Name)
-		if value == "" {
-			continue
-		}
-
-		filters[field.Name] = value
-	}
-
-	// Parse search
-	search := c.Query("q")
-
-	return QueryOptions{
-		Resource: res,
-		Page:     page,
-		PerPage:  perPage,
-		Sort:     sort,
-		Order:    order,
-		Filters:  filters,
-		Search:   search,
-	}
-}
-
-// Apply stosuje opcje zapytania do zapytania GORM
 func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
 	// Apply filters
 	for field, value := range o.Filters {
@@ -201,7 +111,74 @@ func ApplySearch(query *gorm.DB, res resource.Resource, search string) *gorm.DB 
 	return query
 }
 
-// NewQueryOptions creates a new QueryOptions from a Gin context and resource
-func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
-	return ParseQueryOptions(c, res)
+// ParseQueryOptions parses query options from the request
+func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
+	// Parse pagination - support both standard and Refine.dev formats
+	page := 1
+	perPage := 10
+
+	// Try Refine.dev 'current' parameter first
+	if currentStr := c.Query("current"); currentStr != "" {
+		if currentInt, err := strconv.Atoi(currentStr); err == nil && currentInt > 0 {
+			page = currentInt
+		}
+	} else if pageStr := c.Query("page"); pageStr != "" {
+		// Fall back to standard 'page' parameter
+		if pageInt, err := strconv.Atoi(pageStr); err == nil && pageInt > 0 {
+			page = pageInt
+		}
+	}
+
+	// Try Refine.dev 'pageSize' parameter first
+	if pageSizeStr := c.Query("pageSize"); pageSizeStr != "" {
+		if pageSizeInt, err := strconv.Atoi(pageSizeStr); err == nil && pageSizeInt > 0 {
+			perPage = pageSizeInt
+		}
+	} else if perPageStr := c.Query("per_page"); perPageStr != "" {
+		// Fall back to standard 'per_page' parameter
+		if perPageInt, err := strconv.Atoi(perPageStr); err == nil && perPageInt > 0 {
+			perPage = perPageInt
+		}
+	}
+
+	// Parse sorting
+	var sort string
+	var order string
+
+	if sortField := c.Query("sort"); sortField != "" {
+		sort = sortField
+		order = c.DefaultQuery("order", "asc")
+	} else if defaultSort := res.GetDefaultSort(); defaultSort != nil {
+		sort = defaultSort.Field
+		order = defaultSort.Order
+	}
+
+	// Parse filters
+	filters := make(map[string]interface{})
+	for _, field := range res.GetFields() {
+		if !field.Filterable {
+			continue
+		}
+
+		value := c.Query(field.Name)
+		if value == "" {
+			continue
+		}
+
+		filters[field.Name] = value
+	}
+
+	// Parse search
+	search := c.Query("q")
+
+	return QueryOptions{
+		Resource: res,
+		Page:     page,
+		PerPage:  perPage,
+		Sort:     sort,
+		Order:    order,
+		Filters:  filters,
+		Search:   search,
+	}
 }
+

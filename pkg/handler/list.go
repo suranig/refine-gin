@@ -29,7 +29,7 @@ func GenerateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 func generateListHandlerWithDTO(res resource.Resource, repo repository.Repository, dtoProvider dto.DTOProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Create query options
-		options := query.NewQueryOptions(c, res)
+		options := query.ParseQueryOptions(c, res)
 
 		// Call repository
 		data, total, err := repo.List(c.Request.Context(), options)
@@ -52,12 +52,12 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 			data = dtoItems
 		}
 
-		// Return results
+		// Return results in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{
 			"data":     data,
 			"total":    total,
-			"page":     options.Page,
-			"per_page": options.PerPage,
+			"current":  options.Page,    // Refine uses 'current' not 'page'
+			"pageSize": options.PerPage, // Correct parameter name for Refine.dev
 		})
 	}
 }

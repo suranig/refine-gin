@@ -115,6 +115,49 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 	}
 }
 
+// RegisterResourceForRefine registers resource handlers optimized for Refine.dev
+// The idParamName parameter allows specifying a custom ID parameter name for the resource
+// This is useful for resources that use a non-standard ID field (not 'id')
+func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, idParamName string) {
+	// Create default DTO provider if not specified
+	dtoProvider := &dto.DefaultDTOProvider{
+		Model: res.GetModel(),
+	}
+
+	// If idParamName is empty, use default "id"
+	if idParamName == "" {
+		idParamName = "id"
+	}
+
+	// Create resource router with naming convention middleware - default to camelCase for Refine.dev
+	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention))
+
+	// Register handlers for allowed operations
+	if res.HasOperation(resource.OperationList) {
+		resourceRouter.GET("", GenerateListHandlerWithDTO(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationCreate) {
+		resourceRouter.POST("", GenerateCreateHandler(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationRead) {
+		resourceRouter.GET("/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationUpdate) {
+		resourceRouter.PUT("/:"+idParamName, GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+	}
+
+	if res.HasOperation(resource.OperationDelete) {
+		resourceRouter.DELETE("/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
+	}
+
+	if res.HasOperation(resource.OperationCount) {
+		resourceRouter.GET("/count", GenerateCountHandler(res, repo))
+	}
+}
+
 // RegisterOptions zawiera opcje rejestracji zasobu
 type RegisterOptions struct {
 	DTOProvider dto.DTOProvider // Dostawca DTO (opcjonalny)
