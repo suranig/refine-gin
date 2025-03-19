@@ -188,6 +188,22 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	if res.HasOperation(resource.OperationCount) {
 		resourceRouter.GET("/count", GenerateCountHandler(res, repo))
 	}
+
+	// Register handlers for bulk operations
+	if res.HasOperation(resource.OperationCreateMany) {
+		// POST /resources/batch for creating multiple resources
+		resourceRouter.POST("/batch", middleware.NoCacheMiddleware(), GenerateCreateManyHandler(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationUpdateMany) {
+		// PUT /resources/batch for updating multiple resources
+		resourceRouter.PUT("/batch", middleware.NoCacheMiddleware(), GenerateUpdateManyHandler(res, repo, dtoProvider))
+	}
+
+	if res.HasOperation(resource.OperationDeleteMany) {
+		// DELETE /resources/batch for deleting multiple resources
+		resourceRouter.DELETE("/batch", middleware.NoCacheMiddleware(), GenerateDeleteManyHandler(res, repo))
+	}
 }
 
 // RegisterOptions zawiera opcje rejestracji zasobu

@@ -22,4 +22,15 @@ const (
 
 	// OperationCount represents the COUNT operation for counting resources
 	OperationCount Operation = "count"
+
+	// Bulk operations compatible with Refine.dev
+
+	// OperationCreateMany represents bulk CREATE operation (POST /resources/batch)
+	OperationCreateMany Operation = "createMany"
+
+	// OperationUpdateMany represents bulk UPDATE operation (PUT /resources/batch)
+	OperationUpdateMany Operation = "updateMany"
+
+	// OperationDeleteMany represents bulk DELETE operation (DELETE /resources/batch)
+	OperationDeleteMany Operation = "deleteMany"
 )

@@ -240,6 +240,51 @@ GET /api/users?sort=age,name&order=desc,asc
 
 This sorts users by age in descending order, then by name in ascending order.
 
+### Bulk Operations
+
+Refine-Gin supports bulk operations compatible with Refine.dev standards:
+
+#### Bulk Create
+
+Create multiple resources at once:
+
+```
+POST /api/users/batch
+{
+  "values": [
+    { "name": "User 1", "email": "user1@example.com" },
+    { "name": "User 2", "email": "user2@example.com" }
+  ]
+}
+```
+
+#### Bulk Update
+
+Update multiple resources with the same values:
+
+```
+PUT /api/users/batch
+{
+  "ids": ["1", "2", "3"],
+  "values": {
+    "status": "active"
+  }
+}
+```
+
+#### Bulk Delete
+
+Delete multiple resources at once:
+
+```
+DELETE /api/users/batch
+{
+  "ids": ["1", "2", "3"]
+}
+```
+
+All bulk operations are implemented as atomic transactions, ensuring data integrity.
+
 ### Naming Conventions
 
 Refine-Gin supports different naming conventions for JSON fields in requests and responses:

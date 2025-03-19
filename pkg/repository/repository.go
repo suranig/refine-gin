@@ -27,6 +27,20 @@ type Repository interface {
 
 	// Count returns the total number of resources matching the query options
 	Count(ctx context.Context, options query.QueryOptions) (int64, error)
+
+	// Bulk operations for Refine.dev compatibility
+
+	// CreateMany creates multiple resources at once
+	CreateMany(ctx context.Context, data interface{}) (interface{}, error)
+
+	// UpdateMany updates multiple resources at once
+	// ids is a slice of resource IDs to update
+	// data is the data to update for all resources
+	UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error)
+
+	// DeleteMany deletes multiple resources at once
+	// ids is a slice of resource IDs to delete
+	DeleteMany(ctx context.Context, ids []interface{}) (int64, error)
 }
 
 type RepositoryFactory interface {
@@ -99,6 +113,70 @@ func (r *GormRepository) Count(ctx context.Context, options query.QueryOptions) 
 	}
 
 	return total, nil
+}
+
+// CreateMany creates multiple resources at once
+func (r *GormRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	// Validate that data is a slice
+	if !resource.IsSlice(data) {
+		return nil, resource.ErrInvalidType
+	}
+
+	// Start a transaction for bulk creation
+	err := r.DB.Transaction(func(tx *gorm.DB) error {
+		return tx.Create(data).Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+// UpdateMany updates multiple resources at once
+func (r *GormRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	// Start a transaction for bulk updates
+	var count int64
+	err := r.DB.Transaction(func(tx *gorm.DB) error {
+		// Apply updates to all records matching the IDs
+		result := tx.Model(r.Model).Where(r.IDFieldName+" IN ?", ids).Updates(data)
+		if result.Error != nil {
+			return result.Error
+		}
+		count = result.RowsAffected
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// DeleteMany deletes multiple resources at once
+func (r *GormRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	// Create a new instance of the model
+	item := resource.CreateInstanceOfType(r.Model)
+
+	// Start a transaction for bulk deletion
+	var count int64
+	err := r.DB.Transaction(func(tx *gorm.DB) error {
+		// Delete all records matching the IDs
+		result := tx.Where(r.IDFieldName+" IN ?", ids).Delete(item)
+		if result.Error != nil {
+			return result.Error
+		}
+		count = result.RowsAffected
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func NewGormRepository(db *gorm.DB, model interface{}) Repository {
