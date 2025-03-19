@@ -195,6 +195,51 @@ The library supports all Refine.js query parameters:
 - Search: `?q=searchterm`
 - Including relations: `?include=posts,profile`
 
+### Advanced Filtering
+
+Refine-Gin supports advanced filtering capabilities compatible with Refine.dev:
+
+#### Filter Operators
+
+The following filter operators are supported:
+
+- `eq` - Equal to
+- `ne` - Not equal to
+- `lt` - Less than
+- `gt` - Greater than
+- `lte` - Less than or equal to
+- `gte` - Greater than or equal to
+- `contains` - Contains substring (case-sensitive)
+- `containsi` - Contains substring (case-insensitive)
+- `startswith` - Starts with
+- `endswith` - Ends with
+- `null` - Is null (when value is true) or is not null (when value is false)
+- `in` - In a list of values
+
+#### Refine.dev Filter Formats
+
+Refine-Gin supports the following Refine.dev filter formats:
+
+1. Format 1: `filter[field][operator]=value`
+```
+GET /api/users?filter[age][gt]=30&filter[name][contains]=John
+```
+
+2. Format 2: `filters[field]=value&operators[field]=operator`
+```
+GET /api/users?filters[age]=30&operators[age]=gt&filters[name]=John&operators[name]=contains
+```
+
+#### Multi-field Sorting
+
+Refine-Gin supports sorting by multiple fields:
+
+```
+GET /api/users?sort=age,name&order=desc,asc
+```
+
+This sorts users by age in descending order, then by name in ascending order.
+
 ### Naming Conventions
 
 Refine-Gin supports different naming conventions for JSON fields in requests and responses:
@@ -250,6 +295,42 @@ userResource := resource.NewResource(resource.ResourceConfig{
     },
 })
 ```
+
+### Caching and ETags
+
+Refine-Gin supports HTTP caching via ETags to improve performance and reduce bandwidth usage. The implementation automatically generates ETags based on resource content and handles conditional requests:
+
+```go
+// Setting up a resource with ETag support
+opts := resource.DefaultOptions().WithETagSupport(true)
+handler.RegisterResourceWithOptions(api, userResource, userRepo, opts)
+```
+
+When a client makes a request, Refine-Gin will:
+
+1. Generate an ETag based on the resource content.
+2. Include the ETag in the response headers.
+3. Handle conditional requests with `If-None-Match` headers.
+4. Return 304 Not Modified when appropriate, reducing bandwidth.
+
+Example response headers with ETag:
+```
+ETag: "a1b2c3d4e5f6"
+Cache-Control: private, max-age=86400
+```
+
+Subsequent client requests can include the ETag to check for modifications:
+```
+GET /api/users/123
+If-None-Match: "a1b2c3d4e5f6"
+```
+
+If the resource hasn't changed, the server will respond with:
+```
+HTTP/1.1 304 Not Modified
+```
+
+ETag generation and cache control settings can be customized through the options interface.
 
 ## License
 
