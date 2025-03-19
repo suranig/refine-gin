@@ -24,7 +24,11 @@ func ToSnakeCase(s string) string {
 	var result strings.Builder
 	for i, r := range s {
 		if unicode.IsUpper(r) {
-			if i > 0 {
+			// Add underscore if it's not the first character
+			// and either the previous character is lowercase
+			// or the next character exists and is lowercase and the previous character is uppercase
+			if i > 0 && (unicode.IsLower(rune(s[i-1])) ||
+				(i < len(s)-1 && unicode.IsLower(rune(s[i+1])) && i > 0 && unicode.IsUpper(rune(s[i-1])))) {
 				result.WriteRune('_')
 			}
 			result.WriteRune(unicode.ToLower(r))
@@ -40,6 +44,20 @@ func ToCamelCase(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return s
+	}
+
+	// Special handling for all uppercase words with underscores (like HTTP_REQUEST)
+	isAllUpperWithUnderscore := true
+	for _, r := range s {
+		if !unicode.IsUpper(r) && r != '_' {
+			isAllUpperWithUnderscore = false
+			break
+		}
+	}
+
+	if isAllUpperWithUnderscore {
+		// Convert to lowercase first, then apply standard camelCase logic
+		s = strings.ToLower(s)
 	}
 
 	result := ""
@@ -64,6 +82,20 @@ func ToPascalCase(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return s
+	}
+
+	// Special handling for all uppercase words with underscores (like HTTP_REQUEST)
+	isAllUpperWithUnderscore := true
+	for _, r := range s {
+		if !unicode.IsUpper(r) && r != '_' {
+			isAllUpperWithUnderscore = false
+			break
+		}
+	}
+
+	if isAllUpperWithUnderscore {
+		// Convert to lowercase first, then apply standard PascalCase logic
+		s = strings.ToLower(s)
 	}
 
 	result := ""

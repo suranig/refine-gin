@@ -40,17 +40,30 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 		Order:    "asc",
 	}
 
-	// Parse pagination
-	if page := c.DefaultQuery("page", "1"); page != "" {
+	// Parse pagination - support both standard (page, per_page) and Refine.dev formats (current, pageSize)
+	// Try Refine.dev 'current' parameter first
+	if current := c.DefaultQuery("current", ""); current != "" {
 		// Convert to int
+		var currentInt int
+		if _, err := fmt.Sscanf(current, "%d", &currentInt); err == nil && currentInt > 0 {
+			opt.Page = currentInt
+		}
+	} else if page := c.DefaultQuery("page", "1"); page != "" {
+		// Fall back to standard 'page' parameter
 		var pageInt int
 		if _, err := fmt.Sscanf(page, "%d", &pageInt); err == nil && pageInt > 0 {
 			opt.Page = pageInt
 		}
 	}
 
-	if perPage := c.DefaultQuery("per_page", "10"); perPage != "" {
-		// Convert to int
+	// Try Refine.dev 'pageSize' parameter first
+	if pageSize := c.DefaultQuery("pageSize", ""); pageSize != "" {
+		var pageSizeInt int
+		if _, err := fmt.Sscanf(pageSize, "%d", &pageSizeInt); err == nil && pageSizeInt > 0 {
+			opt.PerPage = pageSizeInt
+		}
+	} else if perPage := c.DefaultQuery("per_page", "10"); perPage != "" {
+		// Fall back to standard 'per_page' parameter
 		var perPageInt int
 		if _, err := fmt.Sscanf(perPage, "%d", &perPageInt); err == nil && perPageInt > 0 {
 			opt.PerPage = perPageInt
@@ -68,7 +81,7 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 		}
 	}
 
-	// Parse sorting
+	// Parse sorting - support both standard (sort, order) and Refine.dev formats
 	if sort := c.DefaultQuery("sort", ""); sort != "" {
 		opt.Sort = sort
 		if order := c.DefaultQuery("order", "asc"); order == "desc" {

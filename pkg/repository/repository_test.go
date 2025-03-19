@@ -73,10 +73,9 @@ func TestGormRepository(t *testing.T) {
 		Resource: res,
 		Page:     1,
 		PerPage:  10,
-		Sort: &resource.Sort{
-			Field: "id",
-			Order: "asc",
-		},
+		Sort:     "id",
+		Order:    "asc",
+		Filters:  make(map[string]interface{}),
 	}
 
 	models, total, err := repo.List(ctx, options)
@@ -156,10 +155,9 @@ func TestGormRepositoryWithCustomID(t *testing.T) {
 		Resource: res,
 		Page:     1,
 		PerPage:  10,
-		Sort: &resource.Sort{
-			Field: "uid",
-			Order: "asc",
-		},
+		Sort:     "uid",
+		Order:    "asc",
+		Filters:  make(map[string]interface{}),
 	}
 
 	models, total, err := repo.List(ctx, options)

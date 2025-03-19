@@ -45,6 +45,12 @@ func (m *MockRepository) Delete(ctx context.Context, id interface{}) error {
 	return args.Error(0)
 }
 
+// Count returns the total number of resources matching the query options
+func (m *MockRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	args := m.Called(ctx, options)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Mock resource for testing
 type MockResource struct {
 	mock.Mock
@@ -353,6 +359,7 @@ func TestRegisterResource(t *testing.T) {
 	mockResource.On("HasOperation", resource.OperationCreate).Return(true)
 	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
 	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
+	mockResource.On("HasOperation", resource.OperationCount).Return(true)
 
 	// Register resource
 	api := r.Group("/api")
@@ -485,13 +492,14 @@ func TestRegisterResourceWithOptions(t *testing.T) {
 	mockResource.On("HasOperation", resource.OperationCreate).Return(true)
 	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
 	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
+	mockResource.On("HasOperation", resource.OperationCount).Return(true)
 
 	// Register resource with custom ID parameter name
 	api := r.Group("/api")
-	RegisterResourceWithOptions(api, mockResource, mockRepo, RegisterOptions{
+	RegisterResourceWithOptions(api, mockResource, mockRepo, RegisterOptionsToResourceOptions(RegisterOptions{
 		DTOProvider: mockDTOProvider,
 		IDParamName: "uid",
-	})
+	}))
 
 	// Test routes exist
 	routes := r.Routes()
@@ -503,6 +511,7 @@ func TestRegisterResourceWithOptions(t *testing.T) {
 		"POST /api/tests":        false,
 		"PUT /api/tests/:uid":    false,
 		"DELETE /api/tests/:uid": false,
+		"GET /api/tests/count":   false,
 	}
 
 	for _, route := range routes {
