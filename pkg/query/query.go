@@ -10,12 +10,14 @@ import (
 
 // QueryOptions contains options for querying data
 type QueryOptions struct {
-	Resource resource.Resource
-	Page     int
-	PerPage  int
-	Sort     *resource.Sort
-	Filters  []Filter
-	Search   string
+	Resource          resource.Resource
+	Page              int
+	PerPage           int
+	Sort              string
+	Order             string
+	Filters           map[string]interface{}
+	Search            string
+	DisablePagination bool
 }
 
 // Filter represents a filter condition
@@ -23,6 +25,18 @@ type Filter struct {
 	Field    string
 	Operator string
 	Value    interface{}
+}
+
+// SortOption represents a sort option
+type SortOption struct {
+	Field string
+	Order string
+}
+
+// PaginateOption represents pagination options
+type PaginateOption struct {
+	Page    int
+	PerPage int
 }
 
 // ParseQueryOptions parses query options from the request
@@ -44,17 +58,19 @@ func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 	}
 
 	// Parse sorting
-	sort := res.GetDefaultSort()
+	var sort string
+	var order string
+
 	if sortField := c.Query("sort"); sortField != "" {
-		sortOrder := c.DefaultQuery("order", "asc")
-		sort = &resource.Sort{
-			Field: sortField,
-			Order: sortOrder,
-		}
+		sort = sortField
+		order = c.DefaultQuery("order", "asc")
+	} else if defaultSort := res.GetDefaultSort(); defaultSort != nil {
+		sort = defaultSort.Field
+		order = defaultSort.Order
 	}
 
 	// Parse filters
-	var filters []Filter
+	filters := make(map[string]interface{})
 	for _, field := range res.GetFields() {
 		if !field.Filterable {
 			continue
@@ -65,12 +81,7 @@ func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 			continue
 		}
 
-		operator := c.DefaultQuery(field.Name+"_operator", "eq")
-		filters = append(filters, Filter{
-			Field:    field.Name,
-			Operator: operator,
-			Value:    value,
-		})
+		filters[field.Name] = value
 	}
 
 	// Parse search
@@ -81,6 +92,7 @@ func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 		Page:     page,
 		PerPage:  perPage,
 		Sort:     sort,
+		Order:    order,
 		Filters:  filters,
 		Search:   search,
 	}
@@ -88,25 +100,24 @@ func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 
 // Apply stosuje opcje zapytania do zapytania GORM
 func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
-	query = ApplyFilters(query, o.Filters)
+	// Apply filters
+	for field, value := range o.Filters {
+		query = query.Where(field+" = ?", value)
+	}
 
+	// Apply search
 	if o.Search != "" {
 		query = ApplySearch(query, o.Resource, o.Search)
 	}
 
-	if o.Sort != nil {
-		sortOption := SortOption{
-			Field: o.Sort.Field,
-			Order: o.Sort.Order,
-		}
-		query = ApplySort(query, sortOption)
+	// Apply sorting
+	if o.Sort != "" {
+		query = query.Order(o.Sort + " " + o.Order)
 	}
 
-	paginateOption := PaginateOption{
-		Page:    o.Page,
-		PerPage: o.PerPage,
-	}
-	query = ApplyPaginate(query, paginateOption)
+	// Apply pagination
+	offset := (o.Page - 1) * o.PerPage
+	query = query.Offset(offset).Limit(o.PerPage)
 
 	return query
 }
@@ -117,38 +128,46 @@ func (o QueryOptions) ApplyWithPagination(query *gorm.DB, dest interface{}) (int
 
 	countQuery := query
 
-	countQuery = ApplyFilters(countQuery, o.Filters)
+	// Apply filters to count query
+	for field, value := range o.Filters {
+		countQuery = countQuery.Where(field+" = ?", value)
+	}
 
+	// Apply search to count query
 	if o.Search != "" {
 		countQuery = ApplySearch(countQuery, o.Resource, o.Search)
 	}
 
+	// Count total records
 	if err := countQuery.Count(&total).Error; err != nil {
 		return 0, err
 	}
 
-	query = ApplyFilters(query, o.Filters)
+	// Apply filters to main query
+	for field, value := range o.Filters {
+		query = query.Where(field+" = ?", value)
+	}
 
+	// Apply search to main query
 	if o.Search != "" {
 		query = ApplySearch(query, o.Resource, o.Search)
 	}
 
-	if o.Sort != nil {
-		sortOption := SortOption{
-			Field: o.Sort.Field,
-			Order: o.Sort.Order,
+	// Apply sorting
+	if o.Sort != "" {
+		query = query.Order(o.Sort + " " + o.Order)
+	}
+
+	// Only apply pagination if not disabled and we have a destination
+	if dest != nil && !o.DisablePagination {
+		// Apply pagination
+		offset := (o.Page - 1) * o.PerPage
+		query = query.Offset(offset).Limit(o.PerPage)
+
+		// Execute query and scan results
+		if err := query.Find(dest).Error; err != nil {
+			return 0, err
 		}
-		query = ApplySort(query, sortOption)
-	}
-
-	paginateOption := PaginateOption{
-		Page:    o.Page,
-		PerPage: o.PerPage,
-	}
-	query = ApplyPaginate(query, paginateOption)
-
-	if err := query.Find(dest).Error; err != nil {
-		return 0, err
 	}
 
 	return total, nil

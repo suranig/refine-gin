@@ -19,11 +19,11 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
-		router.GET("/"+res.GetName(), GenerateListHandler(res, repo))
+		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationRead) {
-		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandler(res, repo))
+		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
@@ -36,6 +36,11 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 	if res.HasOperation(resource.OperationDelete) {
 		router.DELETE("/"+res.GetName()+"/:"+idParamName, GenerateDeleteHandler(res, repo))
+	}
+
+	// Register count handler if the operation is allowed
+	if res.HasOperation(resource.OperationCount) {
+		router.GET("/"+res.GetName()+"/count", GenerateCountHandler(res, repo))
 	}
 }
 
@@ -46,11 +51,11 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
-		router.GET("/"+res.GetName(), GenerateListHandler(res, repo))
+		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationRead) {
-		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandler(res, repo))
+		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
@@ -63,6 +68,11 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 	if res.HasOperation(resource.OperationDelete) {
 		router.DELETE("/"+res.GetName()+"/:"+idParamName, GenerateDeleteHandler(res, repo))
+	}
+
+	// Register count handler if the operation is allowed
+	if res.HasOperation(resource.OperationCount) {
+		router.GET("/"+res.GetName()+"/count", GenerateCountHandler(res, repo))
 	}
 }
 
@@ -84,11 +94,11 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
-		router.GET("/"+res.GetName(), GenerateListHandler(res, repo))
+		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationRead) {
-		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParam(res, repo, idParamName))
+		router.GET("/"+res.GetName()+"/:"+idParamName, GenerateGetHandlerWithParamAndDTO(res, repo, idParamName, dtoProvider))
 	}
 
 	if res.HasOperation(resource.OperationCreate) {
@@ -101,6 +111,11 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 
 	if res.HasOperation(resource.OperationDelete) {
 		router.DELETE("/"+res.GetName()+"/:"+idParamName, GenerateDeleteHandlerWithParam(res, repo, idParamName))
+	}
+
+	// Register count handler if the operation is allowed
+	if res.HasOperation(resource.OperationCount) {
+		router.GET("/"+res.GetName()+"/count", GenerateCountHandler(res, repo))
 	}
 }
 

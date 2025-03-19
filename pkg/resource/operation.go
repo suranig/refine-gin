@@ -1,8 +1,9 @@
 package resource
 
-// Operation represents a resource operation
+// Operation represents a CRUD operation
 type Operation string
 
+// Available operations
 const (
 	// OperationList represents the LIST operation (GET /resources)
 	OperationList Operation = "list"
@@ -18,4 +19,7 @@ const (
 
 	// OperationDelete represents the DELETE operation (DELETE /resources/:id)
 	OperationDelete Operation = "delete"
+
+	// OperationCount represents the COUNT operation for counting resources
+	OperationCount Operation = "count"
 )

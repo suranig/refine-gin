@@ -8,16 +8,25 @@ import (
 	"gorm.io/gorm"
 )
 
+// Repository defines a generic repository interface
 type Repository interface {
+	// List returns a list of resources with pagination
 	List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error)
 
+	// Get returns a single resource by ID
 	Get(ctx context.Context, id interface{}) (interface{}, error)
 
+	// Create creates a new resource
 	Create(ctx context.Context, data interface{}) (interface{}, error)
 
+	// Update updates an existing resource
 	Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error)
 
+	// Delete deletes a resource
 	Delete(ctx context.Context, id interface{}) error
+
+	// Count returns the total number of resources matching the query options
+	Count(ctx context.Context, options query.QueryOptions) (int64, error)
 }
 
 type RepositoryFactory interface {
@@ -81,6 +90,15 @@ func (r *GormRepository) Delete(ctx context.Context, id interface{}) error {
 	}
 
 	return r.DB.Delete(item).Error
+}
+
+func (r *GormRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	total, err := options.ApplyWithPagination(r.DB.Model(r.Model), nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return total, nil
 }
 
 func NewGormRepository(db *gorm.DB, model interface{}) Repository {
