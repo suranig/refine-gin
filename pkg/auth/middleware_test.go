@@ -88,6 +88,8 @@ func TestJWTAuthorizationProvider(t *testing.T) {
 	mockResource := new(MockResource)
 	mockResource.On("GetName").Return("tests")
 	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
 
 	// Create a test context with claims
 	gin.SetMode(gin.TestMode)
@@ -307,4 +309,23 @@ func (m *MockResource) GetRelation(name string) *resource.Relation {
 func (m *MockResource) GetIDFieldName() string {
 	args := m.Called()
 	return args.String(0)
+}
+
+// GetField returns a field by name
+func (m *MockResource) GetField(name string) *resource.Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	field := args.Get(0).(resource.Field)
+	return &field
+}
+
+// GetSearchable returns searchable field names
+func (m *MockResource) GetSearchable() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
 }

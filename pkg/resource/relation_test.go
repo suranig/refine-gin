@@ -84,6 +84,24 @@ func (m *MockResource) GetIDFieldName() string {
 	return args.String(0)
 }
 
+// GetField returns a field by name
+func (m *MockResource) GetField(name string) *Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*Field)
+}
+
+// GetSearchable returns searchable field names
+func (m *MockResource) GetSearchable() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 // TestModels for relation tests
 type User struct {
 	ID      string   `json:"id" gorm:"primaryKey"`
@@ -339,6 +357,8 @@ func TestIncludeRelations(t *testing.T) {
 	// Setup expectations
 	res.On("GetRelations").Return(relations)
 	res.On("GetIDFieldName").Return("ID")
+	res.On("GetField", mock.Anything).Return(nil)
+	res.On("GetSearchable").Return([]string{})
 
 	// Ważne: HasRelation musi być wywoływane z dokładnymi parametrami, które będą używane w funkcji
 	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
@@ -470,6 +490,8 @@ func TestLoadRelations(t *testing.T) {
 	res.On("GetRelation", "Profile").Return(&relations[1])
 	res.On("GetRelation", "Invalid").Return(nil)
 	res.On("GetIDFieldName").Return("ID")
+	res.On("GetField", mock.Anything).Return(nil)
+	res.On("GetSearchable").Return([]string{})
 
 	// Test LoadRelations with a single record
 	var loadedUser User

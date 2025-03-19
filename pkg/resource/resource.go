@@ -31,6 +31,12 @@ type Resource interface {
 
 	// Zwraca nazwę pola identyfikatora (domyślnie "ID")
 	GetIDFieldName() string
+
+	// Returns a field by name
+	GetField(name string) *Field
+
+	// Returns searchable fields
+	GetSearchable() []string
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -368,4 +374,25 @@ func SetCustomID(obj interface{}, id interface{}, idFieldName string) error {
 	}
 
 	return nil
+}
+
+// GetField returns a field by name
+func (r *DefaultResource) GetField(name string) *Field {
+	for _, field := range r.Fields {
+		if field.Name == name {
+			return &field
+		}
+	}
+	return nil
+}
+
+// GetSearchable returns a list of searchable field names
+func (r *DefaultResource) GetSearchable() []string {
+	var searchable []string
+	for _, field := range r.Fields {
+		if field.Searchable {
+			searchable = append(searchable, field.Name)
+		}
+	}
+	return searchable
 }

@@ -1,184 +1,184 @@
 package query
 
 import (
+	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 
-// QueryOptions contains options for querying data
-func (o QueryOptions) Apply(query *gorm.DB) *gorm.DB {
+// Apply applies query options (filters, search, sorting, but not pagination) to a GORM query
+func (o QueryOptions) Apply(tx *gorm.DB) *gorm.DB {
 	// Apply filters
 	for field, value := range o.Filters {
-		query = query.Where(field+" = ?", value)
+		// Make sure field exists in resource schema
+		if f := o.Resource.GetField(field); f != nil {
+			tx = tx.Where(fmt.Sprintf("%s = ?", field), value)
+		}
 	}
 
-	// Apply search
-	if o.Search != "" {
-		query = ApplySearch(query, o.Resource, o.Search)
+	// Apply advanced filters
+	tx = applyAdvancedFilters(tx, o.AdvancedFilters, o.Resource)
+
+	// Apply search if provided
+	if o.Search != "" && o.Resource.GetSearchable() != nil {
+		searchableFields := o.Resource.GetSearchable()
+		if len(searchableFields) > 0 {
+			var conditions []string
+			var values []interface{}
+			for _, field := range searchableFields {
+				conditions = append(conditions, fmt.Sprintf("%s LIKE ?", field))
+				values = append(values, fmt.Sprintf("%%%s%%", o.Search))
+			}
+			tx = tx.Where(strings.Join(conditions, " OR "), values...)
+		}
 	}
 
 	// Apply sorting
 	if o.Sort != "" {
-		query = query.Order(o.Sort + " " + o.Order)
+		// Check if we have multiple sort fields (comma-separated)
+		if strings.Contains(o.Sort, ",") {
+			// The sort string already contains both field and order information
+			tx = tx.Order(o.Sort)
+		} else {
+			// Single sort field - validate existence in resource schema
+			if f := o.Resource.GetField(o.Sort); f != nil {
+				tx = tx.Order(fmt.Sprintf("%s %s", o.Sort, o.Order))
+			}
+		}
 	}
 
-	// Apply pagination
-	offset := (o.Page - 1) * o.PerPage
-	query = query.Offset(offset).Limit(o.PerPage)
-
-	return query
+	return tx
 }
 
-// ApplyWithPagination stosuje opcje zapytania do zapytania GORM i zwraca całkowitą liczbę rekordów
-func (o QueryOptions) ApplyWithPagination(query *gorm.DB, dest interface{}) (int64, error) {
-	var total int64
+// ApplyWithPagination applies all query options including pagination to a GORM query
+// Returns the updated query and the total count of records before pagination
+func (o QueryOptions) ApplyWithPagination(tx *gorm.DB, dest interface{}) (int64, error) {
+	// Apply non-pagination filters
+	tx = o.Apply(tx)
 
-	countQuery := query
-
-	// Apply filters to count query
-	for field, value := range o.Filters {
-		countQuery = countQuery.Where(field+" = ?", value)
-	}
-
-	// Apply search to count query
-	if o.Search != "" {
-		countQuery = ApplySearch(countQuery, o.Resource, o.Search)
-	}
-
-	// Count total records
-	if err := countQuery.Count(&total).Error; err != nil {
+	// Get total count
+	var count int64
+	countQuery := tx
+	if err := countQuery.Count(&count).Error; err != nil {
 		return 0, err
 	}
 
-	// Apply filters to main query
-	for field, value := range o.Filters {
-		query = query.Where(field+" = ?", value)
-	}
-
-	// Apply search to main query
-	if o.Search != "" {
-		query = ApplySearch(query, o.Resource, o.Search)
-	}
-
-	// Apply sorting
-	if o.Sort != "" {
-		query = query.Order(o.Sort + " " + o.Order)
-	}
-
-	// Only apply pagination if not disabled and we have a destination
-	if dest != nil && !o.DisablePagination {
-		// Apply pagination
+	// Apply pagination if not disabled
+	if !o.DisablePagination && dest != nil {
 		offset := (o.Page - 1) * o.PerPage
-		query = query.Offset(offset).Limit(o.PerPage)
+		tx = tx.Offset(offset).Limit(o.PerPage)
 
-		// Execute query and scan results
-		if err := query.Find(dest).Error; err != nil {
+		// Find records with pagination
+		if err := tx.Find(dest).Error; err != nil {
 			return 0, err
 		}
 	}
 
-	return total, nil
+	return count, nil
 }
 
-func ApplySearch(query *gorm.DB, res resource.Resource, search string) *gorm.DB {
-	if search == "" {
-		return query
-	}
-
-	var searchableFields []string
-	for _, field := range res.GetFields() {
-		if field.Searchable {
-			searchableFields = append(searchableFields, field.Name)
+// applyAdvancedFilters applies advanced filters with operators to a GORM query
+func applyAdvancedFilters(tx *gorm.DB, filters []Filter, res resource.Resource) *gorm.DB {
+	for _, filter := range filters {
+		// Make sure field exists in resource schema
+		if f := res.GetField(filter.Field); f != nil {
+			// Apply based on operator
+			switch strings.ToLower(filter.Operator) {
+			case "eq":
+				tx = tx.Where(fmt.Sprintf("%s = ?", filter.Field), filter.Value)
+			case "ne":
+				tx = tx.Where(fmt.Sprintf("%s <> ?", filter.Field), filter.Value)
+			case "lt":
+				tx = tx.Where(fmt.Sprintf("%s < ?", filter.Field), filter.Value)
+			case "gt":
+				tx = tx.Where(fmt.Sprintf("%s > ?", filter.Field), filter.Value)
+			case "lte":
+				tx = tx.Where(fmt.Sprintf("%s <= ?", filter.Field), filter.Value)
+			case "gte":
+				tx = tx.Where(fmt.Sprintf("%s >= ?", filter.Field), filter.Value)
+			case "contains":
+				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
+			case "containsi":
+				tx = tx.Where(fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
+			case "startswith":
+				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%v%%", filter.Value))
+			case "endswith":
+				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%%%v", filter.Value))
+			case "null":
+				value := filter.Value
+				boolValue, ok := value.(bool)
+				if ok && boolValue {
+					tx = tx.Where(fmt.Sprintf("%s IS NULL", filter.Field))
+				} else {
+					tx = tx.Where(fmt.Sprintf("%s IS NOT NULL", filter.Field))
+				}
+			case "in":
+				// Handle array values
+				if reflect.TypeOf(filter.Value).Kind() == reflect.String {
+					// If string, split by comma
+					values := strings.Split(filter.Value.(string), ",")
+					tx = tx.Where(fmt.Sprintf("%s IN ?", filter.Field), values)
+				} else {
+					// Already an array/slice
+					tx = tx.Where(fmt.Sprintf("%s IN ?", filter.Field), filter.Value)
+				}
+			default:
+				// Default to equality
+				tx = tx.Where(fmt.Sprintf("%s = ?", filter.Field), filter.Value)
+			}
 		}
 	}
-
-	if len(searchableFields) == 0 {
-		return query
-	}
-
-	searchValue := "%" + search + "%"
-	for i, field := range searchableFields {
-		if i == 0 {
-			query = query.Where(field+" LIKE ?", searchValue)
-		} else {
-			query = query.Or(field+" LIKE ?", searchValue)
-		}
-	}
-
-	return query
+	return tx
 }
 
-// ParseQueryOptions parses query options from the request
+// ParseQueryOptions parses query parameters from gin context
 func ParseQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
-	// Parse pagination - support both standard and Refine.dev formats
-	page := 1
-	perPage := 10
+	return NewQueryOptions(c, res)
+}
 
-	// Try Refine.dev 'current' parameter first
-	if currentStr := c.Query("current"); currentStr != "" {
-		if currentInt, err := strconv.Atoi(currentStr); err == nil && currentInt > 0 {
-			page = currentInt
-		}
-	} else if pageStr := c.Query("page"); pageStr != "" {
-		// Fall back to standard 'page' parameter
-		if pageInt, err := strconv.Atoi(pageStr); err == nil && pageInt > 0 {
-			page = pageInt
-		}
-	}
-
-	// Try Refine.dev 'pageSize' parameter first
-	if pageSizeStr := c.Query("pageSize"); pageSizeStr != "" {
-		if pageSizeInt, err := strconv.Atoi(pageSizeStr); err == nil && pageSizeInt > 0 {
-			perPage = pageSizeInt
-		}
-	} else if perPageStr := c.Query("per_page"); perPageStr != "" {
-		// Fall back to standard 'per_page' parameter
-		if perPageInt, err := strconv.Atoi(perPageStr); err == nil && perPageInt > 0 {
-			perPage = perPageInt
-		}
-	}
-
-	// Parse sorting
-	var sort string
-	var order string
-
-	if sortField := c.Query("sort"); sortField != "" {
-		sort = sortField
-		order = c.DefaultQuery("order", "asc")
-	} else if defaultSort := res.GetDefaultSort(); defaultSort != nil {
-		sort = defaultSort.Field
-		order = defaultSort.Order
-	}
-
-	// Parse filters
-	filters := make(map[string]interface{})
-	for _, field := range res.GetFields() {
-		if !field.Filterable {
-			continue
-		}
-
-		value := c.Query(field.Name)
-		if value == "" {
-			continue
-		}
-
-		filters[field.Name] = value
-	}
-
-	// Parse search
-	search := c.Query("q")
-
-	return QueryOptions{
-		Resource: res,
-		Page:     page,
-		PerPage:  perPage,
-		Sort:     sort,
-		Order:    order,
-		Filters:  filters,
-		Search:   search,
+// ParsePaginationResponse creates a pagination response
+func ParsePaginationResponse(opts QueryOptions, total int64) map[string]interface{} {
+	return map[string]interface{}{
+		"page":      opts.Page,
+		"per_page":  opts.PerPage,
+		"total":     total,
+		"last_page": int(total+int64(opts.PerPage)-1) / opts.PerPage,
 	}
 }
 
+// ToResult converts paginated data to a response format
+func ToResult(data interface{}, meta map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"data": data,
+		"meta": meta,
+	}
+}
+
+// ParseId parses an ID from a string
+func ParseId(id string) (uint, error) {
+	// Convert the ID to int
+	var idInt int
+	if _, err := fmt.Sscanf(id, "%d", &idInt); err != nil {
+		return 0, err
+	}
+	return uint(idInt), nil
+}
+
+// ParseQueryParam parses a query parameter with type conversion
+func ParseQueryParam(value string, fieldType string) (interface{}, error) {
+	switch fieldType {
+	case "int":
+		return strconv.Atoi(value)
+	case "float":
+		return strconv.ParseFloat(value, 64)
+	case "bool":
+		return strconv.ParseBool(value)
+	default:
+		return value, nil
+	}
+}

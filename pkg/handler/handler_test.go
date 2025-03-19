@@ -126,6 +126,25 @@ func (m *MockResource) GetIDFieldName() string {
 	return args.String(0)
 }
 
+// GetField returns a field by name
+func (m *MockResource) GetField(name string) *resource.Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	field := args.Get(0).(resource.Field)
+	return &field
+}
+
+// GetSearchable returns searchable field names
+func (m *MockResource) GetSearchable() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 // Mock DTO provider for testing
 type MockDTOProvider struct {
 	mock.Mock
@@ -183,6 +202,8 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	mockResource.On("HasRelation", mock.Anything).Return(false)
 	mockResource.On("GetRelation", mock.Anything).Return(nil)
 	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
 
 	return r, mockRepo, mockResource, mockDTOProvider
 }

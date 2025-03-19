@@ -8,13 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Filter represents a filtering condition
-type Filter struct {
-	Field    string
-	Operator string
-	Value    interface{}
-}
-
 // FilterOperator defines available filter operators
 type FilterOperator string
 

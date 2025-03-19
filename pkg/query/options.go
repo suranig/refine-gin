@@ -2,10 +2,18 @@ package query
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
+
+// Filter represents a query filter with operator support
+type Filter struct {
+	Field    string      `json:"field"`
+	Operator string      `json:"operator"` // eq, ne, lt, gt, lte, gte, contains, etc.
+	Value    interface{} `json:"value"`
+}
 
 // QueryOptions holds query parameters
 type QueryOptions struct {
@@ -25,6 +33,9 @@ type QueryOptions struct {
 	// Filters
 	Filters map[string]interface{}
 
+	// Advanced filters (with operators)
+	AdvancedFilters []Filter
+
 	// Sorting
 	Sort  string
 	Order string
@@ -38,6 +49,12 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 		Page:     1,
 		PerPage:  10,
 		Order:    "asc",
+	}
+
+	// Default sort
+	if defaultSort := res.GetDefaultSort(); defaultSort != nil {
+		opt.Sort = defaultSort.Field
+		opt.Order = defaultSort.Order
 	}
 
 	// Parse pagination - support both standard (page, per_page) and Refine.dev formats (current, pageSize)
@@ -75,17 +92,102 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 
 	// Parse filters
 	opt.Filters = make(map[string]interface{})
-	for _, filter := range res.GetFilters() {
-		if value := c.DefaultQuery(filter.Field, ""); value != "" {
-			opt.Filters[filter.Field] = value
+	// Get filterable fields from resource
+	for _, field := range res.GetFields() {
+		if field.Filterable {
+			if value := c.DefaultQuery(field.Name, ""); value != "" {
+				opt.Filters[field.Name] = value
+			}
+		}
+	}
+
+	// Initialize advanced filters
+	opt.AdvancedFilters = make([]Filter, 0)
+
+	// Parse Refine.dev advanced filters
+	// Format 1: filter[field][operator]=value
+	for key, values := range c.Request.URL.Query() {
+		// Check if it's a filter parameter
+		if strings.HasPrefix(key, "filter[") && strings.Contains(key, "][") && strings.HasSuffix(key, "]") {
+			// Extract field and operator from the key
+			key = strings.TrimPrefix(key, "filter[")
+			key = strings.TrimSuffix(key, "]")
+			parts := strings.Split(key, "][")
+
+			if len(parts) == 2 && len(values) > 0 {
+				field := parts[0]
+				operator := parts[1]
+				value := values[0]
+
+				// Create advanced filter
+				opt.AdvancedFilters = append(opt.AdvancedFilters, Filter{
+					Field:    field,
+					Operator: operator,
+					Value:    value,
+				})
+			}
+		}
+	}
+
+	// Format 2: filters[field]=value&operators[field]=operator
+	operators := make(map[string]string)
+	for key, values := range c.Request.URL.Query() {
+		if strings.HasPrefix(key, "operators[") && strings.HasSuffix(key, "]") && len(values) > 0 {
+			field := strings.TrimPrefix(key, "operators[")
+			field = strings.TrimSuffix(field, "]")
+			operators[field] = values[0]
+		}
+	}
+
+	for key, values := range c.Request.URL.Query() {
+		if strings.HasPrefix(key, "filters[") && strings.HasSuffix(key, "]") && len(values) > 0 {
+			field := strings.TrimPrefix(key, "filters[")
+			field = strings.TrimSuffix(field, "]")
+
+			// Get the operator, default to "eq" if not specified
+			operator := "eq"
+			if op, exists := operators[field]; exists {
+				operator = op
+			}
+
+			// Create advanced filter
+			opt.AdvancedFilters = append(opt.AdvancedFilters, Filter{
+				Field:    field,
+				Operator: operator,
+				Value:    values[0],
+			})
 		}
 	}
 
 	// Parse sorting - support both standard (sort, order) and Refine.dev formats
 	if sort := c.DefaultQuery("sort", ""); sort != "" {
-		opt.Sort = sort
-		if order := c.DefaultQuery("order", "asc"); order == "desc" {
-			opt.Order = "desc"
+		// Check if this is a multiple sort fields request (comma-separated)
+		if strings.Contains(sort, ",") {
+			sortFields := strings.Split(sort, ",")
+			sortOrders := strings.Split(c.DefaultQuery("order", "asc"), ",")
+
+			// Ensure we have enough orders for all fields
+			for len(sortOrders) < len(sortFields) {
+				sortOrders = append(sortOrders, "asc") // Default to asc
+			}
+
+			// Build sort expressions
+			sortExpressions := make([]string, len(sortFields))
+			for i, field := range sortFields {
+				field = strings.TrimSpace(field)
+				order := strings.TrimSpace(sortOrders[i])
+				if order != "asc" && order != "desc" {
+					order = "asc" // Default to asc for invalid values
+				}
+				sortExpressions[i] = field + " " + order
+			}
+
+			opt.Sort = strings.Join(sortExpressions, ", ")
+		} else {
+			opt.Sort = sort
+			if order := c.DefaultQuery("order", "asc"); order == "desc" {
+				opt.Order = "desc"
+			}
 		}
 	} else if defaultSort := res.GetDefaultSort(); defaultSort != nil {
 		opt.Sort = defaultSort.Field
