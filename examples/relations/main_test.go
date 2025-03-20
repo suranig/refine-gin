@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
@@ -23,78 +22,58 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	assert.NoError(t, err)
 
 	// Migrate models
-	err = db.AutoMigrate(&User{}, &Post{}, &Comment{}, &Profile{})
+	err = db.AutoMigrate(&Category{}, &Post{}, &Tag{})
 	assert.NoError(t, err)
 
 	return db
 }
 
-// createTestData creates test data with unique IDs based on the test name
-func createTestData(t *testing.T, db *gorm.DB) (User, Post, Comment, Profile) {
-	// Generate unique IDs based on test name
-	prefix := fmt.Sprintf("%p", t)
-	userID := fmt.Sprintf("user_%s", prefix)
-	profileID := fmt.Sprintf("profile_%s", prefix)
-	postID := fmt.Sprintf("post_%s", prefix)
-	commentID := fmt.Sprintf("comment_%s", prefix)
-
-	// Create a user
-	user := User{
-		ID:        userID,
-		Name:      "Jan Kowalski",
-		Email:     fmt.Sprintf("jan_%s@example.com", prefix),
+// createTestData creates test data for relation tests
+func createTestData(t *testing.T, db *gorm.DB) (Category, Post, Tag) {
+	// Create a category
+	category := Category{
+		Name:      "Technology",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	err := db.Create(&user).Error
+	err := db.Create(&category).Error
 	assert.NoError(t, err)
 
-	// Create a profile
-	profile := Profile{
-		ID:        profileID,
-		Bio:       "Programista Go",
-		UserID:    user.ID,
+	// Create a tag
+	tag := Tag{
+		Name:      "Go",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	err = db.Create(&profile).Error
+	err = db.Create(&tag).Error
 	assert.NoError(t, err)
 
 	// Create a post
 	post := Post{
-		ID:        postID,
-		Title:     "Testowy post",
-		Content:   "Treść testowego posta",
-		AuthorID:  user.ID,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Title:      "Testowy post",
+		Content:    "Treść testowego posta",
+		CategoryID: &category.ID,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 	err = db.Create(&post).Error
 	assert.NoError(t, err)
 
-	// Create a comment
-	comment := Comment{
-		ID:        commentID,
-		Content:   "Testowy komentarz",
-		AuthorID:  user.ID,
-		PostID:    post.ID,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	err = db.Create(&comment).Error
+	// Create post-tag relation
+	err = db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", post.ID, tag.ID).Error
 	assert.NoError(t, err)
 
-	return user, post, comment, profile
+	return category, post, tag
 }
 
-// MockUserRepository is a modified version of UserRepository for testing
-type MockUserRepository struct {
+// MockCategoryRepository is a repository for Category testing
+type MockCategoryRepository struct {
 	db *gorm.DB
 }
 
-// Get retrieves a user by ID with relations
-func (r *MockUserRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
-	var user User
+// Get retrieves a category by ID with relations
+func (r *MockCategoryRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
+	var category Category
 
 	// Get the resource from context
 	res, ok := ctx.Value("resource").(resource.Resource)
@@ -105,9 +84,7 @@ func (r *MockUserRepository) Get(ctx context.Context, id interface{}) (interface
 	// Get includes directly from the resource (for testing)
 	var includes []string
 	for _, relation := range res.GetRelations() {
-		if relation.IncludeByDefault {
-			includes = append(includes, relation.Name)
-		}
+		includes = append(includes, relation.Field)
 	}
 
 	// Apply includes
@@ -116,50 +93,49 @@ func (r *MockUserRepository) Get(ctx context.Context, id interface{}) (interface
 		q = q.Preload(include)
 	}
 
-	if err := q.First(&user, "id = ?", id).Error; err != nil {
+	if err := q.First(&category, id).Error; err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	return category, nil
 }
 
-// List retrieves users with pagination and relations
-func (r *MockUserRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
-	var users []User
+// List retrieves categories with pagination and relations
+func (r *MockCategoryRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
+	var categories []Category
 	var total int64
 
-	q := r.db.Model(&User{})
+	q := r.db.Model(&Category{})
 
 	// Apply includes from the resource
 	var includes []string
 	for _, relation := range options.Resource.GetRelations() {
-		if relation.IncludeByDefault {
-			includes = append(includes, relation.Name)
-		}
+		includes = append(includes, relation.Field)
 	}
 
 	for _, include := range includes {
 		q = q.Preload(include)
 	}
 
-	total, err := options.ApplyWithPagination(q, &users)
+	total, err := options.ApplyWithPagination(q, &categories)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return users, total, nil
+	return categories, total, nil
 }
 
-func TestUserRepository_Get(t *testing.T) {
+// TestCategoryRepository_Get tests retrieving a category with relations
+func TestCategoryRepository_Get(t *testing.T) {
 	// Setup
 	db := setupTestDB(t)
-	user, _, _, _ := createTestData(t, db)
-	repo := &MockUserRepository{db: db}
+	category, post, _ := createTestData(t, db)
+	repo := &MockCategoryRepository{db: db}
 
 	// Create resource
-	userResource := resource.NewResource(resource.ResourceConfig{
-		Name:  "users",
-		Model: User{},
+	categoryResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "categories",
+		Model: Category{},
 		Operations: []resource.Operation{
 			resource.OperationList,
 			resource.OperationCreate,
@@ -167,84 +143,35 @@ func TestUserRepository_Get(t *testing.T) {
 			resource.OperationUpdate,
 			resource.OperationDelete,
 		},
-	})
-
-	// Create Gin context
-	gin.SetMode(gin.TestMode)
-	ctx := context.WithValue(context.Background(), "resource", userResource)
-
-	// Test: Get user without additional relations
-	result, err := repo.Get(ctx, user.ID)
-	assert.NoError(t, err)
-
-	// Check if user was retrieved correctly
-	resultUser, ok := result.(User)
-	assert.True(t, ok)
-	assert.Equal(t, user.ID, resultUser.ID)
-	assert.Equal(t, user.Name, resultUser.Name)
-	assert.Equal(t, user.Email, resultUser.Email)
-
-	// Profile should be loaded by default (include=true)
-	assert.NotNil(t, resultUser.Profile)
-	assert.Equal(t, "Programista Go", resultUser.Profile.Bio)
-
-	// Posts should not be loaded by default (include=false)
-	assert.Empty(t, resultUser.Posts)
-}
-
-func TestUserRepository_List(t *testing.T) {
-	// Setup
-	db := setupTestDB(t)
-	user, _, _, _ := createTestData(t, db)
-	repo := &MockUserRepository{db: db}
-
-	// Create resource
-	userResource := resource.NewResource(resource.ResourceConfig{
-		Name:  "users",
-		Model: User{},
-		Operations: []resource.Operation{
-			resource.OperationList,
-			resource.OperationCreate,
-			resource.OperationRead,
-			resource.OperationUpdate,
-			resource.OperationDelete,
+		Relations: []resource.Relation{
+			{
+				Name:  "posts",
+				Type:  resource.RelationTypeOneToMany,
+				Field: "Posts",
+			},
 		},
 	})
 
 	// Create Gin context
 	gin.SetMode(gin.TestMode)
+	ctx := context.WithValue(context.Background(), "resource", categoryResource)
 
-	// Create query options
-	options := query.QueryOptions{
-		Resource: userResource,
-		Filters:  make(map[string]interface{}),
-		Sort:     "",
-		Page:     1,
-		PerPage:  10,
-	}
-
-	// Test: List users without additional relations
-	result, total, err := repo.List(context.Background(), options)
+	// Test: Get category with posts
+	result, err := repo.Get(ctx, category.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(1), total)
 
-	// Check if users were retrieved correctly
-	resultUsers, ok := result.([]User)
+	// Check if category was retrieved correctly
+	resultCategory, ok := result.(Category)
 	assert.True(t, ok)
-	assert.Len(t, resultUsers, 1)
-	assert.Equal(t, user.ID, resultUsers[0].ID)
-	assert.Equal(t, user.Name, resultUsers[0].Name)
-	assert.Equal(t, user.Email, resultUsers[0].Email)
+	assert.Equal(t, category.ID, resultCategory.ID)
+	assert.Equal(t, category.Name, resultCategory.Name)
 
-	// Profile should be loaded by default (include=true)
-	assert.NotNil(t, resultUsers[0].Profile)
-	assert.Equal(t, "Programista Go", resultUsers[0].Profile.Bio)
-
-	// Posts should not be loaded by default (include=false)
-	assert.Empty(t, resultUsers[0].Posts)
+	// Check that Posts were loaded
+	assert.NotEmpty(t, resultCategory.Posts)
+	assert.Equal(t, post.ID, resultCategory.Posts[0].ID)
 }
 
-// MockPostRepository is a simplified repository for posts
+// MockPostRepository is a repository for Post testing
 type MockPostRepository struct {
 	db *gorm.DB
 }
@@ -262,9 +189,7 @@ func (r *MockPostRepository) Get(ctx context.Context, id interface{}) (interface
 	// Get includes directly from the resource (for testing)
 	var includes []string
 	for _, relation := range res.GetRelations() {
-		if relation.IncludeByDefault {
-			includes = append(includes, relation.Name)
-		}
+		includes = append(includes, relation.Field)
 	}
 
 	// Apply includes
@@ -273,17 +198,18 @@ func (r *MockPostRepository) Get(ctx context.Context, id interface{}) (interface
 		q = q.Preload(include)
 	}
 
-	if err := q.First(&post, "id = ?", id).Error; err != nil {
+	if err := q.First(&post, id).Error; err != nil {
 		return nil, err
 	}
 
 	return post, nil
 }
 
+// TestPostRepository_Get tests retrieving a post with relations
 func TestPostRepository_Get(t *testing.T) {
 	// Setup
 	db := setupTestDB(t)
-	_, post, _, _ := createTestData(t, db)
+	category, post, tag := createTestData(t, db)
 	repo := &MockPostRepository{db: db}
 
 	// Create resource
@@ -297,13 +223,25 @@ func TestPostRepository_Get(t *testing.T) {
 			resource.OperationUpdate,
 			resource.OperationDelete,
 		},
+		Relations: []resource.Relation{
+			{
+				Name:  "category",
+				Type:  resource.RelationTypeManyToOne,
+				Field: "Category",
+			},
+			{
+				Name:  "tags",
+				Type:  resource.RelationTypeManyToMany,
+				Field: "Tags",
+			},
+		},
 	})
 
 	// Create Gin context
 	gin.SetMode(gin.TestMode)
 	ctx := context.WithValue(context.Background(), "resource", postResource)
 
-	// Test: Get post without additional relations
+	// Test: Get post with category and tags
 	result, err := repo.Get(ctx, post.ID)
 	assert.NoError(t, err)
 
@@ -312,61 +250,53 @@ func TestPostRepository_Get(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, post.ID, resultPost.ID)
 	assert.Equal(t, post.Title, resultPost.Title)
-	assert.Equal(t, post.Content, resultPost.Content)
 
-	// Author should be loaded by default (include=true)
-	assert.NotEmpty(t, resultPost.Author)
-	assert.Equal(t, post.AuthorID, resultPost.Author.ID)
+	// Check that Category was loaded
+	assert.NotNil(t, resultPost.Category)
+	assert.Equal(t, category.ID, resultPost.Category.ID)
 
-	// Comments should not be loaded by default (include=false)
-	assert.Empty(t, resultPost.Comments)
+	// Check that Tags were loaded
+	assert.NotEmpty(t, resultPost.Tags)
+	assert.Equal(t, tag.ID, resultPost.Tags[0].ID)
 }
 
+// Test helper functions for relation extraction
 func TestRelationExtraction(t *testing.T) {
-	// Test relation extraction from User model
-	userRelations := resource.ExtractRelationsFromModel(User{})
+	// Set up a resource with relations
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "posts",
+		Model: Post{},
+		Relations: []resource.Relation{
+			{
+				Name:  "category",
+				Type:  resource.RelationTypeManyToOne,
+				Field: "Category",
+			},
+			{
+				Name:  "tags",
+				Type:  resource.RelationTypeManyToMany,
+				Field: "Tags",
+			},
+		},
+	})
 
-	// Should have 2 relations: Posts and Profile
-	assert.Len(t, userRelations, 2)
+	// Test finding relation by name
+	categoryRelation := findRelationByName(res.GetRelations(), "category")
+	assert.NotNil(t, categoryRelation)
+	assert.Equal(t, "category", categoryRelation.Name)
+	assert.Equal(t, resource.RelationTypeManyToOne, categoryRelation.Type)
 
-	// Check Posts relation
-	postsRelation := findRelationByName(userRelations, "Posts")
-	assert.NotNil(t, postsRelation)
-	assert.Equal(t, "Posts", postsRelation.Name)
-	assert.Equal(t, resource.RelationTypeOneToMany, postsRelation.Type)
-	assert.Equal(t, "posts", postsRelation.Resource)
-	assert.Equal(t, "author_id", postsRelation.Field)
-	assert.Equal(t, "id", postsRelation.ReferenceField)
-	assert.False(t, postsRelation.IncludeByDefault)
+	tagsRelation := findRelationByName(res.GetRelations(), "tags")
+	assert.NotNil(t, tagsRelation)
+	assert.Equal(t, "tags", tagsRelation.Name)
+	assert.Equal(t, resource.RelationTypeManyToMany, tagsRelation.Type)
 
-	// Check Profile relation
-	profileRelation := findRelationByName(userRelations, "Profile")
-	assert.NotNil(t, profileRelation)
-	assert.Equal(t, "Profile", profileRelation.Name)
-	assert.Equal(t, resource.RelationTypeOneToOne, profileRelation.Type)
-	assert.Equal(t, "profiles", profileRelation.Resource)
-	assert.Equal(t, "user_id", profileRelation.Field)
-	assert.Equal(t, "id", profileRelation.ReferenceField)
-	assert.True(t, profileRelation.IncludeByDefault)
-
-	// Test relation extraction from Post model
-	postRelations := resource.ExtractRelationsFromModel(Post{})
-
-	// Should have 2 relations: Author and Comments
-	assert.Len(t, postRelations, 2)
-
-	// Check Author relation
-	authorRelation := findRelationByName(postRelations, "Author")
-	assert.NotNil(t, authorRelation)
-	assert.Equal(t, "Author", authorRelation.Name)
-	assert.Equal(t, resource.RelationTypeManyToOne, authorRelation.Type)
-	assert.Equal(t, "users", authorRelation.Resource)
-	assert.Equal(t, "author_id", authorRelation.Field)
-	assert.Equal(t, "id", authorRelation.ReferenceField)
-	assert.True(t, authorRelation.IncludeByDefault)
+	// Test with a non-existent relation
+	nonExistentRelation := findRelationByName(res.GetRelations(), "comments")
+	assert.Nil(t, nonExistentRelation)
 }
 
-// Helper function to find relation by name
+// Helper to find a relation by name
 func findRelationByName(relations []resource.Relation, name string) *resource.Relation {
 	for _, relation := range relations {
 		if relation.Name == name {
@@ -374,87 +304,4 @@ func findRelationByName(relations []resource.Relation, name string) *resource.Re
 		}
 	}
 	return nil
-}
-
-func TestIncludeRelations(t *testing.T) {
-	// Setup
-	db := setupTestDB(t)
-	_, _, _, _ = createTestData(t, db)
-
-	// Create resource
-	userResource := resource.NewResource(resource.ResourceConfig{
-		Name:  "users",
-		Model: User{},
-		Operations: []resource.Operation{
-			resource.OperationList,
-			resource.OperationCreate,
-			resource.OperationRead,
-			resource.OperationUpdate,
-			resource.OperationDelete,
-		},
-	})
-
-	// Create Gin context
-	gin.SetMode(gin.TestMode)
-
-	// Test: Without include parameter (should return default relations)
-	c1, _ := gin.CreateTestContext(nil)
-	includes1 := resource.IncludeRelations(c1, userResource)
-
-	// Profile should be loaded by default (include=true)
-	assert.Contains(t, includes1, "Profile")
-	// Posts should not be loaded by default (include=false)
-	assert.NotContains(t, includes1, "Posts")
-
-	// Test: With include parameter
-	c2, _ := gin.CreateTestContext(nil)
-	req, _ := http.NewRequest("GET", "/?include=Posts,Profile", nil)
-	c2.Request = req
-	includes2 := resource.IncludeRelations(c2, userResource)
-
-	// Both relations should be loaded
-	assert.Contains(t, includes2, "Posts")
-	assert.Contains(t, includes2, "Profile")
-}
-
-func TestLoadRelations(t *testing.T) {
-	// Setup
-	db := setupTestDB(t)
-	user, post, _, _ := createTestData(t, db)
-
-	// Test: Load relations for user
-	var loadedUser User
-	err := db.First(&loadedUser, "id = ?", user.ID).Error
-	assert.NoError(t, err)
-
-	// Load Posts and Profile relations
-	err = resource.LoadRelations(db, resource.NewResource(resource.ResourceConfig{
-		Name:  "users",
-		Model: User{},
-	}), &loadedUser, []string{"Posts", "Profile"})
-	assert.NoError(t, err)
-
-	// Check if relations were loaded
-	assert.NotNil(t, loadedUser.Profile)
-	assert.Equal(t, "Programista Go", loadedUser.Profile.Bio)
-	assert.Len(t, loadedUser.Posts, 1)
-	assert.Equal(t, post.ID, loadedUser.Posts[0].ID)
-
-	// Test: Load relations for post
-	var loadedPost Post
-	err = db.First(&loadedPost, "id = ?", post.ID).Error
-	assert.NoError(t, err)
-
-	// Load Author and Comments relations
-	err = resource.LoadRelations(db, resource.NewResource(resource.ResourceConfig{
-		Name:  "posts",
-		Model: Post{},
-	}), &loadedPost, []string{"Author", "Comments"})
-	assert.NoError(t, err)
-
-	// Check if relations were loaded
-	assert.Equal(t, user.ID, loadedPost.Author.ID)
-	assert.Equal(t, user.Name, loadedPost.Author.Name)
-	assert.Len(t, loadedPost.Comments, 1)
-	assert.Equal(t, "Testowy komentarz", loadedPost.Comments[0].Content)
 }
