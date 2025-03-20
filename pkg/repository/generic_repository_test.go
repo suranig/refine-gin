@@ -307,3 +307,71 @@ func TestGenericRepository_BulkOperations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, *(discountedProducts.(*[]TestProduct)), 1) // Tylko jeden produkt był z in_stock=false
 }
+
+func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
+	db := setupTestDB(t)
+	category, _ := createTestData(t, db)
+
+	// Utworzenie zasobu i repozytorium
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+
+	// Test CreateMany
+	newProducts := []TestProduct{
+		{Name: "Headphones", Price: 99.99, InStock: true, CategoryID: category.ID},
+		{Name: "Speaker", Price: 199.99, InStock: true, CategoryID: category.ID},
+		{Name: "Keyboard", Price: 79.99, InStock: false, CategoryID: category.ID},
+	}
+
+	createdProducts, err := repo.CreateMany(ctx, &newProducts)
+	assert.NoError(t, err)
+	assert.NotNil(t, createdProducts)
+
+	// Weryfikacja utworzonych produktów
+	products := createdProducts.(*[]TestProduct)
+	for _, p := range *products {
+		assert.NotEqual(t, uint(0), p.ID) // ID powinno być przypisane
+	}
+
+	// Pobierz ID produktów do aktualizacji
+	var productIDs []interface{}
+	for _, p := range *products {
+		if p.InStock {
+			productIDs = append(productIDs, p.ID)
+		}
+	}
+
+	// Test UpdateMany
+	assert.Len(t, productIDs, 2) // Powinny być dwa produkty z InStock=true
+
+	updateCount, err := repo.UpdateMany(ctx, productIDs, map[string]interface{}{"price": 149.99})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), updateCount)
+
+	// Weryfikacja aktualizacji
+	for _, id := range productIDs {
+		product, err := repo.Get(ctx, id)
+		assert.NoError(t, err)
+		assert.Equal(t, 149.99, product.(*TestProduct).Price)
+	}
+
+	// Test DeleteMany
+	deleteCount, err := repo.DeleteMany(ctx, productIDs)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), deleteCount)
+
+	// Weryfikacja usunięcia
+	options := query.QueryOptions{
+		Resource: productResource,
+		Page:     1,
+		PerPage:  10,
+	}
+	_, count, err := repo.List(ctx, options)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count) // 1 z createTestData + 1 z CreateMany (tylko ten z InStock=false)
+}
