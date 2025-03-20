@@ -33,6 +33,13 @@ lint:
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -f $(COVERAGE_FILE) $(COVERAGE_HTML)
+	@rm -f *.db
+	@rm -f file::memory:test_*
+	@rm -f examples/basic/*.db
+	@rm -f examples/refine_integration/*.db
+	@find . -name ":memory:*" -delete
+	@find . -name "*.tmp" -type f -delete
+	@echo "Successfully cleaned all artifacts and test memory files"
 
 help:
 	@echo "Available targets:"
