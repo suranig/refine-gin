@@ -52,9 +52,9 @@ func TestCustomIDIntegration(t *testing.T) {
 
 	// Register resource with custom ID parameter
 	api := r.Group("/api")
-	handler.RegisterResourceWithOptions(api, res, repo, handler.RegisterOptions{
+	handler.RegisterResourceWithOptions(api, res, repo, handler.RegisterOptionsToResourceOptions(handler.RegisterOptions{
 		IDParamName: "uid",
-	})
+	}))
 
 	// Test Create
 	user := User{

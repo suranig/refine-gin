@@ -32,7 +32,15 @@ func ExtractPaginate(c *gin.Context) PaginateOption {
 	pageStr := c.DefaultQuery("page", strconv.Itoa(DefaultPage))
 	perPageStr := c.DefaultQuery("per_page", strconv.Itoa(DefaultPageSize))
 
-	// Handle Refine.js format
+	// Handle Refine.dev format (current, pageSize)
+	if current := c.DefaultQuery("current", ""); current != "" {
+		pageStr = current
+	}
+	if pageSize := c.DefaultQuery("pageSize", ""); pageSize != "" {
+		perPageStr = pageSize
+	}
+
+	// Also check Refine.js nested object format
 	if c.Query("pagination[current]") != "" {
 		pageStr = c.Query("pagination[current]")
 	}

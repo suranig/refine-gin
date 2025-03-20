@@ -81,6 +81,136 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Count returns the number of resources matching the query options
+func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&User{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search
+	if options.Search != "" {
+		query = query.Where("name LIKE ?", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// CreateMany creates multiple users at once
+func (r *UserRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	users, ok := data.([]User)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type, expected []User")
+	}
+
+	// Generate IDs if not provided
+	for i := range users {
+		if users[i].ID == "" {
+			users[i].ID = fmt.Sprintf("%d", time.Now().UnixNano()+int64(i))
+		}
+	}
+
+	// Begin transaction
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Create users in database
+	if err := tx.Create(&users).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// UpdateMany updates multiple users at once
+func (r *UserRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	user, ok := data.(*User)
+	if !ok {
+		return 0, fmt.Errorf("invalid data type, expected *User")
+	}
+
+	// Begin transaction
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update users
+	result := tx.Model(&User{}).Where("id IN ?", ids).Updates(map[string]interface{}{
+		"name":  user.Name,
+		"email": user.Email,
+	})
+
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
+}
+
+// DeleteMany deletes multiple users at once
+func (r *UserRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	// Begin transaction
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Delete users
+	result := tx.Where("id IN ?", ids).Delete(&User{})
+
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
+}
+
 // Setup integration test environment
 func setupIntegrationTest(t *testing.T) (*gin.Engine, *gorm.DB) {
 	gin.SetMode(gin.TestMode)

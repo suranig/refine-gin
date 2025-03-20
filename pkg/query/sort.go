@@ -41,10 +41,26 @@ func ExtractSort(c *gin.Context, defaultSort *SortOption) SortOption {
 	field := c.Query("sort")
 	order := c.Query("order")
 
-	// Handle Refine.js format
+	// Handle Refine.js format with array notation
 	if field == "" {
-		field = c.Query("sort[0][field]")
-		order = c.Query("sort[0][order]")
+		// Check for Refine.dev format: sort[0][field]=name&sort[0][order]=asc
+		indexField := c.Query("sort[0][field]")
+		indexOrder := c.Query("sort[0][order]")
+
+		if indexField != "" {
+			field = indexField
+			if indexOrder != "" {
+				order = indexOrder
+			}
+		}
+	}
+
+	// Handle Refine.js format with object notation
+	if field == "" && c.Query("sort[field]") != "" {
+		field = c.Query("sort[field]")
+		if c.Query("sort[order]") != "" {
+			order = c.Query("sort[order]")
+		}
 	}
 
 	// If no sorting provided, use default

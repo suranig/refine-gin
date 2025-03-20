@@ -45,4 +45,7 @@ file::memory:*
 
 # Build output
 dist/
-build/ 
+build/
+
+# SQLite memory test files
+examples/relations/:memory:* 

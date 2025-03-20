@@ -2,16 +2,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/suranig/refine-gin/pkg/handler"
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+// Sample data
+var users []User
+var posts []Post
 
 type User struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
@@ -67,6 +73,86 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Count returns the total number of resources matching the query options
+func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&User{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search
+	if options.Search != "" {
+		query = query.Where("name LIKE ?", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *UserRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	usersArray, ok := data.([]User)
+	if !ok {
+		return nil, errors.New("data must be []User")
+	}
+
+	for i := range usersArray {
+		usersArray[i].ID = uuid.New().String()
+		users = append(users, usersArray[i])
+	}
+
+	return usersArray, nil
+}
+
+func (r *UserRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	user, ok := data.(User)
+	if !ok {
+		return 0, errors.New("data must be User")
+	}
+
+	count := int64(0)
+	for _, id := range ids {
+		for i, u := range users {
+			if u.ID == id.(string) {
+				// Update user fields while preserving ID
+				user.ID = u.ID
+				users[i] = user
+				count++
+				break
+			}
+		}
+	}
+
+	return count, nil
+}
+
+func (r *UserRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	count := int64(0)
+	var newUsers []User
+
+	for _, u := range users {
+		found := false
+		for _, id := range ids {
+			if u.ID == id.(string) {
+				found = true
+				count++
+				break
+			}
+		}
+		if !found {
+			newUsers = append(newUsers, u)
+		}
+	}
+
+	users = newUsers
+	return count, nil
+}
+
 type Post struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	Title     string    `json:"title" refine:"filterable;searchable"`
@@ -120,6 +206,86 @@ func (r *PostRepository) Update(ctx context.Context, id interface{}, data interf
 
 func (r *PostRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&Post{}, "id = ?", id).Error
+}
+
+// Count returns the total number of resources matching the query options
+func (r *PostRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	query := r.db.Model(&Post{})
+
+	// Apply filters
+	for field, value := range options.Filters {
+		query = query.Where(field+" = ?", value)
+	}
+
+	// Apply search
+	if options.Search != "" {
+		query = query.Where("title LIKE ?", "%"+options.Search+"%")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *PostRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	postsArray, ok := data.([]Post)
+	if !ok {
+		return nil, errors.New("data must be []Post")
+	}
+
+	for i := range postsArray {
+		postsArray[i].ID = uuid.New().String()
+		posts = append(posts, postsArray[i])
+	}
+
+	return postsArray, nil
+}
+
+func (r *PostRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	post, ok := data.(Post)
+	if !ok {
+		return 0, errors.New("data must be Post")
+	}
+
+	count := int64(0)
+	for _, id := range ids {
+		for i, p := range posts {
+			if p.ID == id.(string) {
+				// Update post fields while preserving ID
+				post.ID = p.ID
+				posts[i] = post
+				count++
+				break
+			}
+		}
+	}
+
+	return count, nil
+}
+
+func (r *PostRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	count := int64(0)
+	var newPosts []Post
+
+	for _, p := range posts {
+		found := false
+		for _, id := range ids {
+			if p.ID == id.(string) {
+				found = true
+				count++
+				break
+			}
+		}
+		if !found {
+			newPosts = append(newPosts, p)
+		}
+	}
+
+	posts = newPosts
+	return count, nil
 }
 
 func main() {

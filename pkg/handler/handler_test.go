@@ -45,6 +45,12 @@ func (m *MockRepository) Delete(ctx context.Context, id interface{}) error {
 	return args.Error(0)
 }
 
+// Count returns the total number of resources matching the query options
+func (m *MockRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	args := m.Called(ctx, options)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Mock resource for testing
 type MockResource struct {
 	mock.Mock
@@ -120,6 +126,25 @@ func (m *MockResource) GetIDFieldName() string {
 	return args.String(0)
 }
 
+// GetField returns a field by name
+func (m *MockResource) GetField(name string) *resource.Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	field := args.Get(0).(resource.Field)
+	return &field
+}
+
+// GetSearchable returns searchable field names
+func (m *MockResource) GetSearchable() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 // Mock DTO provider for testing
 type MockDTOProvider struct {
 	mock.Mock
@@ -177,6 +202,8 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	mockResource.On("HasRelation", mock.Anything).Return(false)
 	mockResource.On("GetRelation", mock.Anything).Return(nil)
 	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
 
 	return r, mockRepo, mockResource, mockDTOProvider
 }
@@ -353,6 +380,7 @@ func TestRegisterResource(t *testing.T) {
 	mockResource.On("HasOperation", resource.OperationCreate).Return(true)
 	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
 	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
+	mockResource.On("HasOperation", resource.OperationCount).Return(true)
 
 	// Register resource
 	api := r.Group("/api")
@@ -485,13 +513,14 @@ func TestRegisterResourceWithOptions(t *testing.T) {
 	mockResource.On("HasOperation", resource.OperationCreate).Return(true)
 	mockResource.On("HasOperation", resource.OperationUpdate).Return(true)
 	mockResource.On("HasOperation", resource.OperationDelete).Return(true)
+	mockResource.On("HasOperation", resource.OperationCount).Return(true)
 
 	// Register resource with custom ID parameter name
 	api := r.Group("/api")
-	RegisterResourceWithOptions(api, mockResource, mockRepo, RegisterOptions{
+	RegisterResourceWithOptions(api, mockResource, mockRepo, RegisterOptionsToResourceOptions(RegisterOptions{
 		DTOProvider: mockDTOProvider,
 		IDParamName: "uid",
-	})
+	}))
 
 	// Test routes exist
 	routes := r.Routes()
@@ -503,6 +532,7 @@ func TestRegisterResourceWithOptions(t *testing.T) {
 		"POST /api/tests":        false,
 		"PUT /api/tests/:uid":    false,
 		"DELETE /api/tests/:uid": false,
+		"GET /api/tests/count":   false,
 	}
 
 	for _, route := range routes {

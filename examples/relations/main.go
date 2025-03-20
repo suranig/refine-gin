@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/handler"
 	"github.com/suranig/refine-gin/pkg/query"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,14 +28,16 @@ type User struct {
 
 // Post model
 type Post struct {
-	ID        string    `json:"id" gorm:"primaryKey"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	AuthorID  string    `json:"author_id" gorm:"index"`
-	Author    User      `json:"author" gorm:"foreignKey:AuthorID" relation:"resource=users;type=many-to-one;field=author_id;reference=id;include=true"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Comments  []Comment `json:"comments" gorm:"foreignKey:PostID" relation:"resource=comments;type=one-to-many;field=post_id;reference=id;include=false"`
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	Title      string    `json:"title"`
+	Content    string    `json:"content"`
+	CategoryID *uint     `json:"categoryId" gorm:"index"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	// Relacja "wiele do jednego" z kategorią
+	Category *Category `json:"-" gorm:"foreignKey:CategoryID" relation:"resource=categories;type=many-to-one;field=category"`
+	// Relacja "wiele do wielu" z tagami
+	Tags []Tag `json:"tags" gorm:"many2many:post_tags;" relation:"resource=tags;type=many-to-many;field=tags"`
 }
 
 // Comment model
@@ -57,6 +60,26 @@ type Profile struct {
 	User      User      `json:"user" gorm:"foreignKey:UserID" relation:"resource=users;type=one-to-one;field=user_id;reference=id;include=false"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Category model
+type Category struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Relation "jeden do wielu" z postami
+	Posts []Post `json:"posts" gorm:"foreignKey:CategoryID" relation:"resource=posts;type=one-to-many;field=posts"`
+}
+
+// Tag model
+type Tag struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Relacja "wiele do wielu" z postami
+	Posts []Post `json:"posts" gorm:"many2many:post_tags;" relation:"resource=posts;type=many-to-many;field=posts"`
 }
 
 // UserRepository implements repository for User
@@ -139,55 +162,296 @@ func (r *UserRepository) Delete(ctx context.Context, id interface{}) error {
 	return r.db.Delete(&User{}, "id = ?", id).Error
 }
 
+// Count returns the total number of resources matching the query options
+func (r *UserRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	var count int64
+	db := r.db.Model(&User{})
+
+	// Apply filters from options
+	db = options.Apply(db)
+
+	// Get count
+	if err := db.Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// CreateMany creates multiple users
+func (r *UserRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	users, ok := data.([]User)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type, expected []User")
+	}
+
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Create(&users).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// UpdateMany updates multiple users
+func (r *UserRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	user, ok := data.(User)
+	if !ok {
+		return 0, fmt.Errorf("invalid data type, expected User")
+	}
+
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result := tx.Model(&User{}).Where("id IN ?", ids).Updates(user)
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
+}
+
+// DeleteMany deletes multiple users
+func (r *UserRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result := tx.Where("id IN ?", ids).Delete(&User{})
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, result.Error
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected, nil
+}
+
 // Similar repositories for Post, Comment, and Profile...
 
+// InitDB inicjalizuje bazę danych
+func InitDB() (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Migracja schematów
+	err = db.AutoMigrate(&Category{}, &Post{}, &Tag{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Dodanie przykładowych danych
+	categories := []Category{
+		{Name: "Technology"},
+		{Name: "Health"},
+		{Name: "Business"},
+	}
+
+	for i := range categories {
+		db.Create(&categories[i])
+	}
+
+	tags := []Tag{
+		{Name: "Go"},
+		{Name: "Web"},
+		{Name: "API"},
+		{Name: "Database"},
+	}
+
+	for i := range tags {
+		db.Create(&tags[i])
+	}
+
+	posts := []Post{
+		{
+			Title:      "Introduction to Go",
+			Content:    "Go is a statically typed language developed by Google.",
+			CategoryID: &categories[0].ID,
+		},
+		{
+			Title:      "Health Benefits of Exercise",
+			Content:    "Regular exercise has many health benefits.",
+			CategoryID: &categories[1].ID,
+		},
+		{
+			Title:      "Business Strategies",
+			Content:    "Effective business strategies for growth.",
+			CategoryID: &categories[2].ID,
+		},
+	}
+
+	for i := range posts {
+		db.Create(&posts[i])
+	}
+
+	// Dodanie powiązań między postami a tagami
+	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[0].ID, tags[0].ID)
+	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[0].ID, tags[1].ID)
+	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[1].ID, tags[2].ID)
+	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[2].ID, tags[3].ID)
+
+	return db, nil
+}
+
 func main() {
-	// Setup database
-	db, err := gorm.Open(sqlite.Open("relations.db"), &gorm.Config{})
+	// Inicjalizacja bazy danych
+	db, err := InitDB()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Migrate models
-	err = db.AutoMigrate(&User{}, &Post{}, &Comment{}, &Profile{})
-	if err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
-	}
+	// Utworzenie routera Gin
+	r := gin.Default()
 
-	// Create repositories
-	userRepo := &UserRepository{db: db}
-	// Create other repositories...
+	// API grupa
+	api := r.Group("/api")
 
-	// Create resources
-	userResource := resource.NewResource(resource.ResourceConfig{
-		Name:  "users",
-		Model: User{},
+	// Tworzenie zasobów
+	categoryResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "categories",
+		Model: Category{},
 		Operations: []resource.Operation{
 			resource.OperationList,
 			resource.OperationCreate,
 			resource.OperationRead,
 			resource.OperationUpdate,
 			resource.OperationDelete,
-		},
-		DefaultSort: &resource.Sort{
-			Field: "created_at",
-			Order: "desc",
+			resource.OperationCount,
+			resource.OperationCreateMany,
+			resource.OperationUpdateMany,
+			resource.OperationDeleteMany,
+			resource.OperationCustom,
 		},
 	})
 
-	// Create other resources...
+	postResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "posts",
+		Model: Post{},
+		Operations: []resource.Operation{
+			resource.OperationList,
+			resource.OperationCreate,
+			resource.OperationRead,
+			resource.OperationUpdate,
+			resource.OperationDelete,
+			resource.OperationCount,
+			resource.OperationCreateMany,
+			resource.OperationUpdateMany,
+			resource.OperationDeleteMany,
+			resource.OperationCustom,
+		},
+	})
 
-	// Setup Gin
-	r := gin.Default()
-	api := r.Group("/api")
+	tagResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "tags",
+		Model: Tag{},
+		Operations: []resource.Operation{
+			resource.OperationList,
+			resource.OperationCreate,
+			resource.OperationRead,
+			resource.OperationUpdate,
+			resource.OperationDelete,
+			resource.OperationCount,
+			resource.OperationCreateMany,
+			resource.OperationUpdateMany,
+			resource.OperationDeleteMany,
+			resource.OperationCustom,
+		},
+	})
 
-	// Register resources
-	handler.RegisterResource(api, userResource, userRepo)
-	// Register other resources...
+	// Tworzenie repozytoriów
+	categoryRepo := &repository.GormRepository{
+		DB:          db,
+		Model:       Category{},
+		Resource:    categoryResource,
+		IDFieldName: "id",
+	}
 
-	// Start server
-	log.Println("Starting server on :8080")
+	postRepo := &repository.GormRepository{
+		DB:          db,
+		Model:       Post{},
+		Resource:    postResource,
+		IDFieldName: "id",
+	}
+
+	tagRepo := &repository.GormRepository{
+		DB:          db,
+		Model:       Tag{},
+		Resource:    tagResource,
+		IDFieldName: "id",
+	}
+
+	// Rejestracja zasobów z obsługą relacji
+	handler.RegisterResourceForRefineWithRelations(api, categoryResource, categoryRepo, "id", []string{"posts"})
+	handler.RegisterResourceForRefineWithRelations(api, postResource, postRepo, "id", []string{"category", "tags"})
+	handler.RegisterResourceForRefineWithRelations(api, tagResource, tagRepo, "id", []string{"posts"})
+
+	// Niestandardowa akcja dla publikowania posta
+	publishAction := handler.CustomAction{
+		Name:       "publish",
+		Method:     "POST",
+		RequiresID: true,
+		Handler: func(c *gin.Context, res resource.Resource, repo repository.Repository) (interface{}, error) {
+			id := c.Param("id")
+			post, err := repo.Get(c, id)
+			if err != nil {
+				return nil, err
+			}
+
+			// W rzeczywistej aplikacji można by zaktualizować status publikacji
+			return map[string]interface{}{
+				"success": true,
+				"message": "Post has been published",
+				"post":    post,
+			}, nil
+		},
+	}
+
+	// Rejestracja niestandardowej akcji
+	handler.RegisterCustomActions(api, postResource, postRepo, []handler.CustomAction{publishAction})
+
+	// Uruchomienie serwera
+	log.Println("Server running on http://localhost:8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Fatalf("Failed to run server: %v", err)
 	}
 }
