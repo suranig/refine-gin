@@ -27,6 +27,8 @@ This library integrates the following technologies:
 - Customizable validation rules
 - Flexible JSON naming convention control (snake_case, camelCase, PascalCase)
 - Count endpoint for resources
+- Custom endpoints and actions
+- Swagger for resources
 
 ## Installation
 
