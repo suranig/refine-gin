@@ -33,4 +33,7 @@ const (
 
 	// OperationDeleteMany represents bulk DELETE operation (DELETE /resources/batch)
 	OperationDeleteMany Operation = "deleteMany"
+
+	// OperationCustom represents a custom operation
+	OperationCustom Operation = "custom"
 )
