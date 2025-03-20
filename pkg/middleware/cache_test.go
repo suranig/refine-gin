@@ -323,7 +323,7 @@ func TestNoCacheMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Check Cache-Control header
-	assert.Equal(t, "no-store, must-revalidate", w.Header().Get("Cache-Control"))
+	assert.Equal(t, "no-store, no-cache, must-revalidate, max-age=0", w.Header().Get("Cache-Control"))
 
 	// Check Pragma header
 	assert.Equal(t, "no-cache", w.Header().Get("Pragma"))

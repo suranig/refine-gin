@@ -17,6 +17,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// Mock data for in-memory operations
+var products []Product
+
 // Product model with custom ID field
 type Product struct {
 	Code        string    `json:"code" gorm:"primaryKey" refine:"filterable;sortable;searchable"`
@@ -96,7 +99,7 @@ func (r *ProductRepository) CreateMany(ctx context.Context, data interface{}) (i
 
 	// Generate IDs for new products
 	for i := range productsData {
-		productsData[i].ID = fmt.Sprintf("%d", len(products)+i+1)
+		productsData[i].Code = fmt.Sprintf("%d", len(products)+i+1)
 		products = append(products, productsData[i])
 	}
 
@@ -114,14 +117,14 @@ func (r *ProductRepository) UpdateMany(ctx context.Context, ids []interface{}, d
 	for _, id := range ids {
 		idStr := fmt.Sprintf("%v", id)
 		for i, p := range products {
-			if p.ID == idStr {
+			if p.Code == idStr {
 				// Preserve ID and update other fields
 				products[i].Name = productData.Name
 				products[i].Price = productData.Price
 				products[i].Category = productData.Category
 				products[i].Description = productData.Description
-				products[i].Material = productData.Material
-				products[i].Condition = productData.Condition
+				products[i].InStock = productData.InStock
+				products[i].UpdatedAt = time.Now()
 				count++
 				break
 			}
@@ -140,7 +143,7 @@ func (r *ProductRepository) DeleteMany(ctx context.Context, ids []interface{}) (
 		keep := true
 		for _, id := range ids {
 			idStr := fmt.Sprintf("%v", id)
-			if p.ID == idStr {
+			if p.Code == idStr {
 				keep = false
 				count++
 				break
