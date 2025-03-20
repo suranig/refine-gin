@@ -203,6 +203,15 @@ func GenerateOpenAPI(resources []resource.Resource, info SwaggerInfo) *OpenAPI {
 		// Generate paths for the resource
 		generateResourcePaths(openAPI, res)
 	}
+	// Merge custom endpoints registered via RegisterCustomEndpoint
+	for _, ce := range GetCustomEndpoints() {
+		if existing, exists := openAPI.Paths[ce.Path]; exists {
+			existing[ce.Method] = ce.Operation
+			openAPI.Paths[ce.Path] = existing
+		} else {
+			openAPI.Paths[ce.Path] = PathItem{ce.Method: ce.Operation}
+		}
+	}
 
 	return openAPI
 }

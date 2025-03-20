@@ -450,3 +450,22 @@ MIT
 Please see [CONTRIBUTORS.md](CONTRIBUTORS.md) for details on how to contribute to this project.
 
 We welcome contributions from the community!
+
+## Custom Swagger Endpoints
+
+Starting with version 0.3.1, Refine-Gin supports registering custom Swagger endpoints. You can define a custom endpoint using the new `RegisterCustomEndpoint` function available in the `swagger` package. For example:
+
+```go
+swagger.RegisterCustomEndpoint(swagger.CustomEndpoint{
+    Method: "post",
+    Path: "/auth/custom",
+    Operation: swagger.Operation{
+        Tags:        []string{"auth"},
+        Summary:     "Custom auth endpoint",
+        Description: "Endpoint for custom auth functionality",
+        // ... additional configuration such as RequestBody, Responses, etc. ...
+    },
+})
+```
+
+After registering, the custom endpoints will be merged into the generated OpenAPI documentation when calling `GenerateOpenAPI()`. This allows you to extend the Swagger documentation with endpoints that do not follow the standard resource pattern.
