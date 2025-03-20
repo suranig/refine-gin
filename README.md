@@ -145,6 +145,36 @@ Supported relationship types:
 - `many-to-one`
 - `many-to-many`
 
+### Relational Actions
+
+Refine-Gin provides built-in support for relational actions that allow connecting and disconnecting related resources:
+
+```go
+// Register a resource with relational actions
+relationNames := []string{"posts", "profile"}
+handler.RegisterResourceForRefineWithRelations(api, userResource, userRepository, "id", relationNames)
+```
+
+This will automatically generate the following endpoints for each relation:
+
+- **Attach**: `POST /api/users/:id/actions/attach-{relation}` - Connect related resources
+  ```json
+  {
+    "ids": ["1", "2", "3"]
+  }
+  ```
+
+- **Detach**: `POST /api/users/:id/actions/detach-{relation}` - Disconnect related resources
+  ```json
+  {
+    "ids": ["1", "2", "3"]
+  }
+  ```
+
+- **List**: `GET /api/users/:id/actions/list-{relation}` - List related resources
+
+These actions work with all relationship types (one-to-one, one-to-many, many-to-one, many-to-many).
+
 ### Resource Registration
 
 Resources are registered with the Gin router:
@@ -162,6 +192,38 @@ dtoProvider := &dto.DefaultDTOProvider{
 }
 handler.RegisterResourceWithDTO(api, userResource, userRepository, dtoProvider)
 ```
+
+## Swagger Documentation
+
+Refine-Gin automatically generates OpenAPI 3.0 documentation for your API, making it easy to understand and test your endpoints.
+
+### Setting Up Swagger
+
+```go
+// Create a router group for the API
+api := r.Group("/api")
+
+// Register your resources
+handler.RegisterResource(api, userResource, userRepository)
+handler.RegisterResource(api, postResource, postRepository)
+
+// Configure Swagger info
+swaggerInfo := swagger.SwaggerInfo{
+    Title:       "My Refine API",
+    Description: "API for my application using Refine-Gin",
+    Version:     "1.0.0",
+    BasePath:    "/api",
+}
+
+// Register Swagger routes (after registering all resources)
+swagger.RegisterSwagger(r.Group(""), []resource.Resource{userResource, postResource}, swaggerInfo)
+```
+
+This will create two endpoints:
+- `/swagger` - Swagger UI interface for interactive API documentation
+- `/swagger.json` - OpenAPI specification in JSON format
+
+The Swagger documentation includes all endpoints, including bulk operations and relational actions, with proper request/response schemas.
 
 ### Authentication and Authorization
 
