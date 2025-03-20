@@ -275,9 +275,9 @@ func (s *RepositoryTestSuite) TestCreateMany() {
 
 	// Setup expect query to be executed
 	s.mock.ExpectBegin()
-	s.mock.ExpectQuery(`INSERT INTO "test_models"`).
-		WithArgs("Test 1", 20, "Test 2", 30).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+	s.mock.ExpectExec(`INSERT INTO "test_models"`).
+		WithArgs(sqlmock.AnyArg(), "Test 1", sqlmock.AnyArg(), 20, sqlmock.AnyArg(), "Test 2", sqlmock.AnyArg(), 30).
+		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
 
 	// Call repository method
@@ -300,8 +300,8 @@ func (s *RepositoryTestSuite) TestCreateMany_Error() {
 
 	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
-	s.mock.ExpectQuery(`INSERT INTO "test_models"`).
-		WithArgs("Test 1", 20).
+	s.mock.ExpectExec(`INSERT INTO "test_models"`).
+		WithArgs(sqlmock.AnyArg(), "Test 1", sqlmock.AnyArg(), 20).
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
 
@@ -338,7 +338,7 @@ func (s *RepositoryTestSuite) TestUpdateMany() {
 
 	// Setup expect query to be executed
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE id IN \(\$2,\$3\)`).
+	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE ID IN \(\$2,\$3\)`).
 		WithArgs("Updated Name", 1, 2).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
@@ -362,7 +362,7 @@ func (s *RepositoryTestSuite) TestUpdateMany_Error() {
 
 	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE id IN \(\$2,\$3\)`).
+	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE ID IN \(\$2,\$3\)`).
 		WithArgs("Updated Name", 1, 2).
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
@@ -385,7 +385,7 @@ func (s *RepositoryTestSuite) TestDeleteMany() {
 
 	// Setup expect query to be executed
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE id IN \(\$1,\$2\)`).
+	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE ID IN \(\$1,\$2\)`).
 		WithArgs(1, 2).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
@@ -408,7 +408,7 @@ func (s *RepositoryTestSuite) TestDeleteMany_Error() {
 
 	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE id IN \(\$1,\$2\)`).
+	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE ID IN \(\$1,\$2\)`).
 		WithArgs(1, 2).
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
