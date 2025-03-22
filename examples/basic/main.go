@@ -11,6 +11,7 @@ import (
 	"github.com/suranig/refine-gin/pkg/handler"
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/suranig/refine-gin/pkg/swagger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -372,14 +373,26 @@ func main() {
 	handler.RegisterResource(api, userResource, userRepo)
 	handler.RegisterResource(api, postResource, postRepo)
 
+	// Configure Swagger info
+	swaggerInfo := swagger.SwaggerInfo{
+		Title:       "Basic Example API",
+		Description: "API documentation for the basic example",
+		Version:     "1.0.0",
+		BasePath:    "/api",
+	}
+
+	// Register Swagger routes
+	swagger.RegisterSwagger(r.Group(""), []resource.Resource{userResource, postResource}, swaggerInfo)
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "ok",
 		})
 	})
 
-	log.Println("Server starting on http://localhost:8089")
-	if err := r.Run(":8089"); err != nil {
+	// Start the server
+	log.Printf("Server starting on http://localhost:9003")
+	if err := r.Run(":9003"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
