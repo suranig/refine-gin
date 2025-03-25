@@ -233,6 +233,16 @@ func GenerateRelationsMetadata(relations []Relation) []RelationMetadata {
 			Field:            relation.Field,
 			ReferenceField:   relation.ReferenceField,
 			IncludeByDefault: relation.IncludeByDefault,
+			Required:         relation.Required,
+			MinItems:         relation.MinItems,
+			MaxItems:         relation.MaxItems,
+			DisplayField:     relation.DisplayField,
+			ValueField:       relation.ValueField,
+			PivotTable:       relation.PivotTable,
+			PivotFields:      relation.PivotFields,
+			Cascade:          relation.Cascade,
+			OnDelete:         relation.OnDelete,
+			OnUpdate:         relation.OnUpdate,
 		}
 
 		result = append(result, relationMeta)
