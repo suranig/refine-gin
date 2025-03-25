@@ -207,6 +207,9 @@ func ValidateRelations(ctx context.Context, res Resource, model interface{}, db 
 	// Get all relations of the resource
 	relations := res.GetRelations()
 
+	// Get the registry
+	registry := GetRegistry()
+
 	// For each relation
 	for _, relation := range relations {
 		// Get the field for the relation
@@ -223,15 +226,34 @@ func ValidateRelations(ctx context.Context, res Resource, model interface{}, db 
 			continue
 		}
 
-		// Get related resource
-		// This would require a resource registry to look up resources by name
-		// For now, we'll skip this validation
+		// Get related resource from registry
+		relatedResource, err := registry.GetResource(relation.Resource)
+		if err != nil {
+			// If the related resource is not in the registry, skip detailed validation
+			// but still perform basic validation
+			validator := RelationValidator{
+				Relation: relation,
+				Required: relation.Required,
+				MinItems: relation.MinItems,
+				MaxItems: relation.MaxItems,
+				DB:       db,
+			}
 
-		// Create validator for the relation
+			if err := validator.Validate(field.Interface()); err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		// Create validator for the relation with the related resource
 		validator := RelationValidator{
-			Relation: relation,
-			Required: relation.Required,
-			DB:       db,
+			Relation:        relation,
+			Required:        relation.Required,
+			MinItems:        relation.MinItems,
+			MaxItems:        relation.MaxItems,
+			DB:              db,
+			RelatedResource: relatedResource,
 		}
 
 		// Validate the relation
