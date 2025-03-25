@@ -10,6 +10,9 @@ import (
 
 // RegisterResource registers resource handlers in the Gin router
 func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repository.Repository) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Create default DTO provider if not specified
 	dtoProvider := &dto.DefaultDTOProvider{
 		Model: res.GetModel(),
@@ -50,6 +53,9 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 // RegisterResourceWithDTO registers resource handlers with custom DTO provider
 func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, dtoProvider dto.DTOProvider) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Use default options with DTO provider
 	opts := resource.DefaultOptions()
 
@@ -87,6 +93,9 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 // RegisterResourceWithOptions registers a resource with custom options
 func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, opts resource.Options) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Przygotuj middleware dla cache
 	var middlewares []gin.HandlerFunc
 
@@ -154,6 +163,9 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 // The idParamName parameter allows specifying a custom ID parameter name for the resource
 // This is useful for resources that use a non-standard ID field (not 'id')
 func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, idParamName string) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Create default DTO provider if not specified
 	dtoProvider := &dto.DefaultDTOProvider{
 		Model: res.GetModel(),
