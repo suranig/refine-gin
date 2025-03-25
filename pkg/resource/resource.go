@@ -11,6 +11,12 @@ import (
 type Resource interface {
 	GetName() string
 
+	// Get display label for the resource
+	GetLabel() string
+
+	// Get icon for the resource
+	GetIcon() string
+
 	GetModel() interface{}
 
 	GetFields() []Field
@@ -42,6 +48,8 @@ type Resource interface {
 // ResourceConfig contains configuration for creating a resource
 type ResourceConfig struct {
 	Name        string
+	Label       string
+	Icon        string
 	Model       interface{}
 	Fields      []Field
 	Operations  []Operation
@@ -55,6 +63,8 @@ type ResourceConfig struct {
 // DefaultResource implements the Resource interface
 type DefaultResource struct {
 	Name        string
+	Label       string
+	Icon        string
 	Model       interface{}
 	Fields      []Field
 	Operations  []Operation
@@ -67,6 +77,18 @@ type DefaultResource struct {
 
 func (r *DefaultResource) GetName() string {
 	return r.Name
+}
+
+func (r *DefaultResource) GetLabel() string {
+	if r.Label == "" {
+		// If no label is provided, use capitalized name as default
+		return strings.Title(r.Name)
+	}
+	return r.Label
+}
+
+func (r *DefaultResource) GetIcon() string {
+	return r.Icon
 }
 
 func (r *DefaultResource) GetModel() interface{} {
@@ -129,8 +151,16 @@ func NewResource(config ResourceConfig) Resource {
 		idFieldName = "ID"
 	}
 
+	// Set default label if not provided
+	label := config.Label
+	if label == "" {
+		label = strings.Title(config.Name)
+	}
+
 	return &DefaultResource{
 		Name:        config.Name,
+		Label:       label,
+		Icon:        config.Icon,
 		Model:       config.Model,
 		Fields:      fields,
 		Operations:  config.Operations,
