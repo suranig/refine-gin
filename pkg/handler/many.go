@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
@@ -59,6 +61,31 @@ func GenerateCreateManyHandler(res resource.Resource, repo repository.Repository
 			}
 		} else {
 			modelData = req.Values
+		}
+
+		// Get the database connection from repository for validation
+		db := repo.Query(c.Request.Context())
+
+		// Validate relations for each item if database is available
+		if db != nil && len(res.GetRelations()) > 0 && resource.IsSlice(modelData) {
+			// Get the slice from the interface
+			slice := reflect.ValueOf(modelData)
+			if slice.Kind() == reflect.Ptr {
+				slice = slice.Elem()
+			}
+
+			// Iterate through each item
+			for i := 0; i < slice.Len(); i++ {
+				item := slice.Index(i).Interface()
+
+				// Validate relations for this item
+				if err := resource.ValidateRelations(c.Request.Context(), res, item, db); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"error": fmt.Sprintf("Relation validation failed for item %d: %s", i, err.Error()),
+					})
+					return
+				}
+			}
 		}
 
 		// Call repository method
@@ -148,6 +175,21 @@ func GenerateUpdateManyHandler(res resource.Resource, repo repository.Repository
 			}
 		} else {
 			modelData = req.Values
+		}
+
+		// Get the database connection from repository for validation
+		db := repo.Query(c.Request.Context())
+
+		// Validate relations if database is available
+		// For bulk updates, we only validate that the relation values are valid, not that they exist for each ID
+		if db != nil && len(res.GetRelations()) > 0 {
+			// Validate relations for the update data
+			if err := resource.ValidateRelations(c.Request.Context(), res, modelData, db); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Relation validation failed: %s", err.Error()),
+				})
+				return
+			}
 		}
 
 		// Call repository method
