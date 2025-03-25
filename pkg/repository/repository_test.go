@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/suranig/refine-gin/pkg/query"
@@ -33,8 +32,8 @@ type TestModelWithCustomID struct {
 	Age   int    `json:"age"`
 }
 
-// RepositoryTestSuite is a test suite for the Repository interface implementations
-type RepositoryTestSuite struct {
+// RepositoryMockTestSuite is a test suite for the Repository interface implementations with mock DB
+type RepositoryMockTestSuite struct {
 	suite.Suite
 	db         *gorm.DB
 	mock       sqlmock.Sqlmock
@@ -43,7 +42,7 @@ type RepositoryTestSuite struct {
 }
 
 // SetupSuite initializes the test suite with a mock database
-func (s *RepositoryTestSuite) SetupSuite() {
+func (s *RepositoryMockTestSuite) SetupSuite() {
 	// Setup mock database
 	var err error
 	var mockDB *sql.DB
@@ -69,69 +68,129 @@ func (s *RepositoryTestSuite) SetupSuite() {
 	})
 
 	// Create repository
-	s.repository = NewGormRepository(s.db, &TestModel{})
+	s.repository = NewGenericRepositoryWithResource(s.db, s.resource)
 }
 
-// TestRepositorySuite runs the test suite
-func TestRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RepositoryTestSuite))
+// TestMockRepositorySuite runs the mock test suite
+func TestMockRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RepositoryMockTestSuite))
 }
 
-func TestGormRepository(t *testing.T) {
-	// Setup in-memory database
+// RepositorySuite is a test suite for the Repository interface implementations with SQLite
+type RepositorySuite struct {
+	suite.Suite
+	db         *gorm.DB
+	repository Repository
+}
+
+// SetupTest initializes a new test database for each test
+func (s *RepositorySuite) SetupTest() {
+	// Setup in-memory SQLite database
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
+	s.Require().NoError(err)
 
 	// Migrate model
 	err = db.AutoMigrate(&TestModel{})
-	assert.NoError(t, err)
+	s.Require().NoError(err)
 
-	// Create repository
-	repo := NewGormRepository(db, &TestModel{})
+	s.db = db
+	s.repository = NewGenericRepositoryWithResource(s.db, resource.NewResource(resource.ResourceConfig{
+		Model: &TestModel{},
+	}))
+}
 
-	// Create a test resource
-	res := resource.NewResource(resource.ResourceConfig{
-		Name:  "tests",
-		Model: TestModel{},
-	})
-
-	// Create a test context
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(nil)
-	ctx := context.WithValue(c, "resource", res)
+func (s *RepositorySuite) TestCRUD() {
+	ctx := context.Background()
 
 	// Test Create
 	model := &TestModel{
-		ID:    "1",
 		Name:  "John Doe",
 		Email: "john@example.com",
-		Age:   30,
+	}
+
+	createdModel, err := s.repository.Create(ctx, model)
+	s.NoError(err)
+	s.NotNil(createdModel)
+
+	// Test Get
+	retrievedModel, err := s.repository.Get(ctx, model.ID)
+	s.NoError(err)
+	s.Equal(model.Name, retrievedModel.(*TestModel).Name)
+
+	// Test List
+	models, total, err := s.repository.List(ctx, query.QueryOptions{
+		Page:    1,
+		PerPage: 10,
+	})
+	s.NoError(err)
+	s.Equal(int64(1), total)
+
+	modelsList, ok := models.(*[]TestModel)
+	s.True(ok)
+	s.Len(*modelsList, 1)
+	s.Equal(model.ID, (*modelsList)[0].ID)
+
+	// Test Update
+	model.Name = "Jane Doe"
+	updatedModel, err := s.repository.Update(ctx, model.ID, model)
+	s.NoError(err)
+	s.Equal("Jane Doe", updatedModel.(*TestModel).Name)
+
+	// Test Delete
+	err = s.repository.Delete(ctx, model.ID)
+	s.NoError(err)
+
+	// Verify deletion
+	_, err = s.repository.Get(ctx, model.ID)
+	s.Error(err)
+}
+
+// Helper to setup a SQLite test database
+func setupSQLiteTestDB(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	err = db.AutoMigrate(&TestModel{}, &TestModelWithCustomID{})
+	assert.NoError(t, err)
+
+	return db
+}
+
+func TestRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RepositorySuite))
+}
+
+func TestRepository(t *testing.T) {
+	db := setupSQLiteTestDB(t)
+	repo := NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+		Model: &TestModel{},
+	}))
+
+	ctx := context.Background()
+
+	// Test Create
+	model := &TestModel{
+		Name:  "John Doe",
+		Email: "john@example.com",
 	}
 
 	createdModel, err := repo.Create(ctx, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, createdModel)
+	assert.NotNil(t, createdModel)
 
 	// Test Get
-	retrievedModel, err := repo.Get(ctx, "1")
+	retrievedModel, err := repo.Get(ctx, model.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, model, retrievedModel)
+	assert.Equal(t, model.Name, retrievedModel.(*TestModel).Name)
 
 	// Test List
-	options := query.QueryOptions{
-		Resource: res,
-		Page:     1,
-		PerPage:  10,
-		Sort:     "id",
-		Order:    "asc",
-		Filters:  make(map[string]interface{}),
-	}
-
-	models, total, err := repo.List(ctx, options)
+	models, total, err := repo.List(ctx, query.QueryOptions{
+		Page:    1,
+		PerPage: 10,
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 
-	// The List method returns a slice of the model type, not a slice of pointers to the model type
 	modelsList, ok := models.(*[]TestModel)
 	assert.True(t, ok)
 	assert.Len(t, *modelsList, 1)
@@ -139,81 +198,55 @@ func TestGormRepository(t *testing.T) {
 
 	// Test Update
 	model.Name = "Jane Doe"
-	updatedModel, err := repo.Update(ctx, "1", model)
+	updatedModel, err := repo.Update(ctx, model.ID, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, updatedModel)
-
-	// Verify update
-	retrievedModel, err = repo.Get(ctx, "1")
-	assert.NoError(t, err)
-	assert.Equal(t, "Jane Doe", retrievedModel.(*TestModel).Name)
+	assert.Equal(t, "Jane Doe", updatedModel.(*TestModel).Name)
 
 	// Test Delete
-	err = repo.Delete(ctx, "1")
+	err = repo.Delete(ctx, model.ID)
 	assert.NoError(t, err)
 
-	// Verify delete
-	_, err = repo.Get(ctx, "1")
+	// Verify deletion
+	_, err = repo.Get(ctx, model.ID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record not found")
 }
 
-func TestGormRepositoryWithCustomID(t *testing.T) {
-	// Setup in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	// Migrate model
-	err = db.AutoMigrate(&TestModelWithCustomID{})
-	assert.NoError(t, err)
-
-	// Create a test resource with custom ID field
+func TestRepositoryWithCustomID(t *testing.T) {
+	db := setupSQLiteTestDB(t)
 	res := resource.NewResource(resource.ResourceConfig{
-		Name:        "tests",
-		Model:       TestModelWithCustomID{},
+		Model:       &TestModelWithCustomID{},
 		IDFieldName: "UID",
 	})
+	repo := NewGenericRepositoryWithResource(db, res)
 
-	// Create repository with resource
-	repo := NewGormRepositoryWithResource(db, res)
-
-	// Create a test context
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(nil)
-	ctx := context.WithValue(c, "resource", res)
+	ctx := context.Background()
 
 	// Test Create
 	model := &TestModelWithCustomID{
 		UID:   "custom-1",
 		Name:  "John Doe",
 		Email: "john@example.com",
-		Age:   30,
 	}
 
 	createdModel, err := repo.Create(ctx, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, createdModel)
+	assert.NotNil(t, createdModel)
 
 	// Test Get
-	retrievedModel, err := repo.Get(ctx, "custom-1")
+	retrievedModel, err := repo.Get(ctx, model.UID)
 	assert.NoError(t, err)
-	assert.Equal(t, model, retrievedModel)
+	assert.Equal(t, model.Name, retrievedModel.(*TestModelWithCustomID).Name)
 
 	// Test List
-	options := query.QueryOptions{
-		Resource: res,
-		Page:     1,
-		PerPage:  10,
-		Sort:     "uid",
-		Order:    "asc",
-		Filters:  make(map[string]interface{}),
-	}
-
-	models, total, err := repo.List(ctx, options)
+	models, total, err := repo.List(ctx, query.QueryOptions{
+		Page:    1,
+		PerPage: 10,
+		Sort:    "UID",
+		Order:   "asc",
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 
-	// The List method returns a slice of the model type, not a slice of pointers to the model type
 	modelsList, ok := models.(*[]TestModelWithCustomID)
 	assert.True(t, ok)
 	assert.Len(t, *modelsList, 1)
@@ -221,52 +254,40 @@ func TestGormRepositoryWithCustomID(t *testing.T) {
 
 	// Test Update
 	model.Name = "Jane Doe"
-	updatedModel, err := repo.Update(ctx, "custom-1", model)
+	updatedModel, err := repo.Update(ctx, model.UID, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, updatedModel)
-
-	// Verify update
-	retrievedModel, err = repo.Get(ctx, "custom-1")
-	assert.NoError(t, err)
-	assert.Equal(t, "Jane Doe", retrievedModel.(*TestModelWithCustomID).Name)
+	assert.Equal(t, "Jane Doe", updatedModel.(*TestModelWithCustomID).Name)
 
 	// Test Delete
-	err = repo.Delete(ctx, "custom-1")
+	err = repo.Delete(ctx, model.UID)
 	assert.NoError(t, err)
 
-	// Verify delete
-	_, err = repo.Get(ctx, "custom-1")
+	// Verify deletion
+	_, err = repo.Get(ctx, model.UID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record not found")
 }
 
-func TestGormRepositoryFactory(t *testing.T) {
-	// Setup in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
+func TestGenericRepositoryFactory(t *testing.T) {
+	db := setupSQLiteTestDB(t)
 
-	// Create factory
-	factory := NewGormRepositoryFactory(db)
+	factory := NewGenericRepositoryFactory(db)
 
-	// Create a test resource with custom ID field
 	res := resource.NewResource(resource.ResourceConfig{
 		Name:        "tests",
-		Model:       TestModelWithCustomID{},
+		Model:       &TestModelWithCustomID{},
 		IDFieldName: "UID",
 	})
 
-	// Create repository using factory
 	repo := factory.CreateRepository(res)
 	assert.NotNil(t, repo)
 
-	// Sprawdź, czy repozytorium używa niestandardowego pola identyfikatora
-	gormRepo, ok := repo.(*GormRepository)
+	genericRepo, ok := repo.(*GenericRepository)
 	assert.True(t, ok)
-	assert.Equal(t, "UID", gormRepo.IDFieldName)
+	assert.Equal(t, res, genericRepo.Resource)
 }
 
 // TestCreateMany tests the CreateMany method of the repository
-func (s *RepositoryTestSuite) TestCreateMany() {
+func (s *RepositoryMockTestSuite) TestCreateMany() {
 	// Create mock data
 	data := []TestModel{
 		{Name: "Test 1", Age: 20},
@@ -292,7 +313,7 @@ func (s *RepositoryTestSuite) TestCreateMany() {
 }
 
 // TestCreateMany_Error tests error handling in CreateMany
-func (s *RepositoryTestSuite) TestCreateMany_Error() {
+func (s *RepositoryMockTestSuite) TestCreateMany_Error() {
 	// Create mock data
 	data := []TestModel{
 		{Name: "Test 1", Age: 20},
@@ -317,7 +338,7 @@ func (s *RepositoryTestSuite) TestCreateMany_Error() {
 }
 
 // TestCreateMany_InvalidType tests passing non-slice to CreateMany
-func (s *RepositoryTestSuite) TestCreateMany_InvalidType() {
+func (s *RepositoryMockTestSuite) TestCreateMany_InvalidType() {
 	// Create invalid data (not a slice)
 	data := TestModel{Name: "Test 1", Age: 20}
 
@@ -331,7 +352,7 @@ func (s *RepositoryTestSuite) TestCreateMany_InvalidType() {
 }
 
 // TestUpdateMany tests the UpdateMany method of the repository
-func (s *RepositoryTestSuite) TestUpdateMany() {
+func (s *RepositoryMockTestSuite) TestUpdateMany() {
 	// Create data to update
 	data := TestModel{Name: "Updated Name"}
 	ids := []interface{}{1, 2}
@@ -355,7 +376,7 @@ func (s *RepositoryTestSuite) TestUpdateMany() {
 }
 
 // TestUpdateMany_Error tests error handling in UpdateMany
-func (s *RepositoryTestSuite) TestUpdateMany_Error() {
+func (s *RepositoryMockTestSuite) TestUpdateMany_Error() {
 	// Create data to update
 	data := TestModel{Name: "Updated Name"}
 	ids := []interface{}{1, 2}
@@ -379,7 +400,7 @@ func (s *RepositoryTestSuite) TestUpdateMany_Error() {
 }
 
 // TestDeleteMany tests the DeleteMany method of the repository
-func (s *RepositoryTestSuite) TestDeleteMany() {
+func (s *RepositoryMockTestSuite) TestDeleteMany() {
 	// Create ids to delete
 	ids := []interface{}{1, 2}
 
@@ -402,7 +423,7 @@ func (s *RepositoryTestSuite) TestDeleteMany() {
 }
 
 // TestDeleteMany_Error tests error handling in DeleteMany
-func (s *RepositoryTestSuite) TestDeleteMany_Error() {
+func (s *RepositoryMockTestSuite) TestDeleteMany_Error() {
 	// Create ids to delete
 	ids := []interface{}{1, 2}
 

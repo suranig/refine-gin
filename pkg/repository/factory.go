@@ -5,19 +5,24 @@ import (
 	"gorm.io/gorm"
 )
 
-// GormRepositoryFactory implements the RepositoryFactory for GORM
-type GormRepositoryFactory struct {
+// RepositoryFactory defines the interface for creating repositories
+type RepositoryFactory interface {
+	CreateRepository(res resource.Resource) Repository
+}
+
+// GenericRepositoryFactory implements the RepositoryFactory interface
+type GenericRepositoryFactory struct {
 	DB *gorm.DB
 }
 
-// CreateRepository creates a new repository for a resource
-func (f *GormRepositoryFactory) CreateRepository(res resource.Resource) Repository {
-	return NewGormRepositoryWithResource(f.DB, res)
+// CreateRepository creates a new generic repository for a resource
+func (f *GenericRepositoryFactory) CreateRepository(res resource.Resource) Repository {
+	return NewGenericRepositoryWithResource(f.DB, res)
 }
 
-// NewGormRepositoryFactory creates a new GormRepositoryFactory
-func NewGormRepositoryFactory(db *gorm.DB) RepositoryFactory {
-	return &GormRepositoryFactory{
+// NewGenericRepositoryFactory creates a new GenericRepositoryFactory
+func NewGenericRepositoryFactory(db *gorm.DB) RepositoryFactory {
+	return &GenericRepositoryFactory{
 		DB: db,
 	}
 }
