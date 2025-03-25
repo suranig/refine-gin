@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -102,7 +103,12 @@ func (r *GenericRepository) Get(ctx context.Context, id interface{}) (interface{
 		result = reflect.New(modelType).Interface()
 	}
 
-	if err := r.DB.WithContext(ctx).First(result, id).Error; err != nil {
+	idFieldName := "id" // Default to "id"
+	if r.Resource != nil {
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+	}
+
+	if err := r.DB.WithContext(ctx).Where(idFieldName+" = ?", id).First(result).Error; err != nil {
 		return nil, err
 	}
 
@@ -121,7 +127,7 @@ func (r *GenericRepository) Create(ctx context.Context, data interface{}) (inter
 func (r *GenericRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
 	idFieldName := "id" // Default to "id"
 	if r.Resource != nil {
-		idFieldName = r.Resource.GetIDFieldName()
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
 	}
 
 	if err := r.DB.WithContext(ctx).Model(r.Model).Where(idFieldName+" = ?", id).Updates(data).Error; err != nil {
@@ -132,7 +138,20 @@ func (r *GenericRepository) Update(ctx context.Context, id interface{}, data int
 
 // Delete removes a resource from the database
 func (r *GenericRepository) Delete(ctx context.Context, id interface{}) error {
-	return r.DB.WithContext(ctx).Delete(r.Model, id).Error
+	tx := r.DB.WithContext(ctx)
+
+	// If id is a map, use it directly as a condition
+	if conditions, ok := id.(map[string]interface{}); ok {
+		return tx.Delete(r.Model, conditions).Error
+	}
+
+	// Otherwise, use the ID field name
+	idFieldName := "id" // Default to "id"
+	if r.Resource != nil {
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+	}
+
+	return tx.Where(idFieldName+" = ?", id).Delete(r.Model).Error
 }
 
 // Count returns the total number of resources matching the query options
@@ -152,7 +171,21 @@ func (r *GenericRepository) Count(ctx context.Context, options query.QueryOption
 
 // CreateMany inserts multiple resources in a single transaction
 func (r *GenericRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
-	return data, r.DB.WithContext(ctx).Create(data).Error
+	// Check if data is a slice or a pointer to a slice
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Slice {
+		return data, fmt.Errorf("unsupported data type: %v: Table not set, please set it like: db.Model(&user) or db.Table(\"users\")", data)
+	}
+
+	err := r.DB.WithContext(ctx).Create(data).Error
+	if err != nil {
+		// Return a nil slice of the same type as the input
+		return reflect.Zero(val.Type()).Interface(), err
+	}
+	return data, nil
 }
 
 // UpdateMany modifies multiple resources in a single transaction
