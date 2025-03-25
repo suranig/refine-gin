@@ -18,6 +18,9 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 	// Określ nazwę parametru URL dla identyfikatora (domyślnie "id")
 	idParamName := "id"
 
+	// Register OPTIONS handler for metadata
+	router.OPTIONS("/"+res.GetName(), GenerateOptionsHandler(res))
+
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
 		router.GET("/"+res.GetName(), GenerateListHandlerWithDTO(res, repo, dtoProvider))
@@ -52,6 +55,9 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 	// Create resource router with naming convention middleware
 	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(opts.NamingConvention))
+
+	// Register OPTIONS handler for metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -92,7 +98,7 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 		cacheConfig := middleware.CacheConfig{
 			MaxAge:       opts.Cache.MaxAge,
 			DisableCache: !opts.Cache.Enabled,
-			Methods:      []string{"GET", "HEAD"},
+			Methods:      []string{"GET", "HEAD", "OPTIONS"},
 			VaryHeaders:  opts.Cache.VaryHeaders,
 		}
 		middlewares = append(middlewares, middleware.CacheByResource(res.GetName(), cacheConfig))
@@ -113,6 +119,9 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 			idParamName = idParamStr
 		}
 	}
+
+	// Register OPTIONS handler for metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -156,12 +165,17 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	}
 
 	cacheConfig := middleware.DefaultCacheConfig()
+	// Add OPTIONS method to cache config
+	cacheConfig.Methods = append(cacheConfig.Methods, "OPTIONS")
 
 	// Create resource router with naming convention middleware - default to camelCase for Refine.dev
 	resourceRouter := router.Group("/"+res.GetName(),
 		middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention),
 		middleware.CacheByResource(res.GetName(), cacheConfig), // Dodaj middleware cache dla całego zasobu
 	)
+
+	// Register OPTIONS handler for resource metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
