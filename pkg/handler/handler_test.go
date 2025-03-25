@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/suranig/refine-gin/pkg/query"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"gorm.io/gorm"
 )
 
 // Mock repository for testing
@@ -49,6 +51,51 @@ func (m *MockRepository) Delete(ctx context.Context, id interface{}) error {
 func (m *MockRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
 	args := m.Called(ctx, options)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockRepository) WithTransaction(fn func(repository.Repository) error) error {
+	args := m.Called(fn)
+	return args.Error(0)
+}
+
+func (m *MockRepository) WithRelations(relations ...string) repository.Repository {
+	args := m.Called(relations)
+	return args.Get(0).(repository.Repository)
+}
+
+func (m *MockRepository) FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	args := m.Called(ctx, condition)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	args := m.Called(ctx, condition)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) GetWithRelations(ctx context.Context, id interface{}, relations []string) (interface{}, error) {
+	args := m.Called(ctx, id, relations)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) ListWithRelations(ctx context.Context, options query.QueryOptions, relations []string) (interface{}, int64, error) {
+	args := m.Called(ctx, options, relations)
+	return args.Get(0), int64(args.Int(1)), args.Error(2)
+}
+
+func (m *MockRepository) Query(ctx context.Context) *gorm.DB {
+	args := m.Called(ctx)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockRepository) BulkCreate(ctx context.Context, data interface{}) error {
+	args := m.Called(ctx, data)
+	return args.Error(0)
+}
+
+func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error {
+	args := m.Called(ctx, condition, updates)
+	return args.Error(0)
 }
 
 // Mock resource for testing
@@ -361,14 +408,8 @@ func TestDeleteHandler(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// Assert response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Contains(t, response, "success")
-	assert.Equal(t, true, response["success"])
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body.String())
 }
 
 func TestRegisterResource(t *testing.T) {
@@ -494,14 +535,8 @@ func TestDeleteHandlerWithParam(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// Assert response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Contains(t, response, "success")
-	assert.Equal(t, true, response["success"])
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body.String())
 }
 
 func TestRegisterResourceWithOptions(t *testing.T) {
