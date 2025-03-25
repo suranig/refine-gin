@@ -399,26 +399,17 @@ func main() {
 	})
 
 	// Tworzenie repozytoriów
-	categoryRepo := &repository.GormRepository{
-		DB:          db,
-		Model:       Category{},
-		Resource:    categoryResource,
-		IDFieldName: "id",
-	}
+	categoryRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+		Model: &Category{},
+	}))
 
-	postRepo := &repository.GormRepository{
-		DB:          db,
-		Model:       Post{},
-		Resource:    postResource,
-		IDFieldName: "id",
-	}
+	postRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+		Model: &Post{},
+	}))
 
-	tagRepo := &repository.GormRepository{
-		DB:          db,
-		Model:       Tag{},
-		Resource:    tagResource,
-		IDFieldName: "id",
-	}
+	tagRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+		Model: &Tag{},
+	}))
 
 	// Rejestracja zasobów z obsługą relacji
 	handler.RegisterResourceForRefineWithRelations(api, categoryResource, categoryRepo, "id", []string{"posts"})

@@ -55,8 +55,8 @@ func main() {
 		},
 	})
 
-	// Create the GORM repository
-	userRepo := repository.NewGormRepositoryWithResource(db, userResource)
+	// Create repository
+	userRepo := repository.NewGenericRepositoryWithResource(db, userResource)
 
 	// Create API group with base path
 	api := r.Group("/api")

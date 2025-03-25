@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// Create repository factory
-	repoFactory := repository.NewGormRepositoryFactory(db)
+	repoFactory := repository.NewGenericRepositoryFactory(db)
 
 	// Create API group
 	api := r.Group("/api")
