@@ -22,9 +22,7 @@ func GenerateDeleteHandler(res resource.Resource, repo repository.Repository) gi
 		}
 
 		// Return result
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-		})
+		c.Status(http.StatusNoContent)
 	}
 }
 
@@ -42,8 +40,6 @@ func GenerateDeleteHandlerWithParam(res resource.Resource, repo repository.Repos
 		}
 
 		// Return result
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-		})
+		c.Status(http.StatusNoContent)
 	}
 }
