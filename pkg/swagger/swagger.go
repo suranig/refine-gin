@@ -107,7 +107,7 @@ func RegisterSwagger(router *gin.RouterGroup, resources []resource.Resource, inf
 
 // Helper functions
 
-// generateModelSchema generates a schema for a resource model
+// generateModelSchema creates a schema for a resource model
 func generateModelSchema(res resource.Resource) Schema {
 	schema := Schema{
 		Type:       "object",
@@ -115,14 +115,15 @@ func generateModelSchema(res resource.Resource) Schema {
 		Required:   []string{},
 	}
 
-	// Process fields
 	for _, field := range res.GetFields() {
 		fieldSchema := fieldToSchema(field)
 		schema.Properties[field.Name] = fieldSchema
+	}
 
-		if field.Required {
-			schema.Required = append(schema.Required, field.Name)
-		}
+	// Pobierz wymagane pola
+	// Implementacja GetRequiredFields nie jest wymagana, więc sprawdźmy, czy interfejs ją ma
+	if resWithRequired, ok := res.(interface{ GetRequiredFields() []string }); ok {
+		schema.Required = resWithRequired.GetRequiredFields()
 	}
 
 	return schema

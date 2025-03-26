@@ -7,11 +7,12 @@ import (
 	"github.com/suranig/refine-gin/pkg/resource"
 )
 
-// MockResource implements the Resource interface for testing
+// MockResource implements a minimal resource for testing
 type MockResource struct {
-	name   string
-	fields []resource.Field
-	ops    []resource.Operation
+	name           string
+	fields         []resource.Field
+	ops            []resource.Operation
+	requiredFields []string
 }
 
 func (r MockResource) GetName() string             { return r.name }
@@ -30,23 +31,16 @@ func (r MockResource) HasRelation(name string) bool               { return false
 func (r MockResource) GetRelation(name string) *resource.Relation { return nil }
 func (r MockResource) GetIDFieldName() string                     { return "ID" }
 func (r MockResource) GetField(name string) *resource.Field {
-	for i, f := range r.fields {
+	for _, f := range r.fields {
 		if f.Name == name {
-			return &r.fields[i]
+			return &f
 		}
 	}
 	return nil
 }
 func (r MockResource) GetSearchable() []string {
-	searchable := []string{}
-	for _, f := range r.fields {
-		if f.Searchable {
-			searchable = append(searchable, f.Name)
-		}
-	}
-	return searchable
+	return []string{"name", "email"}
 }
-
 func (r MockResource) HasOperation(op resource.Operation) bool {
 	for _, o := range r.ops {
 		if o == op {
@@ -55,9 +49,11 @@ func (r MockResource) HasOperation(op resource.Operation) bool {
 	}
 	return false
 }
-
 func (r MockResource) GetOptions() resource.Options {
-	return resource.DefaultOptions()
+	return resource.Options{}
+}
+func (r MockResource) GetRequiredFields() []string {
+	return r.requiredFields
 }
 
 func TestDefaultSwaggerInfo(t *testing.T) {
@@ -139,11 +135,12 @@ func TestGenerateOpenAPI(t *testing.T) {
 	mockResource := MockResource{
 		name: "users",
 		fields: []resource.Field{
-			{Name: "id", Type: "int", Required: true},
-			{Name: "name", Type: "string", Required: true},
-			{Name: "email", Type: "string", Required: true},
-			{Name: "age", Type: "int", Required: false},
+			{Name: "id", Type: "int"},
+			{Name: "name", Type: "string"},
+			{Name: "email", Type: "string"},
+			{Name: "age", Type: "int"},
 		},
+		requiredFields: []string{"id", "name", "email"},
 		ops: []resource.Operation{
 			resource.OperationCreate,
 			resource.OperationRead,
