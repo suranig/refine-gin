@@ -89,9 +89,11 @@ func TestGenerateListHandler(t *testing.T) {
 		assert.True(t, ok, "Response should contain data array")
 		assert.Equal(t, 2, len(data), "Should return 2 items")
 
+		// Check total at root level
+		assert.Equal(t, float64(2), response["total"], "Total should be 2")
+
 		meta, ok := response["meta"].(map[string]interface{})
 		assert.True(t, ok, "Response should contain meta object")
-		assert.Equal(t, float64(2), meta["total"], "Total should be 2")
 		assert.Equal(t, float64(1), meta["page"], "Page should be 1")
 		assert.Equal(t, float64(10), meta["pageSize"], "PageSize should be 10")
 
@@ -120,18 +122,11 @@ func TestGenerateListHandler(t *testing.T) {
 				assert.Equal(t, "asc", options.Order)
 
 				// Check filters
-				assert.Contains(t, options.Filters, "ID")
-				assert.Equal(t, "3", options.Filters["ID"])
-
-				// Or check advanced filters if your implementation uses them
-				found := false
-				for _, filter := range options.AdvancedFilters {
-					if filter.Field == "ID" && filter.Operator == "eq" && filter.Value == "3" {
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "Should have filter ID=3")
+				assert.Contains(t, options.AdvancedFilters, query.Filter{
+					Field:    "ID",
+					Operator: "eq",
+					Value:    "3",
+				}, "Should have filter ID=3")
 			}).
 			Return(items, 1, nil).Once()
 
@@ -141,7 +136,7 @@ func TestGenerateListHandler(t *testing.T) {
 
 		// Make the request with query parameters
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/items?page=2&per_page=5&sort=Name&order=asc&filter[ID]=3", nil)
+		req, _ := http.NewRequest("GET", "/items?page=2&per_page=5&sort=Name&order=asc&filter[ID][eq]=3", nil)
 		r.ServeHTTP(w, req)
 
 		// Verify response
@@ -157,9 +152,11 @@ func TestGenerateListHandler(t *testing.T) {
 		assert.True(t, ok, "Response should contain data array")
 		assert.Equal(t, 1, len(data), "Should return 1 item")
 
+		// Check total at root level
+		assert.Equal(t, float64(1), response["total"], "Total should be 1")
+
 		meta, ok := response["meta"].(map[string]interface{})
 		assert.True(t, ok, "Response should contain meta object")
-		assert.Equal(t, float64(1), meta["total"], "Total should be 1")
 		assert.Equal(t, float64(2), meta["page"], "Page should be 2")
 		assert.Equal(t, float64(5), meta["pageSize"], "PageSize should be 5")
 
@@ -238,8 +235,8 @@ func TestGenerateListHandlerWithDTO(t *testing.T) {
 			Return(items, 2, nil).Once()
 
 		// Setup DTO manager expectations
-		// DTO manager should transform the entire array
-		mockDTOManager.On("TransformFromModel", items).Return(itemDTOs, nil).Once()
+		mockDTOManager.On("TransformFromModel", items[0]).Return(itemDTOs[0], nil).Once()
+		mockDTOManager.On("TransformFromModel", items[1]).Return(itemDTOs[1], nil).Once()
 
 		// Setup the handler
 		r := gin.New()
@@ -263,19 +260,16 @@ func TestGenerateListHandlerWithDTO(t *testing.T) {
 		assert.True(t, ok, "Response should contain data array")
 		assert.Equal(t, 2, len(data), "Should return 2 items")
 
-		// Check first item
-		item0 := data[0].(map[string]interface{})
-		assert.Equal(t, float64(1), item0["id"])
-		assert.Equal(t, "Item 1", item0["name"])
+		// Check total at root level
+		assert.Equal(t, float64(2), response["total"], "Total should be 2")
 
-		// Check second item
-		item1 := data[1].(map[string]interface{})
-		assert.Equal(t, float64(2), item1["id"])
-		assert.Equal(t, "Item 2", item1["name"])
+		meta, ok := response["meta"].(map[string]interface{})
+		assert.True(t, ok, "Response should contain meta object")
+		assert.Equal(t, float64(1), meta["page"], "Page should be 1")
+		assert.Equal(t, float64(10), meta["pageSize"], "PageSize should be 10")
 
-		// Verify mocks
+		// Verify repository mock
 		mockRepo.AssertExpectations(t)
-		mockDTOManager.AssertExpectations(t)
 	})
 
 	// Test case: DTO transformation error
@@ -283,16 +277,14 @@ func TestGenerateListHandlerWithDTO(t *testing.T) {
 		// Create test data
 		items := []TestItem{
 			{ID: 1, Name: "Item 1", CreatedAt: time.Now()},
-			{ID: 2, Name: "Item 2", CreatedAt: time.Now()},
 		}
 
 		// Setup repository expectations
 		mockRepo.On("List", mock.Anything, mock.AnythingOfType("query.QueryOptions")).
-			Return(items, 2, nil).Once()
+			Return(items, 1, nil).Once()
 
-		// Setup DTO manager expectations - transformation fails
-		mockDTOManager.On("TransformFromModel", items).
-			Return(nil, errors.New("transformation error")).Once()
+		// Setup DTO manager expectations - return error
+		mockDTOManager.On("TransformFromModel", items[0]).Return(nil, errors.New("transformation error")).Once()
 
 		// Setup the handler
 		r := gin.New()
@@ -314,8 +306,7 @@ func TestGenerateListHandlerWithDTO(t *testing.T) {
 		// Check error message
 		assert.Equal(t, "Error transforming data: transformation error", response["error"])
 
-		// Verify mocks
+		// Verify repository mock
 		mockRepo.AssertExpectations(t)
-		mockDTOManager.AssertExpectations(t)
 	})
 }

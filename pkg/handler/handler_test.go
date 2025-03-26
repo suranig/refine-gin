@@ -24,7 +24,17 @@ type MockRepository struct {
 
 func (m *MockRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
 	args := m.Called(ctx, options)
-	return args.Get(0), args.Get(1).(int64), args.Error(2)
+	// Ensure proper type conversion for the total count
+	var total int64
+	if count := args.Get(1); count != nil {
+		switch v := count.(type) {
+		case int:
+			total = int64(v)
+		case int64:
+			total = v
+		}
+	}
+	return args.Get(0), total, args.Error(2)
 }
 
 func (m *MockRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
@@ -85,6 +95,9 @@ func (m *MockRepository) ListWithRelations(ctx context.Context, options query.Qu
 
 func (m *MockRepository) Query(ctx context.Context) *gorm.DB {
 	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil
+	}
 	return args.Get(0).(*gorm.DB)
 }
 

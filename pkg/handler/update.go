@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
@@ -46,6 +47,12 @@ func GenerateUpdateHandler(res resource.Resource, repo repository.Repository, dt
 		// Call repository
 		updatedModel, err := repo.Update(c.Request.Context(), id, model)
 		if err != nil {
+			// Check if it's a "not found" error
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no rows") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
+				return
+			}
+			// Handle other errors
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -101,6 +108,12 @@ func GenerateUpdateHandlerWithParam(res resource.Resource, repo repository.Repos
 		// Call repository
 		updatedModel, err := repo.Update(c.Request.Context(), id, model)
 		if err != nil {
+			// Check if it's a "not found" error
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no rows") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
+				return
+			}
+			// Handle other errors
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
