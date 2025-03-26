@@ -223,6 +223,79 @@ func generateResourcePaths(openAPI *OpenAPI, res resource.Resource) {
 		}
 	}
 
+	// Generate OPTIONS endpoint for resource metadata (always available)
+	optionsPath := "/" + res.GetName()
+	if openAPI.Paths[optionsPath] == nil {
+		openAPI.Paths[optionsPath] = PathItem{}
+	}
+	openAPI.Paths[optionsPath]["options"] = Operation{
+		Summary:     fmt.Sprintf("Get %s metadata", res.GetName()),
+		Description: fmt.Sprintf("Returns metadata for the %s resource including fields, operations, and configuration", res.GetName()),
+		OperationID: fmt.Sprintf("options%s", capitalize(res.GetName())),
+		Tags:        []string{res.GetName()},
+		Responses: map[string]Response{
+			"200": {
+				Description: "Resource metadata",
+				Content: map[string]MediaType{
+					"application/json": {
+						Schema: Schema{
+							Type: "object",
+							Properties: map[string]Schema{
+								"name": {
+									Type: "string",
+								},
+								"label": {
+									Type: "string",
+								},
+								"icon": {
+									Type: "string",
+								},
+								"operations": {
+									Type: "array",
+									Items: &Schema{
+										Type: "string",
+									},
+								},
+								"fields": {
+									Type: "array",
+									Items: &Schema{
+										Type: "object",
+										Properties: map[string]Schema{
+											"name": {
+												Type: "string",
+											},
+											"type": {
+												Type: "string",
+											},
+											"required": {
+												Type: "boolean",
+											},
+											"unique": {
+												Type: "boolean",
+											},
+											"filterable": {
+												Type: "boolean",
+											},
+											"sortable": {
+												Type: "boolean",
+											},
+											"searchable": {
+												Type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"304": {
+				Description: "Not Modified (when using If-None-Match header with valid ETag)",
+			},
+		},
+	}
+
 	// Generate get endpoint
 	if res.HasOperation(resource.OperationRead) {
 		getPath := fmt.Sprintf("/%s/{id}", res.GetName())

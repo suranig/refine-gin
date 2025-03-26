@@ -182,6 +182,14 @@ func TestGenerateOpenAPI(t *testing.T) {
 	assert.NotNil(t, openAPI.Paths["/users"], "List endpoint should exist")
 	assert.NotNil(t, openAPI.Paths["/users/{id}"], "Get endpoint should exist")
 
+	// Verify OPTIONS endpoint
+	assert.NotNil(t, openAPI.Paths["/users"]["options"], "OPTIONS endpoint should exist")
+	optionsOperation := openAPI.Paths["/users"]["options"]
+	assert.Equal(t, "Get users metadata", optionsOperation.Summary)
+	assert.Equal(t, "optionsUsers", optionsOperation.OperationID)
+	assert.Contains(t, optionsOperation.Responses, "200")
+	assert.Contains(t, optionsOperation.Responses, "304")
+
 	// Test with custom endpoint
 	customOp := Operation{
 		Summary:     "Custom Operation",
