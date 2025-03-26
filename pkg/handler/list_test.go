@@ -37,15 +37,14 @@ func TestGenerateListHandler(t *testing.T) {
 	mockRepo := new(MockRepository)
 
 	// Setup common resource expectations
-	mockResource.On("GetName").Return("items").Maybe()
+	mockResource.On("GetName").Return("tests").Maybe()
 	mockResource.On("GetModel").Return(TestItem{}).Maybe()
 	mockResource.On("GetIDFieldName").Return("ID").Maybe()
 	mockResource.On("GetSearchable").Return([]string{"Name"}).Maybe()
 	mockResource.On("GetDefaultSort").Return(nil).Maybe()
 	mockResource.On("GetFilters").Return([]resource.Filter{}).Maybe()
 	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "ID", Type: "int", Required: true},
-		{Name: "Name", Type: "string", Required: true, Searchable: true},
+		{Name: "Name", Type: "string"},
 	}).Maybe()
 
 	// Test case 1: Successful list with no query parameters
@@ -205,15 +204,14 @@ func TestGenerateListHandlerWithDTO(t *testing.T) {
 	mockDTOManager := new(MockDTOManager)
 
 	// Setup common resource expectations
-	mockResource.On("GetName").Return("items").Maybe()
+	mockResource.On("GetName").Return("tests").Maybe()
 	mockResource.On("GetModel").Return(TestItem{}).Maybe()
 	mockResource.On("GetIDFieldName").Return("ID").Maybe()
 	mockResource.On("GetSearchable").Return([]string{"Name"}).Maybe()
 	mockResource.On("GetDefaultSort").Return(nil).Maybe()
 	mockResource.On("GetFilters").Return([]resource.Filter{}).Maybe()
 	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "ID", Type: "int", Required: true},
-		{Name: "Name", Type: "string", Required: true, Searchable: true},
+		{Name: "Name", Type: "string"},
 	}).Maybe()
 
 	// Test case: Successful list with DTO transformation

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,12 @@ type APIConfigResponse struct {
 // GenerateAPIConfigHandler creates a handler for exposing API configuration
 func GenerateAPIConfigHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Generate ETag based on registry state
-		etag := utils.GenerateETagFromSlice(resource.GetRegistry().ResourceNames())
+		// Pobierz wszystkie zasoby z rejestru
+		resources := make(map[string]resource.ResourceMetadata)
+		allResources := resource.GlobalResourceRegistry.GetAll()
+
+		// Wygeneruj ETag na podstawie liczby zasobów
+		etag := utils.GenerateETag(fmt.Sprintf("%d", len(allResources)))
 		ifNoneMatch := c.GetHeader("If-None-Match")
 
 		// Check if client's cached version is still valid
@@ -30,20 +35,11 @@ func GenerateAPIConfigHandler() gin.HandlerFunc {
 			return
 		}
 
-		// Get all resources from registry
-		registry := resource.GetRegistry()
-		resources := make(map[string]resource.ResourceMetadata)
-
 		// Generate metadata for each resource
-		for _, name := range registry.ResourceNames() {
-			res, err := registry.GetResource(name)
-			if err != nil {
-				continue
-			}
-
+		for _, res := range allResources {
 			// Generate metadata for this resource
 			metadata := resource.GenerateResourceMetadata(res)
-			resources[name] = metadata
+			resources[res.GetName()] = metadata
 		}
 
 		// Create response

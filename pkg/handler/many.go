@@ -78,11 +78,9 @@ func GenerateCreateManyHandler(res resource.Resource, repo repository.Repository
 			for i := 0; i < slice.Len(); i++ {
 				item := slice.Index(i).Interface()
 
-				// Validate relations for this item
-				if err := resource.ValidateRelations(c.Request.Context(), res, item, db); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{
-						"error": fmt.Sprintf("Relation validation failed for item %d: %s", i, err.Error()),
-					})
+				// Validate relations before saving
+				if err := resource.ValidateRelations(db, item); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Item %d: %s", i, err.Error())})
 					return
 				}
 			}
@@ -183,11 +181,9 @@ func GenerateUpdateManyHandler(res resource.Resource, repo repository.Repository
 		// Validate relations if database is available
 		// For bulk updates, we only validate that the relation values are valid, not that they exist for each ID
 		if db != nil && len(res.GetRelations()) > 0 {
-			// Validate relations for the update data
-			if err := resource.ValidateRelations(c.Request.Context(), res, modelData, db); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"error": fmt.Sprintf("Relation validation failed: %s", err.Error()),
-				})
+			// Validate relations before save
+			if err := resource.ValidateRelations(db, modelData); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 		}

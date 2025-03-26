@@ -28,14 +28,14 @@ func GenerateCreateHandler(res resource.Resource, repo repository.Repository, dt
 			return
 		}
 
-		// Get the database connection from repository
+		// Call repository query method to get DB connection
 		db := repo.Query(c.Request.Context())
 
 		// Validate relations (if any) - only perform if repository has DB access
 		if db != nil && len(res.GetRelations()) > 0 {
 			// Validate relations
-			if err := resource.ValidateRelations(c.Request.Context(), res, model, db); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Relation validation failed: " + err.Error()})
+			if err := resource.ValidateRelations(db, model); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 		}

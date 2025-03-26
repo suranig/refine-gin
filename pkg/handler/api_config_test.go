@@ -35,14 +35,14 @@ func TestGenerateAPIConfigHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	// Create and register mock resources
+	// Create test resources
 	resource1 := NewAPIConfigMockResource("resource1")
 	resource2 := NewAPIConfigMockResource("resource2")
 
 	// Clear registry and register test resources
-	registry := resource.GetRegistry()
-	registry.RegisterResource(resource1)
-	registry.RegisterResource(resource2)
+	registry := resource.GlobalResourceRegistry
+	registry.Register(resource1)
+	registry.Register(resource2)
 
 	// Register API config endpoint
 	router.GET("/api-config", GenerateAPIConfigHandler())
@@ -89,8 +89,8 @@ func TestAPIConfigCaching(t *testing.T) {
 	testResource := NewAPIConfigMockResource(uniqueResourceName)
 
 	// Register the resource
-	registry := resource.GetRegistry()
-	registry.RegisterResource(testResource)
+	registry := resource.GlobalResourceRegistry
+	registry.Register(testResource)
 
 	// Create a handler with a closure to ensure we're using the right resource state
 	configHandler := func(c *gin.Context) {
@@ -170,9 +170,9 @@ func TestRegisterAPIConfigEndpoint(t *testing.T) {
 	resourceB := NewAPIConfigMockResource("resourceB")
 
 	// Register test resources
-	registry := resource.GetRegistry()
-	registry.RegisterResource(resourceA)
-	registry.RegisterResource(resourceB)
+	registry := resource.GlobalResourceRegistry
+	registry.Register(resourceA)
+	registry.Register(resourceB)
 
 	// Make a request to the config endpoint
 	w := httptest.NewRecorder()

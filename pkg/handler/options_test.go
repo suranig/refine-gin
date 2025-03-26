@@ -23,9 +23,9 @@ func TestGenerateOptionsHandler(t *testing.T) {
 	mockResource.On("GetLabel").Return("Test Resource")
 	mockResource.On("GetIcon").Return("test-icon")
 	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "int", Required: true},
-		{Name: "name", Type: "string", Required: true, Searchable: true},
-		{Name: "description", Type: "string", Required: false},
+		{Name: "id", Type: "int"},
+		{Name: "name", Type: "string"},
+		{Name: "description", Type: "string"},
 	})
 	mockResource.On("GetOperations").Return([]resource.Operation{
 		resource.OperationCreate,
@@ -94,7 +94,7 @@ func TestRegisterOptionsEndpoint(t *testing.T) {
 	mockResource.On("GetLabel").Return("Test Resource")
 	mockResource.On("GetIcon").Return("test-icon")
 	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "int", Required: true},
+		{Name: "id", Type: "int"},
 	})
 	mockResource.On("GetOperations").Return([]resource.Operation{
 		resource.OperationCreate,
@@ -137,11 +137,10 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	// Setup expectations for user resource
 	userResource.On("GetName").Return("users")
 	userResource.On("GetLabel").Return("Users")
-	userResource.On("GetIcon").Return("user-icon")
+	userResource.On("GetIcon").Return("user")
 	userResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "string", Required: true},
-		{Name: "name", Type: "string", Required: true, Searchable: true},
-		{Name: "email", Type: "string", Required: true},
+		{Name: "id", Type: "string"},
+		{Name: "name", Type: "string"},
 	})
 	userResource.On("GetOperations").Return([]resource.Operation{
 		resource.OperationCreate,
@@ -159,18 +158,15 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	// Setup expectations for post resource
 	postResource.On("GetName").Return("posts")
 	postResource.On("GetLabel").Return("Blog Posts")
-	postResource.On("GetIcon").Return("post-icon")
+	postResource.On("GetIcon").Return("post")
 	postResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "int", Required: true},
-		{Name: "title", Type: "string", Required: true, Searchable: true},
-		{Name: "content", Type: "string", Required: true},
-		{Name: "author_id", Type: "string", Required: true},
+		{Name: "id", Type: "string"},
+		{Name: "title", Type: "string"},
+		{Name: "content", Type: "string"},
 	})
 	postResource.On("GetOperations").Return([]resource.Operation{
 		resource.OperationCreate,
 		resource.OperationRead,
-		resource.OperationUpdate,
-		resource.OperationDelete,
 		resource.OperationList,
 	})
 	postResource.On("GetDefaultSort").Return(&resource.Sort{Field: "id", Order: "desc"})
@@ -192,7 +188,7 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w1.Code)
 	assert.Contains(t, w1.Body.String(), "\"name\":\"users\"")
 	assert.Contains(t, w1.Body.String(), "\"label\":\"Users\"")
-	assert.Contains(t, w1.Body.String(), "\"icon\":\"user-icon\"")
+	assert.Contains(t, w1.Body.String(), "\"icon\":\"user\"")
 	assert.Contains(t, w1.Body.String(), "\"searchable\":[\"name\"]")
 
 	// Test OPTIONS for posts resource

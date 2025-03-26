@@ -38,7 +38,7 @@ func GenerateUpdateHandler(res resource.Resource, repo repository.Repository, dt
 		// Validate relations (if any) - only perform if repository has DB access
 		if db != nil && len(res.GetRelations()) > 0 {
 			// Validate relations
-			if err := resource.ValidateRelations(c.Request.Context(), res, model, db); err != nil {
+			if err := resource.ValidateRelations(db, model); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Relation validation failed: " + err.Error()})
 				return
 			}
@@ -99,7 +99,7 @@ func GenerateUpdateHandlerWithParam(res resource.Resource, repo repository.Repos
 		// Validate relations (if any) - only perform if repository has DB access
 		if db != nil && len(res.GetRelations()) > 0 {
 			// Validate relations
-			if err := resource.ValidateRelations(c.Request.Context(), res, model, db); err != nil {
+			if err := resource.ValidateRelations(db, model); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Relation validation failed: " + err.Error()})
 				return
 			}
