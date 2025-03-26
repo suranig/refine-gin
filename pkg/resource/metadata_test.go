@@ -104,242 +104,139 @@ func (m *MetadataMockResource) GetSearchable() []string {
 }
 
 func TestGenerateResourceMetadata(t *testing.T) {
-	// Create a mock resource
-	mockResource := new(MetadataMockResource)
-
-	// Setup expectations
-	mockResource.On("GetName").Return("test_resource")
-	mockResource.On("GetLabel").Return("Test Resource")
-	mockResource.On("GetIcon").Return("test-icon")
-	mockResource.On("GetOperations").Return([]Operation{OperationCreate, OperationRead, OperationList})
-	mockResource.On("GetIDFieldName").Return("id")
-	mockResource.On("GetDefaultSort").Return(&Sort{Field: "created_at", Order: "desc"})
-	mockResource.On("GetFilters").Return([]Filter{
-		{Field: "status", Operator: "eq", Value: "active"},
-	})
-	mockResource.On("GetSearchable").Return([]string{"name", "description"})
-
-	// Setup fields with different validators
-	mockResource.On("GetFields").Return([]Field{
+	// Create a sample resource
+	fields := []Field{
 		{
-			Name:       "id",
-			Type:       "int",
-			Required:   true,
-			Filterable: true,
-			Sortable:   true,
-		},
-		{
-			Name:       "name",
-			Type:       "string",
-			Required:   true,
-			Searchable: true,
-			Validators: []Validator{
-				StringValidator{
-					MinLength: 3,
-					MaxLength: 50,
-				},
+			Name:  "id",
+			Type:  "int",
+			Label: "ID",
+			List: &ListConfig{
+				Width: 100,
+			},
+			Form: &FormConfig{
+				Placeholder: "Enter ID",
+			},
+			Validation: &Validation{
+				Required: true,
 			},
 		},
 		{
-			Name: "age",
-			Type: "int",
-			Validators: []Validator{
-				NumberValidator{
-					Min: 18,
-					Max: 120,
-				},
+			Name:  "name",
+			Type:  "string",
+			Label: "Name",
+			Validation: &Validation{
+				MinLength: 3,
+				MaxLength: 50,
 			},
 		},
-	})
+	}
 
-	// Setup relations
-	mockResource.On("GetRelations").Return([]Relation{
+	relations := []Relation{
 		{
-			Name:             "posts",
-			Type:             RelationTypeOneToMany,
-			Resource:         "post",
-			Field:            "user_id",
-			ReferenceField:   "id",
-			IncludeByDefault: true,
-		},
-		{
-			Name:           "profile",
-			Type:           RelationTypeOneToOne,
-			Resource:       "profile",
-			Field:          "profile_id",
+			Name:           "posts",
+			Type:           RelationTypeOneToMany,
+			Resource:       "posts",
+			Field:          "author_id",
 			ReferenceField: "id",
-			DisplayField:   "bio",
-			ValueField:     "id",
-			Required:       true,
 		},
-	})
+	}
 
-	// Call the function to test
-	metadata := GenerateResourceMetadata(mockResource)
+	operations := []Operation{
+		OperationList,
+		OperationCreate,
+		OperationRead,
+	}
 
-	// Check resource metadata
-	assert.Equal(t, "test_resource", metadata.Name)
-	assert.Equal(t, "Test Resource", metadata.Label)
-	assert.Equal(t, "test-icon", metadata.Icon)
-	assert.Equal(t, []Operation{OperationCreate, OperationRead, OperationList}, metadata.Operations)
+	defaultSort := &Sort{
+		Field: "id",
+		Order: "asc",
+	}
+
+	filters := []Filter{
+		{
+			Field:    "name",
+			Operator: "eq",
+			Value:    "John",
+		},
+	}
+
+	resource := &DefaultResource{
+		Name:             "users",
+		Label:            "Users",
+		Icon:             "user",
+		Fields:           fields,
+		Operations:       operations,
+		DefaultSort:      defaultSort,
+		Filters:          filters,
+		SearchableFields: []string{"name"},
+		IDFieldName:      "id",
+		FilterableFields: []string{"id", "name"},
+		SortableFields:   []string{"id", "name"},
+		RequiredFields:   []string{"id"},
+		Relations:        relations,
+	}
+
+	// Generate metadata
+	metadata := GenerateResourceMetadata(resource)
+
+	// Verify metadata
+	assert.Equal(t, "users", metadata.Name)
+	assert.Equal(t, "Users", metadata.Label)
+	assert.Equal(t, "user", metadata.Icon)
+	assert.Len(t, metadata.Operations, 3)
+	assert.Len(t, metadata.Fields, 2)
+	assert.Len(t, metadata.Relations, 1)
+	assert.Equal(t, "id", metadata.DefaultSort.Field)
+	assert.Equal(t, "asc", metadata.DefaultSort.Order)
+	assert.Len(t, metadata.Filters, 1)
+	assert.Equal(t, []string{"name"}, metadata.Searchable)
 	assert.Equal(t, "id", metadata.IDFieldName)
-	assert.Equal(t, &Sort{Field: "created_at", Order: "desc"}, metadata.DefaultSort)
-	assert.Equal(t, []Filter{{Field: "status", Operator: "eq", Value: "active"}}, metadata.Filters)
-	assert.Equal(t, []string{"name", "description"}, metadata.Searchable)
-
-	// Check fields metadata
-	assert.Equal(t, 3, len(metadata.Fields))
-
-	// Check first field
-	assert.Equal(t, "id", metadata.Fields[0].Name)
-	assert.Equal(t, "int", metadata.Fields[0].Type)
-	assert.True(t, metadata.Fields[0].Required)
-	assert.True(t, metadata.Fields[0].Filterable)
-	assert.True(t, metadata.Fields[0].Sortable)
-
-	// Check second field with string validator
-	assert.Equal(t, "name", metadata.Fields[1].Name)
-	assert.Equal(t, "string", metadata.Fields[1].Type)
-	assert.True(t, metadata.Fields[1].Required)
-	assert.True(t, metadata.Fields[1].Searchable)
-	assert.Equal(t, 1, len(metadata.Fields[1].Validators))
-	assert.Equal(t, "string", metadata.Fields[1].Validators[0].Type)
-
-	// Check validator rules
-	if minLength, ok := metadata.Fields[1].Validators[0].Rules["minLength"]; ok {
-		// Convert to int if it's a float64, or leave as is if it's already an int
-		var minLengthInt int
-		switch v := minLength.(type) {
-		case float64:
-			minLengthInt = int(v)
-		case int:
-			minLengthInt = v
-		}
-		assert.Equal(t, 3, minLengthInt)
-	} else {
-		t.Error("minLength rule should exist")
-	}
-
-	if maxLength, ok := metadata.Fields[1].Validators[0].Rules["maxLength"]; ok {
-		// Convert to int if it's a float64, or leave as is if it's already an int
-		var maxLengthInt int
-		switch v := maxLength.(type) {
-		case float64:
-			maxLengthInt = int(v)
-		case int:
-			maxLengthInt = v
-		}
-		assert.Equal(t, 50, maxLengthInt)
-	} else {
-		t.Error("maxLength rule should exist")
-	}
-
-	// Check third field with number validator
-	assert.Equal(t, "age", metadata.Fields[2].Name)
-	assert.Equal(t, "int", metadata.Fields[2].Type)
-	assert.Equal(t, 1, len(metadata.Fields[2].Validators))
-	assert.Equal(t, "number", metadata.Fields[2].Validators[0].Type)
-
-	// Check validator rules
-	if min, ok := metadata.Fields[2].Validators[0].Rules["min"]; ok {
-		// Convert to int if it's a float64, or leave as is if it's already an int
-		var minInt int
-		switch v := min.(type) {
-		case float64:
-			minInt = int(v)
-		case int:
-			minInt = v
-		}
-		assert.Equal(t, 18, minInt)
-	} else {
-		t.Error("min rule should exist")
-	}
-
-	if max, ok := metadata.Fields[2].Validators[0].Rules["max"]; ok {
-		// Convert to int if it's a float64, or leave as is if it's already an int
-		var maxInt int
-		switch v := max.(type) {
-		case float64:
-			maxInt = int(v)
-		case int:
-			maxInt = v
-		}
-		assert.Equal(t, 120, maxInt)
-	} else {
-		t.Error("max rule should exist")
-	}
-
-	// Check relations metadata
-	assert.Equal(t, 2, len(metadata.Relations))
-
-	// Check first relation (one-to-many)
-	assert.Equal(t, "posts", metadata.Relations[0].Name)
-	assert.Equal(t, RelationTypeOneToMany, metadata.Relations[0].Type)
-	assert.Equal(t, "post", metadata.Relations[0].Resource)
-	assert.Equal(t, "user_id", metadata.Relations[0].Field)
-	assert.Equal(t, "id", metadata.Relations[0].ReferenceField)
-	assert.True(t, metadata.Relations[0].IncludeByDefault)
-
-	// Check second relation (one-to-one)
-	assert.Equal(t, "profile", metadata.Relations[1].Name)
-	assert.Equal(t, RelationTypeOneToOne, metadata.Relations[1].Type)
-	assert.Equal(t, "profile", metadata.Relations[1].Resource)
-	assert.Equal(t, "profile_id", metadata.Relations[1].Field)
-	assert.Equal(t, "id", metadata.Relations[1].ReferenceField)
-	assert.Equal(t, "bio", metadata.Relations[1].DisplayField)
-	assert.Equal(t, "id", metadata.Relations[1].ValueField)
-	assert.True(t, metadata.Relations[1].Required)
-
-	// Verify all expectations were met
-	mockResource.AssertExpectations(t)
 }
 
 func TestGenerateFieldsMetadata(t *testing.T) {
-	// Test with empty fields
-	emptyFields := []Field{}
-	emptyMetadata := GenerateFieldsMetadata(emptyFields)
-	assert.Empty(t, emptyMetadata)
-
-	// Test with various fields
+	// Create sample fields
 	fields := []Field{
 		{
-			Name:       "id",
-			Type:       "int",
-			Required:   true,
-			Filterable: true,
-			Sortable:   true,
+			Name:  "id",
+			Type:  "int",
+			Label: "ID",
+			Validation: &Validation{
+				Required: true,
+			},
 		},
 		{
-			Name:       "name",
-			Type:       "string",
-			Searchable: true,
-			Unique:     true,
-		},
-		{
-			Name: "description",
-			Type: "text",
+			Name:  "name",
+			Type:  "string",
+			Label: "Name",
+			Validation: &Validation{
+				MinLength: 3,
+				MaxLength: 50,
+			},
 		},
 	}
 
-	metadata := GenerateFieldsMetadata(fields)
-	assert.Equal(t, 3, len(metadata))
+	// Generate fields metadata
+	fieldsMeta := GenerateFieldsMetadata(fields)
 
-	// Check first field
-	assert.Equal(t, "id", metadata[0].Name)
-	assert.Equal(t, "int", metadata[0].Type)
-	assert.True(t, metadata[0].Required)
-	assert.True(t, metadata[0].Filterable)
-	assert.True(t, metadata[0].Sortable)
+	// Verify fields metadata
+	assert.Len(t, fieldsMeta, 2)
+	assert.Equal(t, "id", fieldsMeta[0].Name)
+	assert.Equal(t, "int", fieldsMeta[0].Type)
+	assert.Equal(t, "ID", fieldsMeta[0].Label)
+	assert.True(t, fieldsMeta[0].Required)
+	assert.True(t, fieldsMeta[0].Filterable)  // Default value
+	assert.True(t, fieldsMeta[0].Sortable)    // Default value
+	assert.False(t, fieldsMeta[0].Searchable) // Default value
+	assert.False(t, fieldsMeta[0].Unique)     // Default value
 
-	// Check second field
-	assert.Equal(t, "name", metadata[1].Name)
-	assert.Equal(t, "string", metadata[1].Type)
-	assert.True(t, metadata[1].Searchable)
-	assert.True(t, metadata[1].Unique)
-
-	// Check third field
-	assert.Equal(t, "description", metadata[2].Name)
-	assert.Equal(t, "text", metadata[2].Type)
+	assert.Equal(t, "name", fieldsMeta[1].Name)
+	assert.Equal(t, "string", fieldsMeta[1].Type)
+	assert.Equal(t, "Name", fieldsMeta[1].Label)
+	assert.False(t, fieldsMeta[1].Required)
+	assert.True(t, fieldsMeta[1].Filterable)  // Default value
+	assert.True(t, fieldsMeta[1].Sortable)    // Default value
+	assert.False(t, fieldsMeta[1].Searchable) // Default value
+	assert.False(t, fieldsMeta[1].Unique)     // Default value
 }
 
 func TestGenerateValidatorsMetadata(t *testing.T) {

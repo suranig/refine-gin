@@ -59,6 +59,15 @@ type ResourceConfig struct {
 	Middlewares []interface{}
 	Relations   []Relation
 	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+
+	// Field lists for different purposes
+	FilterableFields []string
+	SearchableFields []string
+	SortableFields   []string
+	TableFields      []string
+	FormFields       []string
+	RequiredFields   []string
+	UniqueFields     []string
 }
 
 // DefaultResource implements the Resource interface
@@ -74,6 +83,15 @@ type DefaultResource struct {
 	Middlewares []interface{}
 	Relations   []Relation
 	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+
+	// Field lists for different purposes
+	FilterableFields []string
+	SearchableFields []string
+	SortableFields   []string
+	TableFields      []string
+	FormFields       []string
+	RequiredFields   []string
+	UniqueFields     []string
 }
 
 func (r *DefaultResource) GetName() string {
@@ -146,16 +164,55 @@ func NewResource(config ResourceConfig) Resource {
 		relations = ExtractRelationsFromModel(config.Model)
 	}
 
-	// Ustaw domyślną nazwę pola identyfikatora, jeśli nie podano
-	idFieldName := config.IDFieldName
-	if idFieldName == "" {
-		idFieldName = "ID"
-	}
-
 	// Set default label if not provided
 	label := config.Label
 	if label == "" {
 		label = strings.Title(config.Name)
+	}
+
+	// Set default field lists if not provided
+	filterableFields := config.FilterableFields
+	if len(filterableFields) == 0 {
+		// By default, all fields are filterable
+		for _, f := range fields {
+			filterableFields = append(filterableFields, f.Name)
+		}
+	}
+
+	sortableFields := config.SortableFields
+	if len(sortableFields) == 0 {
+		// By default, all fields are sortable
+		for _, f := range fields {
+			sortableFields = append(sortableFields, f.Name)
+		}
+	}
+
+	// Default table fields are all fields
+	tableFields := config.TableFields
+	if len(tableFields) == 0 {
+		for _, f := range fields {
+			tableFields = append(tableFields, f.Name)
+		}
+	}
+
+	// Default form fields are all fields except ID
+	formFields := config.FormFields
+	if len(formFields) == 0 {
+		for _, f := range fields {
+			if f.Name != "ID" && f.Name != "id" {
+				formFields = append(formFields, f.Name)
+			}
+		}
+	}
+
+	// Required fields from validation
+	requiredFields := config.RequiredFields
+	if len(requiredFields) == 0 {
+		for _, f := range fields {
+			if f.Validation != nil && f.Validation.Required {
+				requiredFields = append(requiredFields, f.Name)
+			}
+		}
 	}
 
 	return &DefaultResource{
@@ -169,7 +226,16 @@ func NewResource(config ResourceConfig) Resource {
 		Filters:     config.Filters,
 		Middlewares: config.Middlewares,
 		Relations:   relations,
-		IDFieldName: idFieldName,
+		IDFieldName: config.IDFieldName,
+
+		// Field lists
+		FilterableFields: filterableFields,
+		SearchableFields: config.SearchableFields,
+		SortableFields:   sortableFields,
+		TableFields:      tableFields,
+		FormFields:       formFields,
+		RequiredFields:   requiredFields,
+		UniqueFields:     config.UniqueFields,
 	}
 }
 
@@ -190,11 +256,16 @@ func GenerateFieldsFromModel(model interface{}) []Field {
 		}
 
 		fieldDef := Field{
-			Name:       field.Name,
-			Type:       field.Type.String(),
-			Filterable: true,  // By default, all fields are filterable
-			Sortable:   true,  // By default, all fields are sortable
-			Searchable: false, // By default, fields are not searchable
+			Name:  field.Name,
+			Type:  field.Type.String(),
+			Label: field.Name, // Default label is the field name
+			List: &ListConfig{
+				Width:    200, // Default width
+				Ellipsis: true,
+			},
+			Form: &FormConfig{
+				Placeholder: "Enter " + strings.ToLower(field.Name),
+			},
 		}
 
 		if tag, ok := field.Tag.Lookup("refine"); ok {
@@ -214,48 +285,86 @@ func ParseFieldTag(field *Field, tag string) {
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 
-		switch part {
-		case "filterable":
-			field.Filterable = true
-		case "!filterable":
-			field.Filterable = false
-		case "sortable":
-			field.Sortable = true
-		case "!sortable":
-			field.Sortable = false
-		case "searchable":
-			field.Searchable = true
-		case "!searchable":
-			field.Searchable = false
-		case "required":
-			field.Required = true
-		case "!required":
-			field.Required = false
-		case "unique":
-			field.Unique = true
-		case "!unique":
-			field.Unique = false
+		if strings.HasPrefix(part, "label=") {
+			field.Label = part[6:]
+			continue
 		}
 
+		if strings.HasPrefix(part, "placeholder=") {
+			if field.Form == nil {
+				field.Form = &FormConfig{}
+			}
+			field.Form.Placeholder = part[12:]
+			continue
+		}
+
+		if strings.HasPrefix(part, "help=") {
+			if field.Form == nil {
+				field.Form = &FormConfig{}
+			}
+			field.Form.Help = part[5:]
+			continue
+		}
+
+		if strings.HasPrefix(part, "tooltip=") {
+			if field.Form == nil {
+				field.Form = &FormConfig{}
+			}
+			field.Form.Tooltip = part[8:]
+			continue
+		}
+
+		if strings.HasPrefix(part, "width=") {
+			if width, err := strconv.Atoi(part[6:]); err == nil {
+				if field.List == nil {
+					field.List = &ListConfig{}
+				}
+				field.List.Width = width
+			}
+			continue
+		}
+
+		if strings.HasPrefix(part, "fixed=") {
+			if field.List == nil {
+				field.List = &ListConfig{}
+			}
+			field.List.Fixed = part[6:]
+			continue
+		}
+
+		// Validation rules
 		if strings.HasPrefix(part, "min=") {
 			if value, err := strconv.Atoi(part[4:]); err == nil {
+				if field.Validation == nil {
+					field.Validation = &Validation{}
+				}
 				if field.Type == "string" {
-					field.Validators = append(field.Validators, StringValidator{MinLength: value})
-				} else if strings.HasPrefix(field.Type, "int") || strings.HasPrefix(field.Type, "float") {
-					field.Validators = append(field.Validators, NumberValidator{Min: float64(value)})
+					field.Validation.MinLength = value
+				} else {
+					field.Validation.Min = float64(value)
 				}
 			}
 		} else if strings.HasPrefix(part, "max=") {
 			if value, err := strconv.Atoi(part[4:]); err == nil {
+				if field.Validation == nil {
+					field.Validation = &Validation{}
+				}
 				if field.Type == "string" {
-					field.Validators = append(field.Validators, StringValidator{MaxLength: value})
-				} else if strings.HasPrefix(field.Type, "int") || strings.HasPrefix(field.Type, "float") {
-					field.Validators = append(field.Validators, NumberValidator{Max: float64(value)})
+					field.Validation.MaxLength = value
+				} else {
+					field.Validation.Max = float64(value)
 				}
 			}
 		} else if strings.HasPrefix(part, "pattern=") {
-			pattern := part[8:]
-			field.Validators = append(field.Validators, StringValidator{Pattern: pattern})
+			if field.Validation == nil {
+				field.Validation = &Validation{}
+			}
+			field.Validation.Pattern = part[8:]
+		} else if part == "required" {
+			if field.Validation == nil {
+				field.Validation = &Validation{}
+			}
+			field.Validation.Required = true
 		}
 	}
 }
@@ -338,11 +447,5 @@ func (r *DefaultResource) GetField(name string) *Field {
 
 // GetSearchable returns a list of searchable field names
 func (r *DefaultResource) GetSearchable() []string {
-	var searchable []string
-	for _, field := range r.Fields {
-		if field.Searchable {
-			searchable = append(searchable, field.Name)
-		}
-	}
-	return searchable
+	return r.SearchableFields
 }

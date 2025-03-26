@@ -1,7 +1,6 @@
 package resource
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 
@@ -194,69 +193,57 @@ func (v RelationValidator) validateToManyRelation(val reflect.Value) error {
 }
 
 // ValidateRelations validates all relations in a model
-func ValidateRelations(ctx context.Context, res Resource, model interface{}, db *gorm.DB) error {
-	modelVal := reflect.ValueOf(model)
-	if modelVal.Kind() == reflect.Ptr {
-		modelVal = modelVal.Elem()
+func ValidateRelations(db *gorm.DB, obj interface{}) error {
+	objType := reflect.TypeOf(obj)
+	objVal := reflect.ValueOf(obj)
+
+	if objType.Kind() == reflect.Ptr {
+		objType = objType.Elem()
+		objVal = objVal.Elem()
 	}
 
-	if modelVal.Kind() != reflect.Struct {
-		return fmt.Errorf("model must be a struct or a pointer to a struct")
+	// Get the resource from registry based on model type
+	registry := GlobalResourceRegistry
+	var res Resource
+	var found bool
+
+	// Loop through all registered resources
+	for _, r := range registry.GetAll() {
+		resourceModel := r.GetModel()
+		resourceType := reflect.TypeOf(resourceModel)
+		if resourceType.Kind() == reflect.Ptr {
+			resourceType = resourceType.Elem()
+		}
+
+		// If resource model type matches the object type
+		if resourceType == objType {
+			res = r
+			found = true
+			break
+		}
 	}
 
-	// Get all relations of the resource
-	relations := res.GetRelations()
+	if !found {
+		return nil // No resource found for this model, skip validation
+	}
 
-	// Get the registry
-	registry := GetRegistry()
-
-	// For each relation
-	for _, relation := range relations {
-		// Get the field for the relation
-		field := modelVal.FieldByName(relation.Name)
+	// Validate each relation
+	for _, relation := range res.GetRelations() {
+		// Get the field value
+		field := objVal.FieldByName(relation.Field)
 		if !field.IsValid() {
 			continue
 		}
 
-		// If field is zero, check if required
-		if field.IsZero() {
-			if relation.Required {
-				return fmt.Errorf("relation %s is required", relation.Name)
-			}
-			continue
-		}
-
-		// Get related resource from registry
-		relatedResource, err := registry.GetResource(relation.Resource)
-		if err != nil {
-			// If the related resource is not in the registry, skip detailed validation
-			// but still perform basic validation
-			validator := RelationValidator{
-				Relation: relation,
-				Required: relation.Required,
-				MinItems: relation.MinItems,
-				MaxItems: relation.MaxItems,
-				DB:       db,
-			}
-
-			if err := validator.Validate(field.Interface()); err != nil {
-				return err
-			}
-
-			continue
-		}
-
-		// Create validator for the relation with the related resource
+		// Create validator for the relation
 		validator := RelationValidator{
-			Relation:        relation,
-			Required:        relation.Required,
-			MinItems:        relation.MinItems,
-			MaxItems:        relation.MaxItems,
-			DB:              db,
-			RelatedResource: relatedResource,
+			Relation: relation,
+			Required: relation.Required,
+			MinItems: relation.MinItems,
+			MaxItems: relation.MaxItems,
+			DB:       db,
 		}
 
-		// Validate the relation
 		if err := validator.Validate(field.Interface()); err != nil {
 			return err
 		}

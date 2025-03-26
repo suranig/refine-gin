@@ -73,146 +73,70 @@ func (m *RegistryMockResource) GetSearchable() []string {
 	return nil
 }
 
-// TestGetRegistry tests the GetRegistry function
-func TestGetRegistry(t *testing.T) {
-	// Test that GetRegistry returns a singleton instance
-	r1 := GetRegistry()
-	r2 := GetRegistry()
-
-	if r1 != r2 {
-		t.Errorf("GetRegistry() returned different instances: %p != %p", r1, r2)
-	}
-
-	// Test that the registry is initialized with an empty map
-	if r1.resources == nil {
-		t.Errorf("Registry.resources is nil, expected an initialized map")
-	}
-}
-
-// TestRegisterResource tests the RegisterResource method
-func TestRegisterResource(t *testing.T) {
-	// Create a clean registry for testing
-	registry = &Registry{
-		resources: make(map[string]Resource),
-	}
+// TestResourceRegistry tests the ResourceRegistry and GlobalResourceRegistry
+func TestResourceRegistry(t *testing.T) {
+	// Reset GlobalResourceRegistry for testing
+	GlobalResourceRegistry = NewResourceRegistry()
 
 	// Test registering a new resource
 	resource := &RegistryMockResource{name: "test-resource"}
-	GetRegistry().RegisterResource(resource)
+	GlobalResourceRegistry.Register(resource)
 
 	// Verify the resource was registered
-	if !GetRegistry().HasResource("test-resource") {
-		t.Errorf("RegisterResource() failed to register the resource")
-	}
-
-	// Test retrieving the registered resource
-	res, err := GetRegistry().GetResource("test-resource")
-	if err != nil {
-		t.Errorf("GetResource() returned an error: %v", err)
+	res, ok := GlobalResourceRegistry.GetByName("test-resource")
+	if !ok {
+		t.Errorf("Register() failed to register the resource")
 	}
 	if res.GetName() != resource.GetName() {
-		t.Errorf("GetResource() returned a resource with incorrect name: got %s, want %s",
+		t.Errorf("GetByName() returned a resource with incorrect name: got %s, want %s",
 			res.GetName(), resource.GetName())
-	}
-}
-
-// TestGetResource tests the GetResource method
-func TestGetResource(t *testing.T) {
-	// Create a clean registry for testing
-	registry = &Registry{
-		resources: make(map[string]Resource),
-	}
-
-	// Register a test resource
-	resource := &RegistryMockResource{name: "test-resource"}
-	GetRegistry().RegisterResource(resource)
-
-	// Test retrieving an existing resource
-	res, err := GetRegistry().GetResource("test-resource")
-	if err != nil {
-		t.Errorf("GetResource() returned an error for an existing resource: %v", err)
-	}
-	if res.GetName() != "test-resource" {
-		t.Errorf("GetResource() returned a resource with incorrect name: got %s, want %s",
-			res.GetName(), "test-resource")
 	}
 
 	// Test retrieving a non-existent resource
-	_, err = GetRegistry().GetResource("non-existent")
-	if err == nil {
-		t.Errorf("GetResource() should return an error for a non-existent resource")
-	}
-}
-
-// TestHasResource tests the HasResource method
-func TestHasResource(t *testing.T) {
-	// Create a clean registry for testing
-	registry = &Registry{
-		resources: make(map[string]Resource),
+	_, ok = GlobalResourceRegistry.GetByName("non-existent")
+	if ok {
+		t.Errorf("GetByName() should return false for a non-existent resource")
 	}
 
-	// Register a test resource
-	resource := &RegistryMockResource{name: "test-resource"}
-	GetRegistry().RegisterResource(resource)
-
-	// Test HasResource with an existing resource
-	if !GetRegistry().HasResource("test-resource") {
-		t.Errorf("HasResource() returned false for an existing resource")
-	}
-
-	// Test HasResource with a non-existent resource
-	if GetRegistry().HasResource("non-existent") {
-		t.Errorf("HasResource() returned true for a non-existent resource")
-	}
-}
-
-// TestResourceNames tests the ResourceNames method
-func TestResourceNames(t *testing.T) {
-	// Create a clean registry for testing
-	registry = &Registry{
-		resources: make(map[string]Resource),
-	}
+	// Test GetAll
+	GlobalResourceRegistry = NewResourceRegistry()
 
 	// Register test resources
 	resources := []string{"resource1", "resource2", "resource3"}
 	for _, name := range resources {
-		GetRegistry().RegisterResource(&RegistryMockResource{name: name})
+		GlobalResourceRegistry.Register(&RegistryMockResource{name: name})
 	}
 
-	// Test ResourceNames returns all registered resource names
-	names := GetRegistry().ResourceNames()
-	if len(names) != len(resources) {
-		t.Errorf("ResourceNames() returned %d names, expected %d", len(names), len(resources))
+	// Test GetAll returns all registered resources
+	allResources := GlobalResourceRegistry.GetAll()
+	if len(allResources) != len(resources) {
+		t.Errorf("GetAll() returned %d resources, expected %d", len(allResources), len(resources))
 	}
 
 	// Check that all registered names are in the result
 	for _, name := range resources {
 		found := false
-		for _, returnedName := range names {
-			if returnedName == name {
+		for _, res := range allResources {
+			if res.GetName() == name {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("ResourceNames() did not return the expected resource name: %s", name)
+			t.Errorf("GetAll() did not return the expected resource: %s", name)
 		}
 	}
-}
 
-// TestRegisterToRegistry tests the RegisterToRegistry function
-func TestRegisterToRegistry(t *testing.T) {
-	// Create a clean registry for testing
-	registry = &Registry{
-		resources: make(map[string]Resource),
-	}
+	// Test RegisterToRegistry function
+	GlobalResourceRegistry = NewResourceRegistry()
 
 	// Test using the convenience function
-	resource := &RegistryMockResource{name: "test-resource"}
+	resource = &RegistryMockResource{name: "test-resource"}
 	RegisterToRegistry(resource)
 
 	// Verify the resource was registered
-	if !GetRegistry().HasResource("test-resource") {
+	_, ok = GlobalResourceRegistry.GetByName("test-resource")
+	if !ok {
 		t.Errorf("RegisterToRegistry() failed to register the resource")
 	}
 }

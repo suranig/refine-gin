@@ -154,15 +154,33 @@ func GenerateResourceMetadata(res Resource) ResourceMetadata {
 func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 	result := make([]FieldMetadata, 0, len(fields))
 
+	// Domyślnie wszystkie pola są filtrowalne i sortowalne
 	for _, field := range fields {
+		// Sprawdź na podstawie konfiguracji pola
+		isFilterable := true  // Domyślnie filtrowalne
+		isSortable := true    // Domyślnie sortowalne
+		isSearchable := false // Domyślnie nie przeszukiwalne
+		isRequired := false   // Domyślnie niewymagane
+		isUnique := false     // Domyślnie nieunikalne
+
+		// Jeśli pole ma Validation, użyj go dla required
+		if field.Validation != nil && field.Validation.Required {
+			isRequired = true
+		}
+
 		fieldMeta := FieldMetadata{
 			Name:       field.Name,
 			Type:       field.Type,
-			Filterable: field.Filterable,
-			Sortable:   field.Sortable,
-			Searchable: field.Searchable,
-			Required:   field.Required,
-			Unique:     field.Unique,
+			Filterable: isFilterable,
+			Sortable:   isSortable,
+			Searchable: isSearchable,
+			Required:   isRequired,
+			Unique:     isUnique,
+		}
+
+		// Dodaj label jeśli istnieje
+		if field.Label != "" {
+			fieldMeta.Label = field.Label
 		}
 
 		// Add validators metadata

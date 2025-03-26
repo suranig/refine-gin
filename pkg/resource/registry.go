@@ -1,68 +1,54 @@
 package resource
 
 import (
-	"fmt"
 	"sync"
 )
 
-// Registry is a singleton registry for resources
-type Registry struct {
+// ResourceRegistry provides a registry for managing resources
+type ResourceRegistry struct {
 	resources map[string]Resource
-	mu        sync.RWMutex
+	mutex     sync.RWMutex
 }
 
-var (
-	registry     *Registry
-	registryOnce sync.Once
-)
-
-// GetRegistry returns the singleton registry instance
-func GetRegistry() *Registry {
-	registryOnce.Do(func() {
-		registry = &Registry{
-			resources: make(map[string]Resource),
-		}
-	})
-	return registry
+// NewResourceRegistry creates a new resource registry
+func NewResourceRegistry() *ResourceRegistry {
+	return &ResourceRegistry{
+		resources: make(map[string]Resource),
+	}
 }
 
-// RegisterResource adds a resource to the registry
-func (r *Registry) RegisterResource(res Resource) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// Register adds a resource to the registry
+func (r *ResourceRegistry) Register(res Resource) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.resources[res.GetName()] = res
 }
 
-// GetResource returns a resource by name
-func (r *Registry) GetResource(name string) (Resource, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if res, ok := r.resources[name]; ok {
-		return res, nil
+// GetByName retrieves a resource by name
+func (r *ResourceRegistry) GetByName(name string) (Resource, bool) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	res, ok := r.resources[name]
+	return res, ok
+}
+
+// GetAll returns all registered resources
+func (r *ResourceRegistry) GetAll() []Resource {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	result := make([]Resource, 0, len(r.resources))
+	for _, res := range r.resources {
+		result = append(result, res)
 	}
-	return nil, fmt.Errorf("resource '%s' not found in registry", name)
+
+	return result
 }
 
-// HasResource checks if a resource exists in the registry
-func (r *Registry) HasResource(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, ok := r.resources[name]
-	return ok
-}
+// GlobalResourceRegistry is a singleton instance of the resource registry
+var GlobalResourceRegistry = NewResourceRegistry()
 
-// ResourceNames returns all resource names in the registry
-func (r *Registry) ResourceNames() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.resources))
-	for name := range r.resources {
-		names = append(names, name)
-	}
-	return names
-}
-
-// RegisterToRegistry is a convenience function to register a resource to the global registry
+// RegisterToRegistry registers a resource to the global registry
 func RegisterToRegistry(res Resource) {
-	GetRegistry().RegisterResource(res)
+	GlobalResourceRegistry.Register(res)
 }

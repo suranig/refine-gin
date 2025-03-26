@@ -1,7 +1,6 @@
 package resource
 
 import (
-	"context"
 	"testing"
 )
 
@@ -48,13 +47,12 @@ func setupTestResource() Resource {
 	}
 }
 
-func setupTestRegistry() *Registry {
-	registry = &Registry{
-		resources: make(map[string]Resource),
-	}
+func setupTestRegistry() {
+	// Wyczyść rejestr globalny
+	GlobalResourceRegistry = NewResourceRegistry()
 
-	// Register the related resources
-	registry.RegisterResource(&DefaultResource{
+	// Zarejestruj powiązane zasoby
+	GlobalResourceRegistry.Register(&DefaultResource{
 		Name: "categories",
 		Model: struct {
 			ID   uint
@@ -62,24 +60,18 @@ func setupTestRegistry() *Registry {
 		}{},
 	})
 
-	registry.RegisterResource(&DefaultResource{
+	GlobalResourceRegistry.Register(&DefaultResource{
 		Name: "tags",
 		Model: struct {
 			ID   uint
 			Name string
 		}{},
 	})
-
-	return registry
 }
 
 func TestValidateRelations(t *testing.T) {
 	// Setup test resources and registry
-	resource := setupTestResource()
 	setupTestRegistry()
-
-	// Create context
-	ctx := context.Background()
 
 	// Test case 1: Valid relations (without DB check)
 	model := RelationTestModel{
@@ -90,7 +82,29 @@ func TestValidateRelations(t *testing.T) {
 		Author:   func() *string { id := "author1"; return &id }(),
 	}
 
-	err := ValidateRelations(ctx, resource, model, nil)
+	// Rejestrowanie typu modelu do testów
+	GlobalResourceRegistry.Register(&DefaultResource{
+		Name:  "relation_test_model",
+		Model: RelationTestModel{},
+		Relations: []Relation{
+			{
+				Name:     "category",
+				Type:     RelationTypeManyToOne,
+				Resource: "categories",
+				Field:    "Category",
+				Required: false,
+			},
+			{
+				Name:     "tags",
+				Type:     RelationTypeOneToMany,
+				Resource: "tags",
+				Field:    "Tags",
+				Required: false,
+			},
+		},
+	})
+
+	err := ValidateRelations(nil, model)
 	if err != nil {
 		t.Errorf("ValidateRelations() returned an error for valid relations: %v", err)
 	}
@@ -104,7 +118,7 @@ func TestValidateRelations(t *testing.T) {
 		Author:   func() *string { id := "author1"; return &id }(),
 	}
 
-	err = ValidateRelations(ctx, resource, invalidModel, nil)
+	err = ValidateRelations(nil, invalidModel)
 	if err != nil {
 		// This should not error since we're doing basic validation without checking existence
 		t.Errorf("ValidateRelations() should not return an error for basic validation: %v", err)
@@ -119,7 +133,7 @@ func TestValidateRelations(t *testing.T) {
 		Author:   nil,
 	}
 
-	err = ValidateRelations(ctx, resource, nilModel, nil)
+	err = ValidateRelations(nil, nilModel)
 	if err != nil {
 		t.Errorf("ValidateRelations() returned an error for nil relations: %v", err)
 	}
