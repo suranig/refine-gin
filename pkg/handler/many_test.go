@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/suranig/refine-gin/pkg/resource"
 )
 
 func TestCreateManyHandler(t *testing.T) {
@@ -109,12 +110,37 @@ func TestUpdateManyHandler(t *testing.T) {
 }
 
 func TestDeleteManyHandler(t *testing.T) {
-	// Setup
+	// Setup with custom setup function to avoid Query expectation
 	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, _ := setupTest()
+	r := gin.New()
+	mockRepo := new(MockRepository)
+	mockResource := new(MockResource)
+
+	// Setup resource (skip the Query expectation)
+	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetLabel").Return("Tests")
+	mockResource.On("GetIcon").Return("test-icon")
+	mockResource.On("GetModel").Return(TestModel{})
+	mockResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "string"},
+		{Name: "name", Type: "string"},
+	})
+	mockResource.On("GetDefaultSort").Return(nil)
+	mockResource.On("GetFilters").Return([]resource.Filter{})
+	mockResource.On("GetRelations").Return([]resource.Relation{})
+	mockResource.On("HasRelation", mock.Anything).Return(false)
+	mockResource.On("GetRelation", mock.Anything).Return(nil)
+	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
 
 	// Setup test data and mock expectations
 	mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(2), nil)
+
+	// Debugging: Print out all expectations
+	for _, exp := range mockRepo.ExpectedCalls {
+		t.Logf("Expected call: %s", exp.Method)
+	}
 
 	// Setup routes
 	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, mockRepo))

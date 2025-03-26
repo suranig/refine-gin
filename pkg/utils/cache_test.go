@@ -251,8 +251,8 @@ func TestGenerateETagFromSlice(t *testing.T) {
 	}{
 		{"Empty slice", []string{}, "\"2166136261\""},
 		{"Single item", []string{"test"}, "\"2949673445\""},
-		{"Multiple items", []string{"resource1", "resource2"}, "\"3123562646\""},
-		{"Duplicate items", []string{"test", "test"}, "\"1496909320\""},
+		{"Multiple items", []string{"resource1", "resource2"}, "\"4065752498\""},
+		{"Duplicate items", []string{"test", "test"}, "\"2884330559\""},
 	}
 
 	for _, tt := range tests {

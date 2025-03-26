@@ -108,6 +108,16 @@ func (m *MockResource) GetName() string {
 	return args.String(0)
 }
 
+func (m *MockResource) GetLabel() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetIcon() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 func (m *MockResource) GetModel() interface{} {
 	args := m.Called()
 	return args.Get(0)
@@ -236,8 +246,13 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	mockResource := new(MockResource)
 	mockDTOProvider := new(MockDTOProvider)
 
+	// Setup mock repository
+	mockRepo.On("Query", mock.Anything).Return(&gorm.DB{})
+
 	// Setup resource
 	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetLabel").Return("Tests")
+	mockResource.On("GetIcon").Return("test-icon")
 	mockResource.On("GetModel").Return(TestModel{})
 	mockResource.On("GetFields").Return([]resource.Field{
 		{Name: "id", Type: "string"},
