@@ -1,8 +1,8 @@
 package resource
 
 import (
-	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -141,15 +141,15 @@ func parseRelationTag(fieldName string, tag string) *Relation {
 	// Parse min/max items if provided
 	minItems := 0
 	if minStr, ok := parts["min_items"]; ok {
-		if val, err := parseInt(minStr); err == nil {
-			minItems = val
+		if val, err := strconv.ParseInt(minStr, 10, 0); err == nil {
+			minItems = int(val)
 		}
 	}
 
 	maxItems := 0
 	if maxStr, ok := parts["max_items"]; ok {
-		if val, err := parseInt(maxStr); err == nil {
-			maxItems = val
+		if val, err := strconv.ParseInt(maxStr, 10, 0); err == nil {
+			maxItems = int(val)
 		}
 	}
 
@@ -200,13 +200,6 @@ func parseRelationTag(fieldName string, tag string) *Relation {
 		OnDelete:         onDelete,
 		OnUpdate:         onUpdate,
 	}
-}
-
-// parseInt is a helper function to parse an integer
-func parseInt(s string) (int, error) {
-	var result int
-	_, err := fmt.Sscanf(s, "%d", &result)
-	return result, err
 }
 
 // inferRelationFromField tries to infer a relation from a field type
