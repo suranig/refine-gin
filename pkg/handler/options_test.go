@@ -123,3 +123,90 @@ func TestRegisterOptionsEndpoint(t *testing.T) {
 	// Verify all expectations were met
 	mockResource.AssertExpectations(t)
 }
+
+func TestOptionsHandlerWithMultipleResources(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	apiGroup := r.Group("/api")
+
+	// Create mock resources
+	userResource := new(MockResource)
+	postResource := new(MockResource)
+
+	// Setup expectations for user resource
+	userResource.On("GetName").Return("users")
+	userResource.On("GetLabel").Return("Users")
+	userResource.On("GetIcon").Return("user-icon")
+	userResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "string", Required: true},
+		{Name: "name", Type: "string", Required: true, Searchable: true},
+		{Name: "email", Type: "string", Required: true},
+	})
+	userResource.On("GetOperations").Return([]resource.Operation{
+		resource.OperationCreate,
+		resource.OperationRead,
+		resource.OperationUpdate,
+		resource.OperationDelete,
+		resource.OperationList,
+	})
+	userResource.On("GetDefaultSort").Return(nil)
+	userResource.On("GetFilters").Return([]resource.Filter{})
+	userResource.On("GetRelations").Return([]resource.Relation{})
+	userResource.On("GetIDFieldName").Return("ID")
+	userResource.On("GetSearchable").Return([]string{"name"})
+
+	// Setup expectations for post resource
+	postResource.On("GetName").Return("posts")
+	postResource.On("GetLabel").Return("Blog Posts")
+	postResource.On("GetIcon").Return("post-icon")
+	postResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "int", Required: true},
+		{Name: "title", Type: "string", Required: true, Searchable: true},
+		{Name: "content", Type: "string", Required: true},
+		{Name: "author_id", Type: "string", Required: true},
+	})
+	postResource.On("GetOperations").Return([]resource.Operation{
+		resource.OperationCreate,
+		resource.OperationRead,
+		resource.OperationUpdate,
+		resource.OperationDelete,
+		resource.OperationList,
+	})
+	postResource.On("GetDefaultSort").Return(&resource.Sort{Field: "id", Order: "desc"})
+	postResource.On("GetFilters").Return([]resource.Filter{})
+	postResource.On("GetRelations").Return([]resource.Relation{})
+	postResource.On("GetIDFieldName").Return("ID")
+	postResource.On("GetSearchable").Return([]string{"title", "content"})
+
+	// Register options endpoints for both resources
+	RegisterOptionsEndpoint(apiGroup, userResource)
+	RegisterOptionsEndpoint(apiGroup, postResource)
+
+	// Test OPTIONS for users resource
+	w1 := httptest.NewRecorder()
+	req1, _ := http.NewRequest("OPTIONS", "/api/users", nil)
+	r.ServeHTTP(w1, req1)
+
+	// Verify user resource response
+	assert.Equal(t, http.StatusOK, w1.Code)
+	assert.Contains(t, w1.Body.String(), "\"name\":\"users\"")
+	assert.Contains(t, w1.Body.String(), "\"label\":\"Users\"")
+	assert.Contains(t, w1.Body.String(), "\"icon\":\"user-icon\"")
+	assert.Contains(t, w1.Body.String(), "\"searchable\":[\"name\"]")
+
+	// Test OPTIONS for posts resource
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("OPTIONS", "/api/posts", nil)
+	r.ServeHTTP(w2, req2)
+
+	// Verify post resource response
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Contains(t, w2.Body.String(), "\"name\":\"posts\"")
+	assert.Contains(t, w2.Body.String(), "\"label\":\"Blog Posts\"")
+	assert.Contains(t, w2.Body.String(), "\"searchable\":[\"title\",\"content\"]")
+
+	// Verify all expectations were met
+	userResource.AssertExpectations(t)
+	postResource.AssertExpectations(t)
+}

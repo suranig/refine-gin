@@ -155,3 +155,48 @@ func TestAPIConfigCaching(t *testing.T) {
 	// Should return 304 Not Modified
 	assert.Equal(t, http.StatusNotModified, w2.Code)
 }
+
+func TestRegisterAPIConfigEndpoint(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	apiGroup := router.Group("/api")
+
+	// Register API config endpoint
+	RegisterAPIConfigEndpoint(apiGroup)
+
+	// Create and register mock resources
+	resourceA := NewAPIConfigMockResource("resourceA")
+	resourceB := NewAPIConfigMockResource("resourceB")
+
+	// Register test resources
+	registry := resource.GetRegistry()
+	registry.RegisterResource(resourceA)
+	registry.RegisterResource(resourceB)
+
+	// Make a request to the config endpoint
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/config", nil)
+	router.ServeHTTP(w, req)
+
+	// Assertions
+	assert.Equal(t, 200, w.Code)
+
+	// Parse the response
+	var response APIConfigResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	// Verify specific resources in the response
+	assert.Contains(t, response.Resources, "resourceA")
+	assert.Contains(t, response.Resources, "resourceB")
+
+	// Verify resource metadata
+	resourceAMeta := response.Resources["resourceA"]
+	assert.Equal(t, "resourceA", resourceAMeta.Name)
+	assert.Equal(t, "Test resourceA", resourceAMeta.Label)
+	assert.Equal(t, "test-icon", resourceAMeta.Icon)
+
+	// Verify config section
+	assert.Contains(t, response.Config, "version")
+}
