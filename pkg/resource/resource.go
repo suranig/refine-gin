@@ -1,10 +1,11 @@
 package resource
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 // Resource defines the interface for API resources
@@ -315,95 +316,14 @@ func CreateInstanceOfType(model interface{}) interface{} {
 	return instance.Interface()
 }
 
+// SetID sets the ID field of an object
 func SetID(obj interface{}, id interface{}) error {
-	val := reflect.ValueOf(obj)
-
-	if val.Kind() != reflect.Ptr {
-		return fmt.Errorf("object must be a pointer")
-	}
-
-	val = val.Elem()
-
-	idField := val.FieldByName("ID")
-	if !idField.IsValid() {
-		return fmt.Errorf("ID field does not exist")
-	}
-
-	if !idField.CanSet() {
-		return fmt.Errorf("ID field cannot be set")
-	}
-
-	idValue := reflect.ValueOf(id)
-	if idValue.Type() != idField.Type() {
-		switch idField.Kind() {
-		case reflect.String:
-			idField.SetString(fmt.Sprintf("%v", id))
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			intVal, err := strconv.ParseInt(fmt.Sprintf("%v", id), 10, 64)
-			if err != nil {
-				return err
-			}
-			idField.SetInt(intVal)
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			uintVal, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
-			if err != nil {
-				return err
-			}
-			idField.SetUint(uintVal)
-		default:
-			return fmt.Errorf("cannot convert ID to type %s", idField.Type())
-		}
-	} else {
-		idField.Set(idValue)
-	}
-
-	return nil
+	return utils.SetID(obj, id, "ID")
 }
 
-// SetCustomID ustawia wartość pola identyfikatora o podanej nazwie
+// SetCustomID sets a custom ID field of an object
 func SetCustomID(obj interface{}, id interface{}, idFieldName string) error {
-	val := reflect.ValueOf(obj)
-
-	if val.Kind() != reflect.Ptr {
-		return fmt.Errorf("object must be a pointer")
-	}
-
-	val = val.Elem()
-
-	idField := val.FieldByName(idFieldName)
-	if !idField.IsValid() {
-		return fmt.Errorf("%s field does not exist", idFieldName)
-	}
-
-	if !idField.CanSet() {
-		return fmt.Errorf("%s field cannot be set", idFieldName)
-	}
-
-	idValue := reflect.ValueOf(id)
-	if idValue.Type() != idField.Type() {
-		switch idField.Kind() {
-		case reflect.String:
-			idField.SetString(fmt.Sprintf("%v", id))
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			intVal, err := strconv.ParseInt(fmt.Sprintf("%v", id), 10, 64)
-			if err != nil {
-				return err
-			}
-			idField.SetInt(intVal)
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			uintVal, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
-			if err != nil {
-				return err
-			}
-			idField.SetUint(uintVal)
-		default:
-			return fmt.Errorf("cannot convert %s to type %s", idFieldName, idField.Type())
-		}
-	} else {
-		idField.Set(idValue)
-	}
-
-	return nil
+	return utils.SetID(obj, id, idFieldName)
 }
 
 // GetField returns a field by name
