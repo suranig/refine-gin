@@ -130,6 +130,8 @@ type RelationMetadata struct {
 func GenerateResourceMetadata(res Resource) ResourceMetadata {
 	metadata := ResourceMetadata{
 		Name:        res.GetName(),
+		Label:       res.GetLabel(),
+		Icon:        res.GetIcon(),
 		Operations:  res.GetOperations(),
 		IDFieldName: res.GetIDFieldName(),
 		DefaultSort: res.GetDefaultSort(),
