@@ -469,3 +469,41 @@ swagger.RegisterCustomEndpoint(swagger.CustomEndpoint{
 ```
 
 After registering, the custom endpoints will be merged into the generated OpenAPI documentation when calling `GenerateOpenAPI()`. This allows you to extend the Swagger documentation with endpoints that do not follow the standard resource pattern.
+
+## OPTIONS Endpoint Documentation
+
+Starting with version 0.4.0, Refine-Gin automatically includes the OPTIONS endpoint in the Swagger documentation for each resource. This endpoint provides metadata about the resource, including:
+
+- Resource name and label
+- Icon
+- Available operations
+- Field definitions with their types and properties (required, searchable, etc.)
+
+The OPTIONS endpoint can be called with the following HTTP request:
+
+```
+OPTIONS /api/{resource}
+```
+
+This endpoint is particularly useful for client-side frameworks like Refine.js, which can use the metadata to dynamically generate forms, lists, and other UI components based on the resource structure.
+
+### Caching with ETags
+
+The OPTIONS endpoint supports ETag-based caching, allowing clients to efficiently check if the resource metadata has changed:
+
+1. The first request to the OPTIONS endpoint returns the metadata with an ETag header.
+2. Subsequent requests can include the `If-None-Match` header with the previously received ETag.
+3. If the metadata hasn't changed, the server responds with a 304 Not Modified status code, saving bandwidth.
+
+Example headers for conditional request:
+```
+OPTIONS /api/users
+If-None-Match: "3548279132"
+```
+
+Response when metadata hasn't changed:
+```
+HTTP/1.1 304 Not Modified
+```
+
+This caching mechanism is fully documented in the Swagger UI to help API consumers implement efficient client-side caching.
