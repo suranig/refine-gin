@@ -23,6 +23,9 @@ This library integrates the following technologies:
 - Input data validation
 - Data transformation through DTO layer
 - Support for relationships between resources
+- Centralized field lists for filtering, sorting, and searching
+- Advanced reflection utilities for easier dynamic data handling
+- Type mapping for consistent schema generation
 - JWT authentication and authorization
 - Customizable validation rules
 - Flexible JSON naming convention control (snake_case, camelCase, PascalCase)
@@ -91,18 +94,22 @@ func main() {
 
 ### Resource Definition
 
-Resources are defined using the `ResourceConfig` structure:
+Resources are defined using the `ResourceConfig` structure. There are two main approaches to defining field properties:
 
 ```go
 userResource := resource.NewResource(resource.ResourceConfig{
     Name: "users",
     Model: User{},
     Fields: []resource.Field{
-        {Name: "id", Type: "string", Filterable: true},
-        {Name: "name", Type: "string", Filterable: true, Searchable: true},
-        {Name: "email", Type: "string", Filterable: true},
-        {Name: "created_at", Type: "time.Time", Filterable: true, Sortable: true},
+        {Name: "id", Type: "string"},
+        {Name: "name", Type: "string"},
+        {Name: "email", Type: "string"},
+        {Name: "created_at", Type: "time.Time"},
     },
+    // Define properties using field lists
+    FilterableFields: []string{"id", "name", "email", "created_at"},
+    SearchableFields: []string{"name", "email"},
+    SortableFields: []string{"id", "name", "created_at"},
     Operations: []resource.Operation{
         resource.OperationList, 
         resource.OperationCreate, 
@@ -117,7 +124,7 @@ userResource := resource.NewResource(resource.ResourceConfig{
 })
 ```
 
-Alternatively, you can use `refine` tags in your model definition:
+Alternatively, you can use `refine` tags in your model definition, and the field properties will be automatically extracted:
 
 ```go
 type User struct {
@@ -127,6 +134,8 @@ type User struct {
     CreatedAt time.Time `json:"created_at" refine:"filterable;sortable"`
 }
 ```
+
+With the tag approach, you don't need to manually specify field lists - they will be automatically generated based on the tags.
 
 ### Relationships
 
@@ -146,6 +155,26 @@ Supported relationship types:
 - `one-to-many`
 - `many-to-one`
 - `many-to-many`
+
+### Relation Validation
+
+Refine-Gin automatically validates relations between resources during create and update operations. The validation ensures that:
+
+1. Related IDs exist in the database
+2. Correct types of values are provided for different relation types
+3. Required relations are present
+
+The validation process uses the `GlobalResourceRegistry` to find the appropriate resource for each relation and checks the validity of the relation values:
+
+```go
+// This validation happens automatically for each relation during create/update
+if err := resource.ValidateRelations(db, model); err != nil {
+    // Handle validation error
+}
+```
+
+For to-one relations, the validator checks if the provided ID exists in the database.
+For to-many relations, it verifies that each ID in the array exists and that the array structure is correct.
 
 ### Relational Actions
 
@@ -186,6 +215,8 @@ api := r.Group("/api")
 handler.RegisterResource(api, userResource, userRepository)
 ```
 
+All registered resources are automatically added to the `GlobalResourceRegistry`, which is used by the framework to track available resources and their metadata. This registry is used for various features including relation validation, API documentation, and more.
+
 For advanced data transformation, you can use DTOs:
 
 ```go
@@ -199,7 +230,21 @@ handler.RegisterResourceWithDTO(api, userResource, userRepository, dtoProvider)
 
 Refine-Gin automatically generates OpenAPI 3.0 documentation for your API, making it easy to understand and test your endpoints.
 
-### Setting Up Swagger
+#### Type Mapping for Swagger
+
+The library automatically maps Go types to appropriate OpenAPI schema types using the type mapping utilities. For example:
+
+- `string` → OpenAPI type: `string`
+- `int`, `int32` → OpenAPI type: `integer`, format: `int32`
+- `int64` → OpenAPI type: `integer`, format: `int64`
+- `float32` → OpenAPI type: `number`, format: `float`
+- `float64` → OpenAPI type: `number`, format: `double`
+- `bool` → OpenAPI type: `boolean`
+- `time.Time` → OpenAPI type: `string`, format: `date-time`
+- `[]string` → OpenAPI type: `array`, items: `string`
+- `struct` → OpenAPI type: reference to schema
+
+#### Setting Up Swagger
 
 ```go
 // Create a router group for the API
@@ -349,6 +394,51 @@ DELETE /api/users/batch
 
 All bulk operations are implemented as atomic transactions, ensuring data integrity.
 
+### Utility Functions
+
+#### Reflection Utilities
+
+Refine-Gin provides a set of utilities for reflection operations that simplify working with dynamic data:
+
+```go
+// Safely get field value from an object
+value, err := utils.GetFieldValue(obj, "Email")
+
+// Safely set field value on an object
+err := utils.SetFieldValue(obj, "Email", "new@example.com")
+
+// Set ID field on an object (used internally by framework)
+err := utils.SetID(obj, "12345", "ID")
+
+// Get a slice field from an object
+sliceValue, err := utils.GetSliceField(obj, "Tags")
+
+// Check if a value is a slice
+isSlice := utils.IsSlice(value)
+```
+
+#### Type Mapping
+
+The framework provides utilities for mapping Go types to their corresponding schema representations:
+
+```go
+// Get type mapping for a Go type
+typeMapping := utils.GetTypeMapping("time.Time")
+fmt.Println(typeMapping.Category)  // TypeDateTime
+fmt.Println(typeMapping.Format)    // date-time
+fmt.Println(typeMapping.IsPrimitive) // true
+
+// Check type categories
+isNumeric := utils.IsNumericType(field.Type)
+isString := utils.IsStringType(field.Type)
+isArray := utils.IsArrayType(field.Type)
+
+// Get element type for array/slice types
+elementType := utils.GetArrayElementType("[]User")
+```
+
+These utilities are used internally by the framework but are also available for custom implementations and extensions.
+
 ### Naming Conventions
 
 Refine-Gin supports different naming conventions for JSON fields in requests and responses:
@@ -440,6 +530,23 @@ HTTP/1.1 304 Not Modified
 ```
 
 ETag generation and cache control settings can be customized through the options interface.
+
+This caching mechanism is fully documented in the Swagger UI to help API consumers implement efficient client-side caching.
+
+## Recent Updates
+
+### Version 0.4.0
+
+The latest version brings significant improvements to the codebase organization and provides new utility functions:
+
+- **Centralized Field Lists**: Replaced field-level properties (`Filterable`, `Sortable`, `Searchable`) with centralized lists in the resource configuration for better maintainability.
+- **Global Resource Registry**: Introduced a singleton `GlobalResourceRegistry` for easier resource management and tracking.
+- **Reflection Utilities**: Added a comprehensive set of reflection helpers in the `utils` package for safer and more predictable handling of dynamic data.
+- **Type Mapping**: Added utilities for mapping Go types to their schema representations, improving consistency across the codebase.
+- **Enhanced Relation Validation**: Improved validation of relationships between resources with better error handling and type checking.
+- **Improved Swagger Integration**: Better type mapping for more accurate API documentation.
+
+These changes improve code maintainability, reduce duplication, and provide a more consistent API for both library users and developers.
 
 ## License
 
