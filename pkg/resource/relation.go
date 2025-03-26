@@ -2,6 +2,7 @@ package resource
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,36 @@ type Relation struct {
 
 	// Whether to include this relation in responses by default
 	IncludeByDefault bool
+
+	// Whether the relation is required
+	Required bool
+
+	// Minimum number of related items (for to-many relations)
+	MinItems int
+
+	// Maximum number of related items (for to-many relations)
+	MaxItems int
+
+	// Value field in the related resource (used for presentation in UI)
+	ValueField string
+
+	// Display field in the related resource (used for presentation in UI)
+	DisplayField string
+
+	// Pivot table for many-to-many relations
+	PivotTable string
+
+	// Pivot fields for many-to-many relations
+	PivotFields map[string]string
+
+	// Cascade settings for relation
+	Cascade bool
+
+	// On delete behavior (CASCADE, SET NULL, etc.)
+	OnDelete string
+
+	// On update behavior (CASCADE, SET NULL, etc.)
+	OnUpdate string
 }
 
 // ExtractRelationsFromModel extracts relations from a model using reflection
@@ -83,7 +114,7 @@ func ExtractRelationsFromModel(model interface{}) []Relation {
 
 // parseRelationTag parses a relation tag
 func parseRelationTag(fieldName string, tag string) *Relation {
-	// Format: resource=users;type=one-to-many;field=user_id;reference=id;include=true
+	// Format: resource=users;type=one-to-many;field=user_id;reference=id;include=true;required=true
 	parts := map[string]string{}
 
 	for _, part := range strings.Split(tag, ";") {
@@ -105,6 +136,45 @@ func parseRelationTag(fieldName string, tag string) *Relation {
 	field := parts["field"]
 	reference := parts["reference"]
 	include := parts["include"] == "true"
+	required := parts["required"] == "true"
+
+	// Parse min/max items if provided
+	minItems := 0
+	if minStr, ok := parts["min_items"]; ok {
+		if val, err := strconv.ParseInt(minStr, 10, 0); err == nil {
+			minItems = int(val)
+		}
+	}
+
+	maxItems := 0
+	if maxStr, ok := parts["max_items"]; ok {
+		if val, err := strconv.ParseInt(maxStr, 10, 0); err == nil {
+			maxItems = int(val)
+		}
+	}
+
+	// Get value and display fields
+	valueField := parts["value_field"]
+	displayField := parts["display_field"]
+
+	// Get pivot table and fields
+	pivotTable := parts["pivot_table"]
+
+	pivotFields := make(map[string]string)
+	if pivotFieldsStr, ok := parts["pivot_fields"]; ok {
+		pivotParts := strings.Split(pivotFieldsStr, ",")
+		for _, pivotPart := range pivotParts {
+			pivotKV := strings.SplitN(pivotPart, ":", 2)
+			if len(pivotKV) == 2 {
+				pivotFields[pivotKV[0]] = pivotKV[1]
+			}
+		}
+	}
+
+	// Get cascade, on_delete, on_update
+	cascade := parts["cascade"] == "true"
+	onDelete := parts["on_delete"]
+	onUpdate := parts["on_update"]
 
 	// Default name to field name if not specified
 	name := parts["name"]
@@ -119,6 +189,16 @@ func parseRelationTag(fieldName string, tag string) *Relation {
 		Field:            field,
 		ReferenceField:   reference,
 		IncludeByDefault: include,
+		Required:         required,
+		MinItems:         minItems,
+		MaxItems:         maxItems,
+		ValueField:       valueField,
+		DisplayField:     displayField,
+		PivotTable:       pivotTable,
+		PivotFields:      pivotFields,
+		Cascade:          cascade,
+		OnDelete:         onDelete,
+		OnUpdate:         onUpdate,
 	}
 }
 

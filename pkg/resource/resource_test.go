@@ -8,258 +8,202 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type TestModel struct {
-	ID        string `json:"id" refine:"filterable;sortable;searchable"`
-	Name      string `json:"name" refine:"filterable;sortable"`
-	Email     string `json:"email" refine:"filterable"`
-	CreatedAt string `json:"created_at" refine:"filterable;sortable"`
+// Example model for testing
+type TestUser struct {
+	ID        uint      `refine:"label=User ID;width=80;fixed=left"`
+	Name      string    `refine:"label=Full Name;required;min=3;max=50;searchable"`
+	Email     string    `refine:"label=Email Address;required;pattern=^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$;searchable"`
+	Role      string    `refine:"label=User Role;required"`
+	Active    bool      `refine:"label=Is Active"`
+	CreatedAt time.Time `refine:"label=Created At;width=150"`
 }
 
 func TestNewResource(t *testing.T) {
-	// Create a new resource
-	res := NewResource(ResourceConfig{
-		Name:  "tests",
-		Model: TestModel{},
+	// Create resource configuration
+	config := ResourceConfig{
+		Name:  "users",
+		Label: "Users",
+		Icon:  "user",
+		Model: &TestUser{},
 		Operations: []Operation{
 			OperationList,
 			OperationCreate,
-			OperationRead,
 			OperationUpdate,
 			OperationDelete,
 		},
-		DefaultSort: &Sort{
-			Field: "created_at",
-			Order: "desc",
-		},
-	})
-
-	// Check resource properties
-	assert.Equal(t, "tests", res.GetName())
-	assert.Equal(t, TestModel{}, res.GetModel())
-	assert.Len(t, res.GetFields(), 4) // ID, Name, Email, CreatedAt
-	assert.Len(t, res.GetOperations(), 5)
-	assert.True(t, res.HasOperation(OperationList))
-	assert.True(t, res.HasOperation(OperationCreate))
-	assert.True(t, res.HasOperation(OperationRead))
-	assert.True(t, res.HasOperation(OperationUpdate))
-	assert.True(t, res.HasOperation(OperationDelete))
-	assert.NotNil(t, res.GetDefaultSort())
-	assert.Equal(t, "created_at", res.GetDefaultSort().Field)
-	assert.Equal(t, "desc", res.GetDefaultSort().Order)
-}
-
-func TestGenerateFieldsFromModel(t *testing.T) {
-	// Define a test model with various field types and tags
-	type TestModel struct {
-		ID        string    `json:"id" refine:"!filterable;!sortable"`
-		Name      string    `json:"name" refine:"sortable;!filterable"`
-		Email     string    `json:"email" refine:"filterable;!sortable"`
-		Age       int       `json:"age" refine:"sortable;filterable"`
-		IsActive  bool      `json:"is_active" refine:"!sortable;!filterable"`
-		CreatedAt time.Time `json:"created_at" refine:"sortable;!filterable"`
-		UpdatedAt time.Time `json:"-" refine:"-"` // Should be ignored
-		Password  string    `json:"-"`            // Should be ignored due to json tag
-		Notes     string    // No tags, should use default behavior
+		// Define specific field lists
+		FilterableFields: []string{"name", "email", "role", "active"},
+		SearchableFields: []string{"name", "email"},
+		SortableFields:   []string{"id", "name", "email", "created_at"},
+		TableFields:      []string{"id", "name", "email", "role", "active", "created_at"},
+		FormFields:       []string{"name", "email", "role", "active"},
+		RequiredFields:   []string{"name", "email", "role"},
 	}
 
-	// Generate fields from the model
-	fields := GenerateFieldsFromModel(TestModel{})
+	// Create resource
+	res := NewResource(config)
 
-	// Verify the number of fields (all fields are included regardless of json tags)
-	assert.Len(t, fields, 9)
+	// Test basic properties
+	assert.Equal(t, "users", res.GetName())
+	assert.Equal(t, "Users", res.GetLabel())
+	assert.Equal(t, "user", res.GetIcon())
 
-	// Find specific fields by name
-	var idField, nameField, emailField, ageField, isActiveField, createdAtField Field
-	var notesField Field
+	// Test field lists
+	defaultRes := res.(*DefaultResource)
+	assert.ElementsMatch(t, []string{"name", "email", "role", "active"}, defaultRes.FilterableFields)
+	assert.ElementsMatch(t, []string{"name", "email"}, defaultRes.SearchableFields)
+	assert.ElementsMatch(t, []string{"id", "name", "email", "created_at"}, defaultRes.SortableFields)
+	assert.ElementsMatch(t, []string{"id", "name", "email", "role", "active", "created_at"}, defaultRes.TableFields)
+	assert.ElementsMatch(t, []string{"name", "email", "role", "active"}, defaultRes.FormFields)
+	assert.ElementsMatch(t, []string{"name", "email", "role"}, defaultRes.RequiredFields)
+}
 
-	for _, field := range fields {
-		switch field.Name {
-		case "ID":
-			idField = field
-		case "Name":
-			nameField = field
-		case "Email":
-			emailField = field
-		case "Age":
-			ageField = field
-		case "IsActive":
-			isActiveField = field
-		case "CreatedAt":
-			createdAtField = field
-		case "Notes":
-			notesField = field
+func TestNewResourceWithDefaults(t *testing.T) {
+	// Create minimal resource configuration
+	config := ResourceConfig{
+		Name:  "users",
+		Model: &TestUser{},
+	}
+
+	// Create resource
+	res := NewResource(config)
+	defaultRes := res.(*DefaultResource)
+
+	// Test that default field lists are created correctly
+	fields := defaultRes.GetFields()
+	fieldNames := make([]string, len(fields))
+	for i, f := range fields {
+		fieldNames[i] = f.Name
+	}
+
+	// By default, all fields should be filterable and sortable
+	assert.ElementsMatch(t, fieldNames, defaultRes.FilterableFields)
+	assert.ElementsMatch(t, fieldNames, defaultRes.SortableFields)
+
+	// By default, all fields should be in table view
+	assert.ElementsMatch(t, fieldNames, defaultRes.TableFields)
+
+	// Form fields should exclude ID by default
+	formFields := make([]string, 0)
+	for _, name := range fieldNames {
+		if name != "ID" {
+			formFields = append(formFields, name)
 		}
 	}
+	assert.ElementsMatch(t, formFields, defaultRes.FormFields)
 
-	// Check specific fields
-	assert.Equal(t, "ID", idField.Name)
-	assert.False(t, idField.Filterable)
-	assert.False(t, idField.Sortable)
-
-	assert.Equal(t, "Name", nameField.Name)
-	assert.True(t, nameField.Sortable)
-	assert.False(t, nameField.Filterable)
-
-	assert.Equal(t, "Email", emailField.Name)
-	assert.False(t, emailField.Sortable)
-	assert.True(t, emailField.Filterable)
-
-	assert.Equal(t, "Age", ageField.Name)
-	assert.True(t, ageField.Sortable)
-	assert.True(t, ageField.Filterable)
-
-	assert.Equal(t, "IsActive", isActiveField.Name)
-	assert.False(t, isActiveField.Sortable)
-	assert.False(t, isActiveField.Filterable)
-
-	assert.Equal(t, "CreatedAt", createdAtField.Name)
-	assert.True(t, createdAtField.Sortable)
-	assert.False(t, createdAtField.Filterable)
-
-	assert.Equal(t, "Notes", notesField.Name)
-	assert.True(t, notesField.Sortable)
-	assert.True(t, notesField.Filterable)
-
-	// Test with a pointer to the model
-	fieldsFromPtr := GenerateFieldsFromModel(&TestModel{})
-	assert.Len(t, fieldsFromPtr, 9)
+	// Required fields should be detected from validation
+	assert.ElementsMatch(t, []string{"Name", "Email", "Role"}, defaultRes.RequiredFields)
 }
 
-func TestParseFieldTag(t *testing.T) {
-	// Test all possible tag options
-
-	// Test basic flags
-	field := Field{
-		Name:       "test",
-		Type:       "string",
-		Filterable: false,
-		Sortable:   false,
-		Searchable: false,
-		Required:   false,
-		Unique:     false,
+func TestFieldConfiguration(t *testing.T) {
+	// Create resource
+	config := ResourceConfig{
+		Name:  "users",
+		Model: &TestUser{},
 	}
+	res := NewResource(config)
 
-	ParseFieldTag(&field, "filterable;sortable;searchable;required;unique")
+	// Test field configurations
+	field := res.GetField("Name")
+	assert.NotNil(t, field)
+	assert.Equal(t, "Full Name", field.Label)
+	assert.NotNil(t, field.Validation)
+	assert.True(t, field.Validation.Required)
+	assert.Equal(t, 3, field.Validation.MinLength)
+	assert.Equal(t, 50, field.Validation.MaxLength)
 
-	assert.True(t, field.Filterable)
-	assert.True(t, field.Sortable)
-	assert.True(t, field.Searchable)
-	assert.True(t, field.Required)
-	assert.True(t, field.Unique)
+	// Test email field with pattern validation
+	emailField := res.GetField("Email")
+	assert.NotNil(t, emailField)
+	assert.Equal(t, "Email Address", emailField.Label)
+	assert.NotNil(t, emailField.Validation)
+	assert.True(t, emailField.Validation.Required)
+	assert.Equal(t, "^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$", emailField.Validation.Pattern)
 
-	// Test negative flags
-	field = Field{
-		Name:       "test",
-		Type:       "string",
-		Filterable: true,
-		Sortable:   true,
-		Searchable: true,
-		Required:   true,
-		Unique:     true,
+	// Test field with list configuration
+	idField := res.GetField("ID")
+	assert.NotNil(t, idField)
+	assert.NotNil(t, idField.List)
+	assert.Equal(t, 80, idField.List.Width)
+	assert.Equal(t, "left", idField.List.Fixed)
+}
+
+func TestSearchableFields(t *testing.T) {
+	// Create resource with specific searchable fields
+	config := ResourceConfig{
+		Name:             "users",
+		Model:            &TestUser{},
+		SearchableFields: []string{"name", "email"},
 	}
+	res := NewResource(config)
 
-	ParseFieldTag(&field, "!filterable;!sortable;!searchable;!required;!unique")
+	// Test searchable fields
+	searchable := res.GetSearchable()
+	assert.ElementsMatch(t, []string{"name", "email"}, searchable)
+}
 
-	assert.False(t, field.Filterable)
-	assert.False(t, field.Sortable)
-	assert.False(t, field.Searchable)
-	assert.False(t, field.Required)
-	assert.False(t, field.Unique)
+func TestIDFieldName(t *testing.T) {
+	// Test default ID field name
+	res := NewResource(ResourceConfig{
+		Name:  "tests",
+		Model: TestUser{},
+	})
+	assert.Equal(t, "ID", res.GetIDFieldName())
 
-	// Test string validators
-	field = Field{
-		Name: "test",
-		Type: "string",
+	// Test custom ID field name
+	res = NewResource(ResourceConfig{
+		Name:        "tests",
+		Model:       TestUser{},
+		IDFieldName: "UID",
+	})
+	assert.Equal(t, "UID", res.GetIDFieldName())
+}
+
+func TestSetCustomID(t *testing.T) {
+	type CustomStringIDStruct struct {
+		UID  string
+		Name string
 	}
+	stringObj := &CustomStringIDStruct{Name: "Test"}
+	err := SetCustomID(stringObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, "123", stringObj.UID)
 
-	ParseFieldTag(&field, "min=5;max=10;pattern=[a-z]+")
-
-	assert.Len(t, field.Validators, 3)
-
-	// Check string validator with min length
-	stringValidator1, ok := field.Validators[0].(StringValidator)
-	assert.True(t, ok)
-	assert.Equal(t, 5, stringValidator1.MinLength)
-
-	// Check string validator with max length
-	stringValidator2, ok := field.Validators[1].(StringValidator)
-	assert.True(t, ok)
-	assert.Equal(t, 10, stringValidator2.MaxLength)
-
-	// Check string validator with pattern
-	stringValidator3, ok := field.Validators[2].(StringValidator)
-	assert.True(t, ok)
-	assert.Equal(t, "[a-z]+", stringValidator3.Pattern)
-
-	// Test number validators for int type
-	field = Field{
-		Name: "test",
-		Type: "int",
+	type CustomIntIDStruct struct {
+		UID  int
+		Name string
 	}
+	intObj := &CustomIntIDStruct{Name: "Test"}
+	err = SetCustomID(intObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, 123, intObj.UID)
 
-	ParseFieldTag(&field, "min=5;max=10")
-
-	assert.Len(t, field.Validators, 2)
-
-	// Check number validator with min value
-	numberValidator1, ok := field.Validators[0].(NumberValidator)
-	assert.True(t, ok)
-	assert.Equal(t, float64(5), numberValidator1.Min)
-
-	// Check number validator with max value
-	numberValidator2, ok := field.Validators[1].(NumberValidator)
-	assert.True(t, ok)
-	assert.Equal(t, float64(10), numberValidator2.Max)
-
-	// Test number validators for float type
-	field = Field{
-		Name: "test",
-		Type: "float64",
+	type CustomUintIDStruct struct {
+		UID  uint
+		Name string
 	}
+	uintObj := &CustomUintIDStruct{Name: "Test"}
+	err = SetCustomID(uintObj, "123", "UID")
+	assert.NoError(t, err)
+	assert.Equal(t, uint(123), uintObj.UID)
 
-	ParseFieldTag(&field, "min=5;max=10")
-
-	assert.Len(t, field.Validators, 2)
-
-	// Check number validator with min value
-	numberValidator1, ok = field.Validators[0].(NumberValidator)
-	assert.True(t, ok)
-	assert.Equal(t, float64(5), numberValidator1.Min)
-
-	// Check number validator with max value
-	numberValidator2, ok = field.Validators[1].(NumberValidator)
-	assert.True(t, ok)
-	assert.Equal(t, float64(10), numberValidator2.Max)
-
-	// Test with invalid min/max values
-	field = Field{
-		Name: "test",
-		Type: "string",
+	type NoUIDStruct struct {
+		Name string
 	}
+	noIDObj := &NoUIDStruct{Name: "Test"}
+	err = SetCustomID(noIDObj, "123", "UID")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "UID field does not exist")
 
-	ParseFieldTag(&field, "min=invalid;max=invalid")
-
-	assert.Len(t, field.Validators, 0)
-
-	// Test with empty tag
-	field = Field{
-		Name: "test",
-		Type: "string",
+	type InvalidIDStruct struct {
+		UID  []string
+		Name string
 	}
-
-	ParseFieldTag(&field, "")
-
-	assert.Len(t, field.Validators, 0)
-
-	// Test with unknown tag parts
-	field = Field{
-		Name: "test",
-		Type: "string",
-	}
-
-	ParseFieldTag(&field, "unknown=value;another_unknown")
-
-	assert.Len(t, field.Validators, 0)
+	invalidObj := &InvalidIDStruct{Name: "Test"}
+	err = SetCustomID(invalidObj, "123", "UID")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert UID to type")
 }
 
 func TestCreateSliceOfType(t *testing.T) {
@@ -430,7 +374,7 @@ func TestDefaultResourceRelations(t *testing.T) {
 	// Create a DefaultResource with the relations
 	resource := &DefaultResource{
 		Name:      "users",
-		Model:     User{},
+		Model:     TestUser{},
 		Relations: relations,
 	}
 
@@ -484,7 +428,7 @@ func TestDefaultResourceGetFiltersAndMiddlewares(t *testing.T) {
 	// Create resource with filters and middlewares
 	resource := &DefaultResource{
 		Name:        "users",
-		Model:       User{},
+		Model:       TestUser{},
 		Filters:     filters,
 		Middlewares: middlewares,
 	}
@@ -530,7 +474,7 @@ func TestDefaultResourceHasOperation(t *testing.T) {
 
 	resource := &DefaultResource{
 		Name:       "users",
-		Model:      User{},
+		Model:      TestUser{},
 		Operations: operations,
 	}
 
@@ -546,7 +490,7 @@ func TestDefaultResourceHasOperation(t *testing.T) {
 	// Test with empty operations
 	emptyResource := &DefaultResource{
 		Name:       "empty",
-		Model:      User{},
+		Model:      TestUser{},
 		Operations: []Operation{},
 	}
 	assert.False(t, emptyResource.HasOperation(OperationList))
@@ -554,70 +498,7 @@ func TestDefaultResourceHasOperation(t *testing.T) {
 	// Test with nil operations
 	nilResource := &DefaultResource{
 		Name:  "nil",
-		Model: User{},
+		Model: TestUser{},
 	}
 	assert.False(t, nilResource.HasOperation(OperationList))
-}
-
-func TestGetIDFieldName(t *testing.T) {
-	// Test z domyślną nazwą pola identyfikatora
-	res := NewResource(ResourceConfig{
-		Name:  "tests",
-		Model: TestModel{},
-	})
-	assert.Equal(t, "ID", res.GetIDFieldName())
-
-	// Test z niestandardową nazwą pola identyfikatora
-	res = NewResource(ResourceConfig{
-		Name:        "tests",
-		Model:       TestModel{},
-		IDFieldName: "UID",
-	})
-	assert.Equal(t, "UID", res.GetIDFieldName())
-}
-
-func TestSetCustomID(t *testing.T) {
-	type CustomStringIDStruct struct {
-		UID  string
-		Name string
-	}
-	stringObj := &CustomStringIDStruct{Name: "Test"}
-	err := SetCustomID(stringObj, "123", "UID")
-	assert.NoError(t, err)
-	assert.Equal(t, "123", stringObj.UID)
-
-	type CustomIntIDStruct struct {
-		UID  int
-		Name string
-	}
-	intObj := &CustomIntIDStruct{Name: "Test"}
-	err = SetCustomID(intObj, "123", "UID")
-	assert.NoError(t, err)
-	assert.Equal(t, 123, intObj.UID)
-
-	type CustomUintIDStruct struct {
-		UID  uint
-		Name string
-	}
-	uintObj := &CustomUintIDStruct{Name: "Test"}
-	err = SetCustomID(uintObj, "123", "UID")
-	assert.NoError(t, err)
-	assert.Equal(t, uint(123), uintObj.UID)
-
-	type NoUIDStruct struct {
-		Name string
-	}
-	noIDObj := &NoUIDStruct{Name: "Test"}
-	err = SetCustomID(noIDObj, "123", "UID")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "UID field does not exist")
-
-	type InvalidIDStruct struct {
-		UID  []string
-		Name string
-	}
-	invalidObj := &InvalidIDStruct{Name: "Test"}
-	err = SetCustomID(invalidObj, "123", "UID")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot convert UID to type")
 }

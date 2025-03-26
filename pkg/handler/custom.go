@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 // CustomAction represents a custom action that can be performed on a resource
@@ -124,12 +125,6 @@ func AttachAction(relationName string) CustomAction {
 		Handler: func(c *gin.Context, res resource.Resource, repo repository.Repository) (interface{}, error) {
 			id := c.Param("id")
 
-			// Check if relation exists
-			relation := getRelationByName(res, relationName)
-			if relation == nil {
-				return nil, fmt.Errorf("relation %s not found", relationName)
-			}
-
 			// Parse request body
 			var req RelationRequest
 			if err := c.ShouldBindJSON(&req); err != nil {
@@ -137,13 +132,19 @@ func AttachAction(relationName string) CustomAction {
 			}
 
 			if len(req.IDs) == 0 {
-				return nil, fmt.Errorf("no IDs provided to attach")
+				return nil, fmt.Errorf("no IDs provided")
 			}
 
 			// Get the parent resource
 			parentObj, err := repo.Get(c, id)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resource not found")
+			}
+
+			// Check if relation exists
+			relation := getRelationByName(res, relationName)
+			if relation == nil {
+				return nil, fmt.Errorf("relation %s not found", relationName)
 			}
 
 			// Attach related objects
@@ -329,9 +330,10 @@ func RegisterResourceForRefineWithRelations(
 
 // getRelationByName finds a relation by name in a resource
 func getRelationByName(res resource.Resource, name string) *resource.Relation {
-	for _, relation := range res.GetRelations() {
-		if relation.Name == name {
-			return &relation
+	relations := res.GetRelations()
+	for i := range relations {
+		if relations[i].Name == name {
+			return &relations[i]
 		}
 	}
 	return nil
@@ -339,20 +341,9 @@ func getRelationByName(res resource.Resource, name string) *resource.Relation {
 
 // attachToHasManyRelation attaches objects to a HasMany relation
 func attachToHasManyRelation(parentObj interface{}, relation *resource.Relation, ids []interface{}, repo repository.Repository) error {
-	// Get the collection field
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(relation.Field)
-	if !field.IsValid() {
-		return fmt.Errorf("field %s not found", relation.Field)
-	}
-
-	// Check if the field is a slice
-	if field.Kind() != reflect.Slice {
-		return fmt.Errorf("field %s is not a slice", relation.Field)
+	field, err := utils.GetSliceField(parentObj, relation.Field)
+	if err != nil {
+		return err
 	}
 
 	// For each ID, create or get the related object and append to the slice
@@ -382,7 +373,7 @@ func attachToHasOneRelation(parentObj interface{}, relation *resource.Relation, 
 	}
 
 	// Set the field
-	return resource.SetFieldValue(parentObj, relation.Field, relatedObj)
+	return utils.SetFieldValue(parentObj, relation.Field, relatedObj)
 }
 
 // attachToBelongsToRelation attaches an object to a BelongsTo relation
@@ -397,28 +388,14 @@ func attachToBelongsToRelation(parentObj interface{}, relation *resource.Relatio
 	foreignKeyField := relation.Name + "ID"
 
 	// Set the foreign key field
-	return resource.SetFieldValue(parentObj, foreignKeyField, id)
+	return utils.SetFieldValue(parentObj, foreignKeyField, id)
 }
 
 // attachToManyToManyRelation attaches objects to a ManyToMany relation
 func attachToManyToManyRelation(parentObj interface{}, relation *resource.Relation, ids []interface{}, repo repository.Repository, res resource.Resource, parentID string) error {
-	// This is simplified as actual ManyToMany implementation depends on the ORM and database structure
-	// In a real implementation, this would create entries in a join table
-
-	// For this example, we'll assume there's a field that stores the IDs as a slice
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(relation.Field)
-	if !field.IsValid() {
-		return fmt.Errorf("field %s not found", relation.Field)
-	}
-
-	// Check if the field is a slice
-	if field.Kind() != reflect.Slice {
-		return fmt.Errorf("field %s is not a slice", relation.Field)
+	field, err := utils.GetSliceField(parentObj, relation.Field)
+	if err != nil {
+		return err
 	}
 
 	// For each ID, append to the slice if not already there
@@ -446,20 +423,9 @@ func attachToManyToManyRelation(parentObj interface{}, relation *resource.Relati
 
 // detachFromHasManyRelation detaches objects from a HasMany relation
 func detachFromHasManyRelation(parentObj interface{}, relation *resource.Relation, ids []interface{}) error {
-	// Get the collection field
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(relation.Field)
-	if !field.IsValid() {
-		return fmt.Errorf("field %s not found", relation.Field)
-	}
-
-	// Check if the field is a slice
-	if field.Kind() != reflect.Slice {
-		return fmt.Errorf("field %s is not a slice", relation.Field)
+	field, err := utils.GetSliceField(parentObj, relation.Field)
+	if err != nil {
+		return err
 	}
 
 	// Create a new slice without the specified IDs
@@ -503,7 +469,6 @@ func detachFromHasManyRelation(parentObj interface{}, relation *resource.Relatio
 
 // detachFromHasOneRelation detaches an object from a HasOne relation
 func detachFromHasOneRelation(parentObj interface{}, relation *resource.Relation) error {
-	// Set the field to nil
 	v := reflect.ValueOf(parentObj)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -525,14 +490,13 @@ func detachFromHasOneRelation(parentObj interface{}, relation *resource.Relation
 
 // detachFromBelongsToRelation detaches an object from a BelongsTo relation
 func detachFromBelongsToRelation(parentObj interface{}, relation *resource.Relation) error {
-	// Set the foreign key to nil or zero value
+	// For BelongsTo, we assume a foreign key field with the same name as the relation plus "ID"
+	foreignKeyField := relation.Name + "ID"
+
 	v := reflect.ValueOf(parentObj)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-
-	// For BelongsTo, we assume a foreign key field with the same name as the relation plus "ID"
-	foreignKeyField := relation.Name + "ID"
 
 	field := v.FieldByName(foreignKeyField)
 	if !field.IsValid() {
@@ -547,22 +511,9 @@ func detachFromBelongsToRelation(parentObj interface{}, relation *resource.Relat
 
 // detachFromManyToManyRelation detaches objects from a ManyToMany relation
 func detachFromManyToManyRelation(parentObj interface{}, relation *resource.Relation, ids []interface{}, repo repository.Repository, res resource.Resource, parentID string) error {
-	// Similar to detachFromHasManyRelation but for a join table
-
-	// For this example, we'll assume there's a field that stores the IDs as a slice
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(relation.Field)
-	if !field.IsValid() {
-		return fmt.Errorf("field %s not found", relation.Field)
-	}
-
-	// Check if the field is a slice
-	if field.Kind() != reflect.Slice {
-		return fmt.Errorf("field %s is not a slice", relation.Field)
+	field, err := utils.GetSliceField(parentObj, relation.Field)
+	if err != nil {
+		return err
 	}
 
 	// Create a new slice without the specified IDs
@@ -592,55 +543,69 @@ func detachFromManyToManyRelation(parentObj interface{}, relation *resource.Rela
 
 // getRelatedCollection gets a collection of related objects
 func getRelatedCollection(parentObj interface{}, relation *resource.Relation, repo repository.Repository) (interface{}, error) {
-	// Get the collection field
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	// If parentObj is a map, try to get the field from the map
+	if m, ok := parentObj.(map[string]interface{}); ok {
+		if field, exists := m[relation.Field]; exists {
+			return field, nil
+		}
+		return nil, fmt.Errorf("field %s not found in map", relation.Field)
 	}
 
-	field := v.FieldByName(relation.Field)
-	if !field.IsValid() {
-		return nil, fmt.Errorf("field %s not found", relation.Field)
+	// For struct types, use reflection
+	value, err := utils.GetFieldValue(parentObj, relation.Field)
+	if err != nil {
+		return nil, err
 	}
 
-	// Check if the field is a slice
-	if field.Kind() != reflect.Slice {
+	if !utils.IsSlice(value) {
 		return nil, fmt.Errorf("field %s is not a slice", relation.Field)
 	}
 
-	// Return the collection
-	return field.Interface(), nil
+	return value, nil
 }
 
 // getRelatedObject gets a single related object
 func getRelatedObject(parentObj interface{}, relation *resource.Relation, repo repository.Repository) (interface{}, error) {
-	v := reflect.ValueOf(parentObj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	// If parentObj is a map, try to get the field from the map
+	if m, ok := parentObj.(map[string]interface{}); ok {
+		if relation.Type == resource.RelationTypeOneToOne {
+			if field, exists := m[relation.Field]; exists {
+				return field, nil
+			}
+			return nil, fmt.Errorf("field %s not found in map", relation.Field)
+		}
+
+		if relation.Type == resource.RelationTypeManyToOne {
+			foreignKeyField := relation.Name + "ID"
+			if foreignKeyValue, exists := m[foreignKeyField]; exists {
+				if foreignKeyValue == nil || reflect.ValueOf(foreignKeyValue).IsZero() {
+					return nil, nil
+				}
+				// Get the related object using empty query options
+				relatedObj, err := repo.Get(context.Background(), fmt.Sprintf("%v", foreignKeyValue))
+				if err != nil {
+					return nil, err
+				}
+				return relatedObj, nil
+			}
+			return nil, fmt.Errorf("foreign key field %s not found in map", foreignKeyField)
+		}
 	}
 
 	// For HasOne, get the field directly
-	if relation.Type == HasOne {
-		field := v.FieldByName(relation.Field)
-		if !field.IsValid() {
-			return nil, fmt.Errorf("field %s not found", relation.Field)
-		}
-
-		return field.Interface(), nil
+	if relation.Type == resource.RelationTypeOneToOne {
+		return utils.GetFieldValue(parentObj, relation.Field)
 	}
 
 	// For BelongsTo, get the foreign key and load the related object
-	if relation.Type == BelongsTo {
+	if relation.Type == resource.RelationTypeManyToOne {
 		// For BelongsTo, we assume a foreign key field with the same name as the relation plus "ID"
 		foreignKeyField := relation.Name + "ID"
 
-		field := v.FieldByName(foreignKeyField)
-		if !field.IsValid() {
-			return nil, fmt.Errorf("foreign key field %s not found", foreignKeyField)
+		foreignKeyValue, err := utils.GetFieldValue(parentObj, foreignKeyField)
+		if err != nil {
+			return nil, err
 		}
-
-		// Get the foreign key value
-		foreignKeyValue := field.Interface()
 
 		// If nil or zero, return nil
 		if reflect.ValueOf(foreignKeyValue).IsZero() {
@@ -657,9 +622,4 @@ func getRelatedObject(parentObj interface{}, relation *resource.Relation, repo r
 	}
 
 	return nil, fmt.Errorf("unsupported relation type: %s", relation.Type)
-}
-
-// Helper function to set a field value using reflection
-func setFieldValue(obj interface{}, fieldName string, value interface{}) error {
-	return resource.SetFieldValue(obj, fieldName, value)
 }

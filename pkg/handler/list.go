@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
@@ -50,9 +51,11 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 		}
 
 		// Transform models to DTOs if we have an array
-		if items, ok := data.([]interface{}); ok && dtoProvider != nil {
-			dtoItems := make([]interface{}, 0, len(items))
-			for _, item := range items {
+		if reflect.TypeOf(data).Kind() == reflect.Slice {
+			v := reflect.ValueOf(data)
+			dtoItems := make([]interface{}, 0, v.Len())
+			for i := 0; i < v.Len(); i++ {
+				item := v.Index(i).Interface()
 				dtoItem, err := dtoProvider.TransformFromModel(item)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Error transforming data: " + err.Error()})
@@ -68,10 +71,12 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 
 		// Return results in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{
-			"data":     data,
-			"total":    total,
-			"current":  options.Page,    // Refine uses 'current' not 'page'
-			"pageSize": options.PerPage, // Correct parameter name for Refine.dev
+			"data":  data,
+			"total": total,
+			"meta": gin.H{
+				"page":     options.Page,
+				"pageSize": options.PerPage,
+			},
 		})
 	}
 }

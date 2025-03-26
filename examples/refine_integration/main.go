@@ -158,6 +158,40 @@ func (r *ProductRepository) DeleteMany(ctx context.Context, ids []interface{}) (
 	return count, nil
 }
 
+// Implement missing methods to fulfill the Repository interface
+func (r *ProductRepository) WithTransaction(fn func(repository.Repository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		txRepo := &ProductRepository{db: tx}
+		return fn(txRepo)
+	})
+}
+
+func (r *ProductRepository) WithRelations(relations ...string) repository.Repository {
+	newRepo := &ProductRepository{
+		db: r.db,
+	}
+	for _, relation := range relations {
+		newRepo.db = newRepo.db.Preload(relation)
+	}
+	return newRepo
+}
+
+func (r *ProductRepository) FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	var product Product
+	if err := r.db.Where(condition).First(&product).Error; err != nil {
+		return nil, err
+	}
+	return &product, nil
+}
+
+func (r *ProductRepository) FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	var products []Product
+	if err := r.db.Where(condition).Find(&products).Error; err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
 // Order model with relations
 type Order struct {
 	ID         string    `json:"id" gorm:"primaryKey" refine:"filterable;sortable"`
@@ -320,6 +354,54 @@ func setupSampleData(db *gorm.DB) error {
 	return nil
 }
 
+// GetWithRelations retrieves a single product with relations
+func (r *ProductRepository) GetWithRelations(ctx context.Context, id interface{}, relations []string) (interface{}, error) {
+	var product Product
+	query := r.db
+
+	for _, relation := range relations {
+		query = query.Preload(relation)
+	}
+
+	if err := query.First(&product, "code = ?", id).Error; err != nil {
+		return nil, err
+	}
+
+	return &product, nil
+}
+
+// ListWithRelations lists products with relations
+func (r *ProductRepository) ListWithRelations(ctx context.Context, options query.QueryOptions, relations []string) (interface{}, int64, error) {
+	var products []Product
+	query := r.db
+
+	for _, relation := range relations {
+		query = query.Preload(relation)
+	}
+
+	total, err := options.ApplyWithPagination(query, &products)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return products, total, nil
+}
+
+// Query returns a direct DB query builder
+func (r *ProductRepository) Query(ctx context.Context) *gorm.DB {
+	return r.db.Model(&Product{})
+}
+
+// BulkCreate creates multiple products at once
+func (r *ProductRepository) BulkCreate(ctx context.Context, data interface{}) error {
+	return r.db.Create(data).Error
+}
+
+// BulkUpdate updates multiple products based on condition
+func (r *ProductRepository) BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error {
+	return r.db.Model(&Product{}).Where(condition).Updates(updates).Error
+}
+
 func main() {
 	// Create a new Gin router
 	r := gin.Default()
@@ -362,12 +444,12 @@ func main() {
 
 	// Create repositories
 	productRepo := &ProductRepository{db: db}
-	orderRepo := repository.NewGormRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+	orderRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
 		Name:        "orders",
 		Model:       Order{},
 		IDFieldName: "ID",
 	}))
-	itemRepo := repository.NewGormRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+	itemRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
 		Name:        "items",
 		Model:       Item{},
 		IDFieldName: "ID",

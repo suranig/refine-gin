@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/suranig/refine-gin/pkg/query"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"gorm.io/gorm"
 )
 
 // Mock repository for testing
@@ -22,7 +24,17 @@ type MockRepository struct {
 
 func (m *MockRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
 	args := m.Called(ctx, options)
-	return args.Get(0), args.Get(1).(int64), args.Error(2)
+	// Ensure proper type conversion for the total count
+	var total int64
+	if count := args.Get(1); count != nil {
+		switch v := count.(type) {
+		case int:
+			total = int64(v)
+		case int64:
+			total = v
+		}
+	}
+	return args.Get(0), total, args.Error(2)
 }
 
 func (m *MockRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
@@ -51,12 +63,70 @@ func (m *MockRepository) Count(ctx context.Context, options query.QueryOptions) 
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockRepository) WithTransaction(fn func(repository.Repository) error) error {
+	args := m.Called(fn)
+	return args.Error(0)
+}
+
+func (m *MockRepository) WithRelations(relations ...string) repository.Repository {
+	args := m.Called(relations)
+	return args.Get(0).(repository.Repository)
+}
+
+func (m *MockRepository) FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	args := m.Called(ctx, condition)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	args := m.Called(ctx, condition)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) GetWithRelations(ctx context.Context, id interface{}, relations []string) (interface{}, error) {
+	args := m.Called(ctx, id, relations)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockRepository) ListWithRelations(ctx context.Context, options query.QueryOptions, relations []string) (interface{}, int64, error) {
+	args := m.Called(ctx, options, relations)
+	return args.Get(0), int64(args.Int(1)), args.Error(2)
+}
+
+func (m *MockRepository) Query(ctx context.Context) *gorm.DB {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockRepository) BulkCreate(ctx context.Context, data interface{}) error {
+	args := m.Called(ctx, data)
+	return args.Error(0)
+}
+
+func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error {
+	args := m.Called(ctx, condition, updates)
+	return args.Error(0)
+}
+
 // Mock resource for testing
 type MockResource struct {
 	mock.Mock
 }
 
 func (m *MockResource) GetName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetLabel() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetIcon() string {
 	args := m.Called()
 	return args.String(0)
 }
@@ -189,8 +259,13 @@ func setupTest() (*gin.Engine, *MockRepository, *MockResource, *MockDTOProvider)
 	mockResource := new(MockResource)
 	mockDTOProvider := new(MockDTOProvider)
 
+	// Setup mock repository
+	mockRepo.On("Query", mock.Anything).Return(&gorm.DB{})
+
 	// Setup resource
 	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetLabel").Return("Tests")
+	mockResource.On("GetIcon").Return("test-icon")
 	mockResource.On("GetModel").Return(TestModel{})
 	mockResource.On("GetFields").Return([]resource.Field{
 		{Name: "id", Type: "string"},
@@ -361,14 +436,8 @@ func TestDeleteHandler(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// Assert response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Contains(t, response, "success")
-	assert.Equal(t, true, response["success"])
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body.String())
 }
 
 func TestRegisterResource(t *testing.T) {
@@ -494,14 +563,8 @@ func TestDeleteHandlerWithParam(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// Assert response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Contains(t, response, "success")
-	assert.Equal(t, true, response["success"])
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body.String())
 }
 
 func TestRegisterResourceWithOptions(t *testing.T) {

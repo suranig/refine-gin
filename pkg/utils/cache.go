@@ -97,3 +97,9 @@ func DisableCaching(w http.ResponseWriter) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 }
+
+// GenerateETagFromSlice creates a hash of the given slice of strings to use as an ETag.
+// The ETag is a quoted string as per HTTP spec.
+func GenerateETagFromSlice(items []string) string {
+	return GenerateETag(strings.Join(items, ","))
+}

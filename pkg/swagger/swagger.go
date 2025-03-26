@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 // DefaultSwaggerInfo returns default Swagger metadata
@@ -106,7 +107,7 @@ func RegisterSwagger(router *gin.RouterGroup, resources []resource.Resource, inf
 
 // Helper functions
 
-// generateModelSchema generates a schema for a resource model
+// generateModelSchema creates a schema for a resource model
 func generateModelSchema(res resource.Resource) Schema {
 	schema := Schema{
 		Type:       "object",
@@ -114,14 +115,15 @@ func generateModelSchema(res resource.Resource) Schema {
 		Required:   []string{},
 	}
 
-	// Process fields
 	for _, field := range res.GetFields() {
 		fieldSchema := fieldToSchema(field)
 		schema.Properties[field.Name] = fieldSchema
+	}
 
-		if field.Required {
-			schema.Required = append(schema.Required, field.Name)
-		}
+	// Pobierz wymagane pola
+	// Implementacja GetRequiredFields nie jest wymagana, więc sprawdźmy, czy interfejs ją ma
+	if resWithRequired, ok := res.(interface{ GetRequiredFields() []string }); ok {
+		schema.Required = resWithRequired.GetRequiredFields()
 	}
 
 	return schema
@@ -131,54 +133,37 @@ func generateModelSchema(res resource.Resource) Schema {
 func fieldToSchema(field resource.Field) Schema {
 	schema := Schema{}
 
-	// Map Go types to OpenAPI types
-	switch field.Type {
-	case "string":
+	typeMapping := utils.GetTypeMapping(field.Type)
+
+	switch typeMapping.Category {
+	case utils.TypeString:
 		schema.Type = "string"
-	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+	case utils.TypeInteger:
 		schema.Type = "integer"
-		if field.Type == "int64" || field.Type == "uint64" {
-			schema.Format = "int64"
-		} else {
-			schema.Format = "int32"
-		}
-	case "float32", "float64":
+		schema.Format = typeMapping.Format
+	case utils.TypeNumber:
 		schema.Type = "number"
-		if field.Type == "float64" {
-			schema.Format = "double"
-		} else {
-			schema.Format = "float"
-		}
-	case "bool":
+		schema.Format = typeMapping.Format
+	case utils.TypeBoolean:
 		schema.Type = "boolean"
-	case "time.Time":
+	case utils.TypeDateTime:
 		schema.Type = "string"
 		schema.Format = "date-time"
-	default:
-		// Check if it's an array
-		if strings.HasPrefix(field.Type, "[]") {
-			schema.Type = "array"
-			itemType := strings.TrimPrefix(field.Type, "[]")
-			schema.Items = &Schema{}
+	case utils.TypeArray:
+		schema.Type = "array"
+		schema.Items = &Schema{}
 
-			// Set the item type
-			switch itemType {
-			case "string":
-				schema.Items.Type = "string"
-			case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
-				schema.Items.Type = "integer"
-			case "float32", "float64":
-				schema.Items.Type = "number"
-			case "bool":
-				schema.Items.Type = "boolean"
-			default:
-				// Complex type, use a reference
-				schema.Items.Ref = "#/components/schemas/" + itemType
+		elementTypeMapping := utils.GetTypeMapping(typeMapping.Format)
+		if elementTypeMapping.IsPrimitive {
+			schema.Items.Type = string(elementTypeMapping.Category)
+			if elementTypeMapping.Format != "" {
+				schema.Items.Format = elementTypeMapping.Format
 			}
 		} else {
-			// Complex type, use a reference
-			schema.Ref = "#/components/schemas/" + field.Type
+			schema.Items.Ref = "#/components/schemas/" + typeMapping.Format
 		}
+	default:
+		schema.Ref = "#/components/schemas/" + typeMapping.Format
 	}
 
 	return schema
@@ -221,6 +206,79 @@ func generateResourcePaths(openAPI *OpenAPI, res resource.Resource) {
 				},
 			},
 		}
+	}
+
+	// Generate OPTIONS endpoint for resource metadata (always available)
+	optionsPath := "/" + res.GetName()
+	if openAPI.Paths[optionsPath] == nil {
+		openAPI.Paths[optionsPath] = PathItem{}
+	}
+	openAPI.Paths[optionsPath]["options"] = Operation{
+		Summary:     fmt.Sprintf("Get %s metadata", res.GetName()),
+		Description: fmt.Sprintf("Returns metadata for the %s resource including fields, operations, and configuration", res.GetName()),
+		OperationID: fmt.Sprintf("options%s", capitalize(res.GetName())),
+		Tags:        []string{res.GetName()},
+		Responses: map[string]Response{
+			"200": {
+				Description: "Resource metadata",
+				Content: map[string]MediaType{
+					"application/json": {
+						Schema: Schema{
+							Type: "object",
+							Properties: map[string]Schema{
+								"name": {
+									Type: "string",
+								},
+								"label": {
+									Type: "string",
+								},
+								"icon": {
+									Type: "string",
+								},
+								"operations": {
+									Type: "array",
+									Items: &Schema{
+										Type: "string",
+									},
+								},
+								"fields": {
+									Type: "array",
+									Items: &Schema{
+										Type: "object",
+										Properties: map[string]Schema{
+											"name": {
+												Type: "string",
+											},
+											"type": {
+												Type: "string",
+											},
+											"required": {
+												Type: "boolean",
+											},
+											"unique": {
+												Type: "boolean",
+											},
+											"filterable": {
+												Type: "boolean",
+											},
+											"sortable": {
+												Type: "boolean",
+											},
+											"searchable": {
+												Type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"304": {
+				Description: "Not Modified (when using If-None-Match header with valid ETag)",
+			},
+		},
 	}
 
 	// Generate get endpoint

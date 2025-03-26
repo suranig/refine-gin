@@ -91,11 +91,14 @@ func createTestResource() resource.Resource {
 		Name:  "tests",
 		Model: TestModel{},
 		Fields: []resource.Field{
-			{Name: "id", Type: "string", Filterable: true, Sortable: true, Searchable: true},
-			{Name: "name", Type: "string", Filterable: true, Sortable: true, Searchable: true},
-			{Name: "email", Type: "string", Filterable: true, Sortable: false, Searchable: false},
-			{Name: "age", Type: "int", Filterable: true, Sortable: true, Searchable: false},
+			{Name: "id", Type: "string"},
+			{Name: "name", Type: "string"},
+			{Name: "email", Type: "string"},
+			{Name: "age", Type: "int"},
 		},
+		FilterableFields: []string{"id", "name", "email", "age"},
+		SortableFields:   []string{"id", "name", "age"},
+		SearchableFields: []string{"id", "name"},
 		DefaultSort: &resource.Sort{
 			Field: "id",
 			Order: "asc",
@@ -131,11 +134,14 @@ func TestApplyQueryOptions(t *testing.T) {
 		Name:  "tests",
 		Model: TestModel{},
 		Fields: []resource.Field{
-			{Name: "id", Type: "string", Filterable: true, Sortable: true, Searchable: true},
-			{Name: "name", Type: "string", Filterable: true, Sortable: true, Searchable: true},
-			{Name: "email", Type: "string", Filterable: true},
-			{Name: "age", Type: "int", Filterable: true},
+			{Name: "id", Type: "string"},
+			{Name: "name", Type: "string"},
+			{Name: "email", Type: "string"},
+			{Name: "age", Type: "int"},
 		},
+		FilterableFields: []string{"id", "name", "email", "age"},
+		SortableFields:   []string{"id", "name", "age"},
+		SearchableFields: []string{"id", "name"},
 	})
 
 	// Test with no options

@@ -10,12 +10,62 @@ import (
 type Field struct {
 	Name       string
 	Type       string
-	Filterable bool
-	Sortable   bool
-	Searchable bool
-	Required   bool
-	Unique     bool
+	Label      string
+	Validation *Validation
+	Options    []Option
+	Relation   *RelationConfig
+	List       *ListConfig
+	Form       *FormConfig
 	Validators []Validator
+}
+
+// Validation defines field validation rules
+type Validation struct {
+	Required  bool
+	Min       float64
+	Max       float64
+	MinLength int
+	MaxLength int
+	Pattern   string
+	Message   string
+}
+
+// RelationConfig defines field relation configuration
+type RelationConfig struct {
+	Resource     string
+	Type         string
+	ValueField   string
+	DisplayField string
+	FetchMode    string
+	Endpoint     string
+	IDField      string
+	Required     bool
+	AllowNone    bool
+	MinItems     int
+	MaxItems     int
+	Searchable   bool
+	Async        bool
+	Placeholder  string
+}
+
+// Option represents a field option for select/enum fields
+type Option struct {
+	Value interface{}
+	Label string
+}
+
+// ListConfig defines field configuration for list view
+type ListConfig struct {
+	Width    int
+	Fixed    string
+	Ellipsis bool
+}
+
+// FormConfig defines field configuration for form view
+type FormConfig struct {
+	Placeholder string
+	Help        string
+	Tooltip     string
 }
 
 // Validator represents a field validator

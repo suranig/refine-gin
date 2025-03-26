@@ -23,6 +23,16 @@ func (m *MockResource) GetName() string {
 	return args.String(0)
 }
 
+func (m *MockResource) GetLabel() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetIcon() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 func (m *MockResource) GetModel() interface{} {
 	args := m.Called()
 	return args.Get(0)

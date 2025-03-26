@@ -242,3 +242,24 @@ func TestDisableCaching(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateETagFromSlice(t *testing.T) {
+	tests := []struct {
+		name    string
+		content []string
+		want    string
+	}{
+		{"Empty slice", []string{}, "\"2166136261\""},
+		{"Single item", []string{"test"}, "\"2949673445\""},
+		{"Multiple items", []string{"resource1", "resource2"}, "\"4065752498\""},
+		{"Duplicate items", []string{"test", "test"}, "\"2884330559\""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GenerateETagFromSlice(tt.content); got != tt.want {
+				t.Errorf("GenerateETagFromSlice() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

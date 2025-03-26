@@ -10,6 +10,9 @@ import (
 
 // RegisterResource registers resource handlers in the Gin router
 func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repository.Repository) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Create default DTO provider if not specified
 	dtoProvider := &dto.DefaultDTOProvider{
 		Model: res.GetModel(),
@@ -17,6 +20,9 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 	// Określ nazwę parametru URL dla identyfikatora (domyślnie "id")
 	idParamName := "id"
+
+	// Register OPTIONS handler for metadata
+	router.OPTIONS("/"+res.GetName(), GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -47,11 +53,17 @@ func RegisterResource(router *gin.RouterGroup, res resource.Resource, repo repos
 
 // RegisterResourceWithDTO registers resource handlers with custom DTO provider
 func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, dtoProvider dto.DTOProvider) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Use default options with DTO provider
 	opts := resource.DefaultOptions()
 
 	// Create resource router with naming convention middleware
 	resourceRouter := router.Group("/"+res.GetName(), middleware.NamingConventionMiddleware(opts.NamingConvention))
+
+	// Register OPTIONS handler for metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -81,6 +93,9 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 
 // RegisterResourceWithOptions registers a resource with custom options
 func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, opts resource.Options) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Przygotuj middleware dla cache
 	var middlewares []gin.HandlerFunc
 
@@ -92,7 +107,7 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 		cacheConfig := middleware.CacheConfig{
 			MaxAge:       opts.Cache.MaxAge,
 			DisableCache: !opts.Cache.Enabled,
-			Methods:      []string{"GET", "HEAD"},
+			Methods:      []string{"GET", "HEAD", "OPTIONS"},
 			VaryHeaders:  opts.Cache.VaryHeaders,
 		}
 		middlewares = append(middlewares, middleware.CacheByResource(res.GetName(), cacheConfig))
@@ -113,6 +128,9 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 			idParamName = idParamStr
 		}
 	}
+
+	// Register OPTIONS handler for metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -145,6 +163,9 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 // The idParamName parameter allows specifying a custom ID parameter name for the resource
 // This is useful for resources that use a non-standard ID field (not 'id')
 func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, idParamName string) {
+	// Register resource to registry
+	resource.RegisterToRegistry(res)
+
 	// Create default DTO provider if not specified
 	dtoProvider := &dto.DefaultDTOProvider{
 		Model: res.GetModel(),
@@ -156,12 +177,17 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	}
 
 	cacheConfig := middleware.DefaultCacheConfig()
+	// Add OPTIONS method to cache config
+	cacheConfig.Methods = append(cacheConfig.Methods, "OPTIONS")
 
 	// Create resource router with naming convention middleware - default to camelCase for Refine.dev
 	resourceRouter := router.Group("/"+res.GetName(),
 		middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention),
 		middleware.CacheByResource(res.GetName(), cacheConfig), // Dodaj middleware cache dla całego zasobu
 	)
+
+	// Register OPTIONS handler for resource metadata
+	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {

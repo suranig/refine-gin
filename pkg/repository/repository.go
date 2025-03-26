@@ -4,195 +4,62 @@ import (
 	"context"
 
 	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 
-// Repository defines a generic repository interface
+// Repository defines the interface for database operations
 type Repository interface {
-	// List returns a list of resources with pagination
+	// List returns a paginated list of resources based on query options
 	List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error)
 
-	// Get returns a single resource by ID
+	// Get retrieves a single resource by its ID
 	Get(ctx context.Context, id interface{}) (interface{}, error)
 
-	// Create creates a new resource
+	// Create inserts a new resource into the database
 	Create(ctx context.Context, data interface{}) (interface{}, error)
 
-	// Update updates an existing resource
+	// Update modifies an existing resource identified by ID
 	Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error)
 
-	// Delete deletes a resource
+	// Delete removes a resource from the database
 	Delete(ctx context.Context, id interface{}) error
 
 	// Count returns the total number of resources matching the query options
 	Count(ctx context.Context, options query.QueryOptions) (int64, error)
 
-	// Bulk operations for Refine.dev compatibility
-
-	// CreateMany creates multiple resources at once
+	// CreateMany inserts multiple resources in a single transaction
 	CreateMany(ctx context.Context, data interface{}) (interface{}, error)
 
-	// UpdateMany updates multiple resources at once
-	// ids is a slice of resource IDs to update
-	// data is the data to update for all resources
+	// UpdateMany modifies multiple resources in a single transaction
 	UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error)
 
-	// DeleteMany deletes multiple resources at once
-	// ids is a slice of resource IDs to delete
+	// DeleteMany removes multiple resources in a single transaction
 	DeleteMany(ctx context.Context, ids []interface{}) (int64, error)
-}
 
-type RepositoryFactory interface {
-	CreateRepository(res resource.Resource) Repository
-}
+	// WithTransaction executes operations within a database transaction
+	WithTransaction(fn func(Repository) error) error
 
-type GormRepository struct {
-	DB          *gorm.DB
-	Model       interface{}
-	Resource    resource.Resource
-	IDFieldName string // Nazwa pola identyfikatora
-}
+	// WithRelations specifies which relations should be loaded with the query
+	WithRelations(relations ...string) Repository
 
-func (r *GormRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
-	slicePtr := resource.CreateSliceOfType(r.Model)
+	// FindOneBy finds the first record that matches the condition
+	FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error)
 
-	total, err := options.ApplyWithPagination(r.DB.Model(r.Model), slicePtr)
-	if err != nil {
-		return nil, 0, err
-	}
+	// FindAllBy finds all records that match the condition
+	FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error)
 
-	return slicePtr, total, nil
-}
+	// GetWithRelations retrieves a single resource with specified relations loaded
+	GetWithRelations(ctx context.Context, id interface{}, relations []string) (interface{}, error)
 
-func (r *GormRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
-	item := resource.CreateInstanceOfType(r.Model)
+	// ListWithRelations lists resources with specified relations loaded
+	ListWithRelations(ctx context.Context, options query.QueryOptions, relations []string) (interface{}, int64, error)
 
-	if err := r.DB.First(item, r.IDFieldName+" = ?", id).Error; err != nil {
-		return nil, err
-	}
+	// Query returns a GORM DB instance for custom queries
+	Query(ctx context.Context) *gorm.DB
 
-	return item, nil
-}
+	// BulkCreate creates multiple resources at once
+	BulkCreate(ctx context.Context, data interface{}) error
 
-func (r *GormRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
-	if err := r.DB.Create(data).Error; err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (r *GormRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
-	// Ustaw ID w danych, jeśli to możliwe
-	if err := resource.SetCustomID(data, id, r.IDFieldName); err != nil {
-		return nil, err
-	}
-
-	if err := r.DB.Save(data).Error; err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (r *GormRepository) Delete(ctx context.Context, id interface{}) error {
-	item := resource.CreateInstanceOfType(r.Model)
-
-	if err := resource.SetCustomID(item, id, r.IDFieldName); err != nil {
-		return err
-	}
-
-	return r.DB.Delete(item).Error
-}
-
-func (r *GormRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
-	total, err := options.ApplyWithPagination(r.DB.Model(r.Model), nil)
-	if err != nil {
-		return 0, err
-	}
-
-	return total, nil
-}
-
-// CreateMany creates multiple resources at once
-func (r *GormRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
-	// Validate that data is a slice
-	if !resource.IsSlice(data) {
-		return nil, resource.ErrInvalidType
-	}
-
-	// Start a transaction for bulk creation
-	err := r.DB.Transaction(func(tx *gorm.DB) error {
-		return tx.Create(data).Error
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-// UpdateMany updates multiple resources at once
-func (r *GormRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
-	// Start a transaction for bulk updates
-	var count int64
-	err := r.DB.Transaction(func(tx *gorm.DB) error {
-		// Apply updates to all records matching the IDs
-		result := tx.Model(r.Model).Where(r.IDFieldName+" IN ?", ids).Updates(data)
-		if result.Error != nil {
-			return result.Error
-		}
-		count = result.RowsAffected
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-// DeleteMany deletes multiple resources at once
-func (r *GormRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
-	// Create a new instance of the model
-	item := resource.CreateInstanceOfType(r.Model)
-
-	// Start a transaction for bulk deletion
-	var count int64
-	err := r.DB.Transaction(func(tx *gorm.DB) error {
-		// Delete all records matching the IDs
-		result := tx.Where(r.IDFieldName+" IN ?", ids).Delete(item)
-		if result.Error != nil {
-			return result.Error
-		}
-		count = result.RowsAffected
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-func NewGormRepository(db *gorm.DB, model interface{}) Repository {
-	return &GormRepository{
-		DB:          db,
-		Model:       model,
-		IDFieldName: "ID", // Domyślna nazwa pola identyfikatora
-	}
-}
-
-// NewGormRepositoryWithResource tworzy nowe repozytorium GORM z zasobem
-func NewGormRepositoryWithResource(db *gorm.DB, res resource.Resource) Repository {
-	return &GormRepository{
-		DB:          db,
-		Model:       res.GetModel(),
-		Resource:    res,
-		IDFieldName: res.GetIDFieldName(),
-	}
+	// BulkUpdate updates multiple resources matching a condition
+	BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error
 }

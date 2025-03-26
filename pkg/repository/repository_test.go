@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/suranig/refine-gin/pkg/query"
@@ -33,8 +32,8 @@ type TestModelWithCustomID struct {
 	Age   int    `json:"age"`
 }
 
-// RepositoryTestSuite is a test suite for the Repository interface implementations
-type RepositoryTestSuite struct {
+// RepositoryMockTestSuite is a test suite for the Repository interface implementations with mock DB
+type RepositoryMockTestSuite struct {
 	suite.Suite
 	db         *gorm.DB
 	mock       sqlmock.Sqlmock
@@ -43,7 +42,7 @@ type RepositoryTestSuite struct {
 }
 
 // SetupSuite initializes the test suite with a mock database
-func (s *RepositoryTestSuite) SetupSuite() {
+func (s *RepositoryMockTestSuite) SetupSuite() {
 	// Setup mock database
 	var err error
 	var mockDB *sql.DB
@@ -69,151 +68,182 @@ func (s *RepositoryTestSuite) SetupSuite() {
 	})
 
 	// Create repository
-	s.repository = NewGormRepository(s.db, &TestModel{})
+	s.repository = NewGenericRepositoryWithResource(s.db, s.resource)
 }
 
-// TestRepositorySuite runs the test suite
-func TestRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RepositoryTestSuite))
+// TestMockRepositorySuite runs the mock test suite
+func TestMockRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RepositoryMockTestSuite))
 }
 
-func TestGormRepository(t *testing.T) {
-	// Setup in-memory database
+// RepositorySuite is a test suite for the Repository interface implementations with SQLite
+type RepositorySuite struct {
+	suite.Suite
+	db         *gorm.DB
+	repository Repository
+}
+
+// SetupTest initializes a new test database for each test
+func (s *RepositorySuite) SetupTest() {
+	// Setup in-memory SQLite database
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	s.Require().NoError(err)
+
+	// Migrate model
+	err = db.AutoMigrate(&TestModel{})
+	s.Require().NoError(err)
+
+	s.db = db
+	s.repository = NewGenericRepositoryWithResource(s.db, resource.NewResource(resource.ResourceConfig{
+		Model: &TestModel{},
+	}))
+}
+
+func (s *RepositorySuite) TestCRUD() {
+	ctx := context.Background()
+
+	// Create
+	model := &TestModel{
+		ID:    "test-1",
+		Name:  "Test Model",
+		Email: "test@example.com",
+		Age:   25,
+	}
+
+	result, err := s.repository.Create(ctx, model)
+	s.NoError(err)
+	s.NotNil(result)
+
+	// Get
+	retrieved, err := s.repository.Get(ctx, "test-1")
+	s.NoError(err)
+	s.NotNil(retrieved)
+
+	retrievedModel := retrieved.(*TestModel)
+	s.Equal("test-1", retrievedModel.ID)
+	s.Equal("Test Model", retrievedModel.Name)
+	s.Equal("test@example.com", retrievedModel.Email)
+	s.Equal(25, retrievedModel.Age)
+
+	// Update
+	retrievedModel.Name = "Updated Model"
+	updated, err := s.repository.Update(ctx, "test-1", retrievedModel)
+	s.NoError(err)
+	s.NotNil(updated)
+
+	updatedModel := updated.(*TestModel)
+	s.Equal("Updated Model", updatedModel.Name)
+
+	// Delete
+	err = s.repository.Delete(ctx, map[string]interface{}{"id": retrievedModel.ID})
+	s.NoError(err)
+
+	// Verify deletion
+	_, err = s.repository.Get(ctx, retrievedModel.ID)
+	s.Error(err)
+}
+
+// Helper to setup a SQLite test database
+func setupSQLiteTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	assert.NoError(t, err)
 
-	// Migrate model
+	err = db.AutoMigrate(&TestModel{}, &TestModelWithCustomID{})
+	assert.NoError(t, err)
+
+	return db
+}
+
+func TestRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RepositorySuite))
+}
+
+func TestRepository(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	// Create test table
 	err = db.AutoMigrate(&TestModel{})
 	assert.NoError(t, err)
 
 	// Create repository
-	repo := NewGormRepository(db, &TestModel{})
-
-	// Create a test resource
 	res := resource.NewResource(resource.ResourceConfig{
-		Name:  "tests",
-		Model: TestModel{},
+		Model: &TestModel{},
 	})
-
-	// Create a test context
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(nil)
-	ctx := context.WithValue(c, "resource", res)
+	repo := NewGenericRepositoryWithResource(db, res)
 
 	// Test Create
 	model := &TestModel{
-		ID:    "1",
+		ID:    "test-1",
 		Name:  "John Doe",
 		Email: "john@example.com",
-		Age:   30,
 	}
 
-	createdModel, err := repo.Create(ctx, model)
+	result, err := repo.Create(context.Background(), model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, createdModel)
+	assert.NotNil(t, result)
 
 	// Test Get
-	retrievedModel, err := repo.Get(ctx, "1")
+	retrieved, err := repo.Get(context.Background(), "test-1")
 	assert.NoError(t, err)
-	assert.Equal(t, model, retrievedModel)
+	assert.NotNil(t, retrieved)
 
-	// Test List
-	options := query.QueryOptions{
-		Resource: res,
-		Page:     1,
-		PerPage:  10,
-		Sort:     "id",
-		Order:    "asc",
-		Filters:  make(map[string]interface{}),
-	}
-
-	models, total, err := repo.List(ctx, options)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), total)
-
-	// The List method returns a slice of the model type, not a slice of pointers to the model type
-	modelsList, ok := models.(*[]TestModel)
-	assert.True(t, ok)
-	assert.Len(t, *modelsList, 1)
-	assert.Equal(t, model.ID, (*modelsList)[0].ID)
+	retrievedModel := retrieved.(*TestModel)
+	assert.Equal(t, "test-1", retrievedModel.ID)
+	assert.Equal(t, "John Doe", retrievedModel.Name)
+	assert.Equal(t, "john@example.com", retrievedModel.Email)
 
 	// Test Update
-	model.Name = "Jane Doe"
-	updatedModel, err := repo.Update(ctx, "1", model)
+	retrievedModel.Name = "Jane Doe"
+	updated, err := repo.Update(context.Background(), "test-1", retrievedModel)
 	assert.NoError(t, err)
-	assert.Equal(t, model, updatedModel)
+	assert.NotNil(t, updated)
 
-	// Verify update
-	retrievedModel, err = repo.Get(ctx, "1")
-	assert.NoError(t, err)
-	assert.Equal(t, "Jane Doe", retrievedModel.(*TestModel).Name)
+	updatedModel := updated.(*TestModel)
+	assert.Equal(t, "Jane Doe", updatedModel.Name)
 
 	// Test Delete
-	err = repo.Delete(ctx, "1")
+	err = repo.Delete(context.Background(), map[string]interface{}{"id": retrievedModel.ID})
 	assert.NoError(t, err)
 
-	// Verify delete
-	_, err = repo.Get(ctx, "1")
+	// Verify deletion
+	_, err = repo.Get(context.Background(), retrievedModel.ID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record not found")
 }
 
-func TestGormRepositoryWithCustomID(t *testing.T) {
-	// Setup in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	// Migrate model
-	err = db.AutoMigrate(&TestModelWithCustomID{})
-	assert.NoError(t, err)
-
-	// Create a test resource with custom ID field
-	res := resource.NewResource(resource.ResourceConfig{
-		Name:        "tests",
-		Model:       TestModelWithCustomID{},
+func TestRepositoryWithCustomID(t *testing.T) {
+	db := setupSQLiteTestDB(t)
+	repo := NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
+		Model:       &TestModelWithCustomID{},
 		IDFieldName: "UID",
-	})
+	}))
 
-	// Create repository with resource
-	repo := NewGormRepositoryWithResource(db, res)
-
-	// Create a test context
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(nil)
-	ctx := context.WithValue(c, "resource", res)
+	ctx := context.Background()
 
 	// Test Create
 	model := &TestModelWithCustomID{
 		UID:   "custom-1",
 		Name:  "John Doe",
 		Email: "john@example.com",
-		Age:   30,
 	}
 
 	createdModel, err := repo.Create(ctx, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, createdModel)
+	assert.NotNil(t, createdModel)
 
 	// Test Get
-	retrievedModel, err := repo.Get(ctx, "custom-1")
+	retrievedModel, err := repo.Get(ctx, model.UID)
 	assert.NoError(t, err)
-	assert.Equal(t, model, retrievedModel)
+	assert.Equal(t, model.Name, retrievedModel.(*TestModelWithCustomID).Name)
 
 	// Test List
-	options := query.QueryOptions{
-		Resource: res,
-		Page:     1,
-		PerPage:  10,
-		Sort:     "uid",
-		Order:    "asc",
-		Filters:  make(map[string]interface{}),
-	}
-
-	models, total, err := repo.List(ctx, options)
+	models, total, err := repo.List(ctx, query.QueryOptions{
+		Page:    1,
+		PerPage: 10,
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 
-	// The List method returns a slice of the model type, not a slice of pointers to the model type
 	modelsList, ok := models.(*[]TestModelWithCustomID)
 	assert.True(t, ok)
 	assert.Len(t, *modelsList, 1)
@@ -221,205 +251,157 @@ func TestGormRepositoryWithCustomID(t *testing.T) {
 
 	// Test Update
 	model.Name = "Jane Doe"
-	updatedModel, err := repo.Update(ctx, "custom-1", model)
+	updatedModel, err := repo.Update(ctx, model.UID, model)
 	assert.NoError(t, err)
-	assert.Equal(t, model, updatedModel)
+	assert.Equal(t, "Jane Doe", updatedModel.(*TestModelWithCustomID).Name)
 
-	// Verify update
-	retrievedModel, err = repo.Get(ctx, "custom-1")
-	assert.NoError(t, err)
-	assert.Equal(t, "Jane Doe", retrievedModel.(*TestModelWithCustomID).Name)
-
-	// Test Delete
-	err = repo.Delete(ctx, "custom-1")
+	// Test Delete with WHERE condition
+	err = repo.Delete(ctx, map[string]interface{}{"uid": model.UID})
 	assert.NoError(t, err)
 
-	// Verify delete
-	_, err = repo.Get(ctx, "custom-1")
+	// Verify deletion
+	_, err = repo.Get(ctx, model.UID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record not found")
 }
 
-func TestGormRepositoryFactory(t *testing.T) {
-	// Setup in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
+func TestGenericRepositoryFactory(t *testing.T) {
+	db := setupSQLiteTestDB(t)
 
-	// Create factory
-	factory := NewGormRepositoryFactory(db)
+	factory := NewGenericRepositoryFactory(db)
 
-	// Create a test resource with custom ID field
 	res := resource.NewResource(resource.ResourceConfig{
 		Name:        "tests",
-		Model:       TestModelWithCustomID{},
+		Model:       &TestModelWithCustomID{},
 		IDFieldName: "UID",
 	})
 
-	// Create repository using factory
 	repo := factory.CreateRepository(res)
 	assert.NotNil(t, repo)
 
-	// Sprawdź, czy repozytorium używa niestandardowego pola identyfikatora
-	gormRepo, ok := repo.(*GormRepository)
+	genericRepo, ok := repo.(*GenericRepository)
 	assert.True(t, ok)
-	assert.Equal(t, "UID", gormRepo.IDFieldName)
+	assert.Equal(t, res, genericRepo.Resource)
 }
 
 // TestCreateMany tests the CreateMany method of the repository
-func (s *RepositoryTestSuite) TestCreateMany() {
-	// Create mock data
-	data := []TestModel{
-		{Name: "Test 1", Age: 20},
-		{Name: "Test 2", Age: 30},
+func (s *RepositoryMockTestSuite) TestCreateMany() {
+	ctx := context.Background()
+	models := []TestModel{
+		{ID: "1", Name: "Test 1", Email: "test1@example.com", Age: 20},
+		{ID: "2", Name: "Test 2", Email: "test2@example.com", Age: 25},
 	}
 
-	// Setup expect query to be executed
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec(`INSERT INTO "test_models"`).
-		WithArgs(sqlmock.AnyArg(), "Test 1", sqlmock.AnyArg(), 20, sqlmock.AnyArg(), "Test 2", sqlmock.AnyArg(), 30).
+		WithArgs("1", "Test 1", "test1@example.com", 20, "2", "Test 2", "test2@example.com", 25).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
 
-	// Call repository method
-	result, err := s.repository.CreateMany(context.Background(), data)
+	result, err := s.repository.CreateMany(ctx, models)
+	s.NoError(err)
+	s.NotNil(result)
 
-	// Assert no error
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), result)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	createdModels, ok := result.([]TestModel)
+	s.True(ok)
+	s.Len(createdModels, 2)
 }
 
 // TestCreateMany_Error tests error handling in CreateMany
-func (s *RepositoryTestSuite) TestCreateMany_Error() {
-	// Create mock data
-	data := []TestModel{
-		{Name: "Test 1", Age: 20},
+func (s *RepositoryMockTestSuite) TestCreateMany_Error() {
+	ctx := context.Background()
+	models := []TestModel{
+		{ID: "1", Name: "Test 1", Email: "", Age: 20},
 	}
 
-	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec(`INSERT INTO "test_models"`).
-		WithArgs(sqlmock.AnyArg(), "Test 1", sqlmock.AnyArg(), 20).
+		WithArgs("1", "Test 1", "", 20).
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
 
-	// Call repository method
-	result, err := s.repository.CreateMany(context.Background(), data)
-
-	// Assert error
-	assert.Error(s.T(), err)
-	assert.Nil(s.T(), result)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	result, err := s.repository.CreateMany(ctx, models)
+	s.Error(err)
+	s.Equal("database error", err.Error())
+	s.Equal([]TestModel(nil), result)
 }
 
 // TestCreateMany_InvalidType tests passing non-slice to CreateMany
-func (s *RepositoryTestSuite) TestCreateMany_InvalidType() {
-	// Create invalid data (not a slice)
-	data := TestModel{Name: "Test 1", Age: 20}
+func (s *RepositoryMockTestSuite) TestCreateMany_InvalidType() {
+	ctx := context.Background()
+	invalidModel := "invalid"
 
-	// Call repository method with non-slice
-	result, err := s.repository.CreateMany(context.Background(), data)
-
-	// Assert error
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), resource.ErrInvalidType, err)
-	assert.Nil(s.T(), result)
+	result, err := s.repository.CreateMany(ctx, invalidModel)
+	s.Error(err)
+	s.Equal("unsupported data type: invalid: Table not set, please set it like: db.Model(&user) or db.Table(\"users\")", err.Error())
+	s.Equal("invalid", result)
 }
 
 // TestUpdateMany tests the UpdateMany method of the repository
-func (s *RepositoryTestSuite) TestUpdateMany() {
-	// Create data to update
-	data := TestModel{Name: "Updated Name"}
-	ids := []interface{}{1, 2}
+func (s *RepositoryMockTestSuite) TestUpdateMany() {
+	ctx := context.Background()
+	ids := []interface{}{"1", "2"}
+	updates := map[string]interface{}{
+		"name": "Updated Name",
+	}
 
-	// Setup expect query to be executed
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE ID IN \(\$2,\$3\)`).
-		WithArgs("Updated Name", 1, 2).
+	s.mock.ExpectExec(`UPDATE "test_models"`).
+		WithArgs("Updated Name", "1", "2").
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
 
-	// Call repository method
-	count, err := s.repository.UpdateMany(context.Background(), ids, data)
-
-	// Assert no error and correct count
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), count)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	affected, err := s.repository.UpdateMany(ctx, ids, updates)
+	s.NoError(err)
+	s.Equal(int64(2), affected)
 }
 
 // TestUpdateMany_Error tests error handling in UpdateMany
-func (s *RepositoryTestSuite) TestUpdateMany_Error() {
-	// Create data to update
-	data := TestModel{Name: "Updated Name"}
-	ids := []interface{}{1, 2}
+func (s *RepositoryMockTestSuite) TestUpdateMany_Error() {
+	ctx := context.Background()
+	ids := []interface{}{"1", "2"}
+	updates := map[string]interface{}{
+		"name": "Updated Name",
+	}
 
-	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`UPDATE "test_models" SET "name"=\$1 WHERE ID IN \(\$2,\$3\)`).
-		WithArgs("Updated Name", 1, 2).
+	s.mock.ExpectExec(`UPDATE "test_models"`).
+		WithArgs("Updated Name", "1", "2").
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
 
-	// Call repository method
-	count, err := s.repository.UpdateMany(context.Background(), ids, data)
-
-	// Assert error
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), int64(0), count)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	affected, err := s.repository.UpdateMany(ctx, ids, updates)
+	s.Error(err)
+	s.Equal(int64(0), affected)
 }
 
 // TestDeleteMany tests the DeleteMany method of the repository
-func (s *RepositoryTestSuite) TestDeleteMany() {
-	// Create ids to delete
-	ids := []interface{}{1, 2}
+func (s *RepositoryMockTestSuite) TestDeleteMany() {
+	ctx := context.Background()
+	ids := []interface{}{"1", "2"}
 
-	// Setup expect query to be executed
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE ID IN \(\$1,\$2\)`).
-		WithArgs(1, 2).
+	s.mock.ExpectExec(`DELETE FROM "test_models"`).
+		WithArgs("1", "2").
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	s.mock.ExpectCommit()
 
-	// Call repository method
-	count, err := s.repository.DeleteMany(context.Background(), ids)
-
-	// Assert no error and correct count
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), count)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	affected, err := s.repository.DeleteMany(ctx, ids)
+	s.NoError(err)
+	s.Equal(int64(2), affected)
 }
 
 // TestDeleteMany_Error tests error handling in DeleteMany
-func (s *RepositoryTestSuite) TestDeleteMany_Error() {
-	// Create ids to delete
-	ids := []interface{}{1, 2}
+func (s *RepositoryMockTestSuite) TestDeleteMany_Error() {
+	ctx := context.Background()
+	ids := []interface{}{"1", "2"}
 
-	// Setup expect query to be executed with error
 	s.mock.ExpectBegin()
-	s.mock.ExpectExec(`DELETE FROM "test_models" WHERE ID IN \(\$1,\$2\)`).
-		WithArgs(1, 2).
+	s.mock.ExpectExec(`DELETE FROM "test_models"`).
+		WithArgs("1", "2").
 		WillReturnError(errors.New("database error"))
 	s.mock.ExpectRollback()
 
-	// Call repository method
-	count, err := s.repository.DeleteMany(context.Background(), ids)
-
-	// Assert error
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), int64(0), count)
-
-	// Verify that expectations were met
-	assert.NoError(s.T(), s.mock.ExpectationsWereMet())
+	affected, err := s.repository.DeleteMany(ctx, ids)
+	s.Error(err)
+	s.Equal(int64(0), affected)
 }

@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
@@ -59,6 +61,29 @@ func GenerateCreateManyHandler(res resource.Resource, repo repository.Repository
 			}
 		} else {
 			modelData = req.Values
+		}
+
+		// Get the database connection from repository for validation
+		db := repo.Query(c.Request.Context())
+
+		// Validate relations for each item if database is available
+		if db != nil && len(res.GetRelations()) > 0 && resource.IsSlice(modelData) {
+			// Get the slice from the interface
+			slice := reflect.ValueOf(modelData)
+			if slice.Kind() == reflect.Ptr {
+				slice = slice.Elem()
+			}
+
+			// Iterate through each item
+			for i := 0; i < slice.Len(); i++ {
+				item := slice.Index(i).Interface()
+
+				// Validate relations before saving
+				if err := resource.ValidateRelations(db, item); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Item %d: %s", i, err.Error())})
+					return
+				}
+			}
 		}
 
 		// Call repository method
@@ -148,6 +173,19 @@ func GenerateUpdateManyHandler(res resource.Resource, repo repository.Repository
 			}
 		} else {
 			modelData = req.Values
+		}
+
+		// Get the database connection from repository for validation
+		db := repo.Query(c.Request.Context())
+
+		// Validate relations if database is available
+		// For bulk updates, we only validate that the relation values are valid, not that they exist for each ID
+		if db != nil && len(res.GetRelations()) > 0 {
+			// Validate relations before save
+			if err := resource.ValidateRelations(db, modelData); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 		}
 
 		// Call repository method
