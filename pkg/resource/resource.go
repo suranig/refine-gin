@@ -275,14 +275,67 @@ func GenerateFieldsFromModel(model interface{}) []Field {
 			},
 		}
 
+		// Check for JSON or object field types
+		if isJsonField(field.Type) {
+			fieldDef.Type = "json"
+			fieldDef.Json = &JsonConfig{
+				DefaultExpanded: true,
+				EditorType:      "form", // Default to form editor
+			}
+
+			// Extract JSON properties from struct tags if available
+			jsonSchema, jsonProps := extractJsonSchemaAndProperties(field.Type)
+			if jsonSchema != nil {
+				fieldDef.Json.Schema = jsonSchema
+			}
+			if len(jsonProps) > 0 {
+				fieldDef.Json.Properties = jsonProps
+			}
+		}
+
 		if tag, ok := field.Tag.Lookup("refine"); ok {
 			ParseFieldTag(&fieldDef, tag)
+		}
+
+		// Look for json tags to enhance the field definition
+		if tag, ok := field.Tag.Lookup("json"); ok {
+			ProcessJsonTag(&fieldDef, tag)
 		}
 
 		fields = append(fields, fieldDef)
 	}
 
 	return fields
+}
+
+// isJsonField checks if a field type is a JSON type (map, struct with json.RawMessage, etc.)
+func isJsonField(t reflect.Type) bool {
+	// Check direct json.RawMessage type
+	if t.String() == "json.RawMessage" {
+		return true
+	}
+
+	// Check for map with string keys
+	if t.Kind() == reflect.Map && t.Key().Kind() == reflect.String {
+		return true
+	}
+
+	// Check for struct with exported fields that have json tags
+	if t.Kind() == reflect.Struct {
+		hasJsonFields := false
+
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			if field.PkgPath == "" && field.Tag.Get("json") != "" {
+				hasJsonFields = true
+				break
+			}
+		}
+
+		return hasJsonFields
+	}
+
+	return false
 }
 
 // ParseFieldTag parses the field tag and updates the field definition
@@ -373,6 +426,171 @@ func ParseFieldTag(field *Field, tag string) {
 			}
 			field.Validation.Required = true
 		}
+	}
+}
+
+// extractJsonSchemaAndProperties extracts JSON schema and properties from a struct type
+func extractJsonSchemaAndProperties(t reflect.Type) (map[string]interface{}, []JsonProperty) {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Initialize schema
+	schema := map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
+	}
+
+	// If it's not a struct, return empty schema
+	if t.Kind() != reflect.Struct {
+		return schema, nil
+	}
+
+	var properties []JsonProperty
+
+	// Extract properties from struct fields
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+
+		// Skip unexported fields
+		if field.PkgPath != "" {
+			continue
+		}
+
+		// Get JSON field name from tag or use field name
+		jsonName := field.Name
+		if tag, ok := field.Tag.Lookup("json"); ok {
+			parts := strings.Split(tag, ",")
+			if parts[0] != "" && parts[0] != "-" {
+				jsonName = parts[0]
+			}
+		}
+
+		// Create property
+		prop := JsonProperty{
+			Path:  jsonName,
+			Label: field.Name,
+			Type:  getJsonPropertyType(field.Type),
+		}
+
+		// Add validation if available
+		if validationTag, ok := field.Tag.Lookup("validate"); ok {
+			prop.Validation = parseValidationTag(validationTag)
+		}
+
+		// For nested objects, recursively extract properties
+		if isJsonField(field.Type) {
+			_, nestedProps := extractJsonSchemaAndProperties(field.Type)
+
+			// Set properties with prefixed paths
+			for _, nestedProp := range nestedProps {
+				nestedPath := jsonName + "." + nestedProp.Path
+				nestedProp.Path = nestedPath
+				properties = append(properties, nestedProp)
+			}
+		}
+
+		properties = append(properties, prop)
+
+		// Add to schema
+		propSchema := map[string]interface{}{
+			"type": prop.Type,
+		}
+		if prop.Validation != nil {
+			if prop.Validation.Required {
+				propSchema["required"] = true
+			}
+		}
+
+		schema["properties"].(map[string]interface{})[jsonName] = propSchema
+	}
+
+	return schema, properties
+}
+
+// getJsonPropertyType returns the JSON type for a Go type
+func getJsonPropertyType(t reflect.Type) string {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.String:
+		return "string"
+	case reflect.Struct:
+		if t.String() == "time.Time" {
+			return "string" // Treat time as string
+		}
+		return "object"
+	case reflect.Map:
+		return "object"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	default:
+		return "string" // Default to string
+	}
+}
+
+// parseValidationTag parses validation tag into Validation struct
+func parseValidationTag(tag string) *Validation {
+	validation := &Validation{}
+	parts := strings.Split(tag, ",")
+
+	for _, part := range parts {
+		switch {
+		case part == "required":
+			validation.Required = true
+		case strings.HasPrefix(part, "min="):
+			value, err := strconv.Atoi(part[4:])
+			if err == nil {
+				validation.Min = float64(value)
+			}
+		case strings.HasPrefix(part, "max="):
+			value, err := strconv.Atoi(part[4:])
+			if err == nil {
+				validation.Max = float64(value)
+			}
+		case strings.HasPrefix(part, "minlength="):
+			value, err := strconv.Atoi(part[10:])
+			if err == nil {
+				validation.MinLength = value
+			}
+		case strings.HasPrefix(part, "maxlength="):
+			value, err := strconv.Atoi(part[10:])
+			if err == nil {
+				validation.MaxLength = value
+			}
+		}
+	}
+
+	return validation
+}
+
+// ProcessJsonTag processes a json tag for field configuration
+func ProcessJsonTag(field *Field, tag string) {
+	// Check for omitempty or - (ignore field)
+	if strings.Contains(tag, "omitempty") {
+		// If field has validation, ensure it's not required
+		if field.Validation != nil {
+			field.Validation.Required = false
+		}
+	}
+
+	// Extract the field name from json tag
+	parts := strings.Split(tag, ",")
+	if parts[0] != "" && parts[0] != "-" {
+		// Store the original name as label if not already set
+		if field.Label == field.Name {
+			field.Label = field.Name
+		}
+		// Use json field name as the actual name
+		field.Name = parts[0]
 	}
 }
 
