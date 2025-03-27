@@ -17,6 +17,46 @@ type Field struct {
 	List       *ListConfig
 	Form       *FormConfig
 	Validators []Validator
+	Json       *JsonConfig
+}
+
+// JsonConfig defines configuration for JSON fields
+type JsonConfig struct {
+	// Schema for JSON field validation and UI
+	Schema map[string]interface{} `json:"schema,omitempty"`
+
+	// Properties defines nested fields in the JSON structure
+	Properties []JsonProperty `json:"properties,omitempty"`
+
+	// Default expanded state in UI
+	DefaultExpanded bool `json:"defaultExpanded,omitempty"`
+
+	// JSON path prefix for filtering nested fields
+	PathPrefix string `json:"pathPrefix,omitempty"`
+
+	// Editor type (json, form, tree)
+	EditorType string `json:"editorType,omitempty"`
+}
+
+// JsonProperty defines a property in a JSON field
+type JsonProperty struct {
+	// Property path (e.g. "config.oauth.client_id")
+	Path string `json:"path,omitempty"`
+
+	// Property label for display
+	Label string `json:"label,omitempty"`
+
+	// Property type (string, number, boolean, object, array)
+	Type string `json:"type,omitempty"`
+
+	// Additional validation for the property
+	Validation *Validation `json:"validation,omitempty"`
+
+	// For object types, nested properties
+	Properties []JsonProperty `json:"properties,omitempty"`
+
+	// UI configuration
+	Form *FormConfig `json:"form,omitempty"`
 }
 
 // Validation defines field validation rules
