@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -161,7 +162,7 @@ func TestUpdateDomainWithNestedJSON(t *testing.T) {
 	jsonData, _ := json.Marshal(updateData)
 
 	// Create request
-	req := httptest.NewRequest("PUT", "/api/domains/"+string(rune(domain.ID)), bytes.NewBuffer(jsonData))
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/domains/%d", domain.ID), bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Perform request

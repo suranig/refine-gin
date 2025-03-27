@@ -17,7 +17,7 @@ import (
 type Domain struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	Name      string    `json:"name" gorm:"uniqueIndex" refine:"required"`
-	Config    Config    `json:"config" gorm:"type:jsonb"`
+	Config    Config    `json:"config" gorm:"serializer:json"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
