@@ -73,6 +73,26 @@ func (m *RegistryMockResource) GetSearchable() []string {
 	return nil
 }
 
+func (m *RegistryMockResource) GetFilterableFields() []string {
+	return nil
+}
+
+func (m *RegistryMockResource) GetSortableFields() []string {
+	return nil
+}
+
+func (m *RegistryMockResource) GetRequiredFields() []string {
+	return nil
+}
+
+func (m *RegistryMockResource) GetTableFields() []string {
+	return nil
+}
+
+func (m *RegistryMockResource) GetFormFields() []string {
+	return nil
+}
+
 // TestResourceRegistry tests the ResourceRegistry and GlobalResourceRegistry
 func TestResourceRegistry(t *testing.T) {
 	// Reset GlobalResourceRegistry for testing

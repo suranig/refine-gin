@@ -44,6 +44,13 @@ type Resource interface {
 
 	// Returns searchable fields
 	GetSearchable() []string
+
+	// Returns field lists for UI
+	GetFilterableFields() []string
+	GetSortableFields() []string
+	GetTableFields() []string
+	GetFormFields() []string
+	GetRequiredFields() []string
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -448,4 +455,25 @@ func (r *DefaultResource) GetField(name string) *Field {
 // GetSearchable returns a list of searchable field names
 func (r *DefaultResource) GetSearchable() []string {
 	return r.SearchableFields
+}
+
+// Add implementations for DefaultResource
+func (r *DefaultResource) GetFilterableFields() []string {
+	return r.FilterableFields
+}
+
+func (r *DefaultResource) GetSortableFields() []string {
+	return r.SortableFields
+}
+
+func (r *DefaultResource) GetTableFields() []string {
+	return r.TableFields
+}
+
+func (r *DefaultResource) GetFormFields() []string {
+	return r.FormFields
+}
+
+func (r *DefaultResource) GetRequiredFields() []string {
+	return r.RequiredFields
 }

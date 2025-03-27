@@ -7,8 +7,152 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
+
+// OptionsMockResource implements Resource interface for options testing
+type OptionsMockResource struct {
+	mock.Mock
+}
+
+func (m *OptionsMockResource) GetName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *OptionsMockResource) GetLabel() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *OptionsMockResource) GetIcon() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *OptionsMockResource) GetModel() interface{} {
+	args := m.Called()
+	return args.Get(0)
+}
+
+func (m *OptionsMockResource) GetFields() []resource.Field {
+	args := m.Called()
+	return args.Get(0).([]resource.Field)
+}
+
+func (m *OptionsMockResource) GetOperations() []resource.Operation {
+	args := m.Called()
+	return args.Get(0).([]resource.Operation)
+}
+
+func (m *OptionsMockResource) HasOperation(op resource.Operation) bool {
+	args := m.Called(op)
+	return args.Bool(0)
+}
+
+func (m *OptionsMockResource) GetDefaultSort() *resource.Sort {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.Sort)
+}
+
+func (m *OptionsMockResource) GetFilters() []resource.Filter {
+	args := m.Called()
+	return args.Get(0).([]resource.Filter)
+}
+
+func (m *OptionsMockResource) GetMiddlewares() []interface{} {
+	args := m.Called()
+	return args.Get(0).([]interface{})
+}
+
+func (m *OptionsMockResource) GetRelations() []resource.Relation {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []resource.Relation{}
+	}
+	return args.Get(0).([]resource.Relation)
+}
+
+func (m *OptionsMockResource) HasRelation(name string) bool {
+	args := m.Called(name)
+	return args.Bool(0)
+}
+
+func (m *OptionsMockResource) GetRelation(name string) *resource.Relation {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	relation := args.Get(0).(resource.Relation)
+	return &relation
+}
+
+func (m *OptionsMockResource) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *OptionsMockResource) GetField(name string) *resource.Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	field := args.Get(0).(resource.Field)
+	return &field
+}
+
+func (m *OptionsMockResource) GetSearchable() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// Add new methods for field lists
+func (m *OptionsMockResource) GetFilterableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *OptionsMockResource) GetSortableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *OptionsMockResource) GetRequiredFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *OptionsMockResource) GetTableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *OptionsMockResource) GetFormFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
 
 func TestGenerateOptionsHandler(t *testing.T) {
 	// Setup
@@ -16,7 +160,7 @@ func TestGenerateOptionsHandler(t *testing.T) {
 	r := gin.New()
 
 	// Create a mock resource
-	mockResource := new(MockResource)
+	mockResource := new(OptionsMockResource)
 
 	// Setup expectations
 	mockResource.On("GetName").Return("test_resource")
@@ -37,6 +181,11 @@ func TestGenerateOptionsHandler(t *testing.T) {
 	mockResource.On("GetRelations").Return([]resource.Relation{})
 	mockResource.On("GetIDFieldName").Return("ID")
 	mockResource.On("GetSearchable").Return([]string{"name"})
+	mockResource.On("GetFilterableFields").Return([]string{"id", "name"})
+	mockResource.On("GetSortableFields").Return([]string{"id", "name"})
+	mockResource.On("GetRequiredFields").Return([]string{"name"})
+	mockResource.On("GetTableFields").Return([]string{"id", "name", "description"})
+	mockResource.On("GetFormFields").Return([]string{"name", "description"})
 
 	// Register the options handler
 	r.OPTIONS("/test_resource", GenerateOptionsHandler(mockResource))
@@ -53,6 +202,15 @@ func TestGenerateOptionsHandler(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "\"name\":\"test_resource\"")
 	assert.Contains(t, w.Body.String(), "\"label\":\"Test Resource\"")
 	assert.Contains(t, w.Body.String(), "\"icon\":\"test-icon\"")
+
+	// Verify lists section
+	assert.Contains(t, w.Body.String(), "\"lists\":{")
+	assert.Contains(t, w.Body.String(), "\"filterable\":[\"id\",\"name\"]")
+	assert.Contains(t, w.Body.String(), "\"searchable\":[\"name\"]")
+	assert.Contains(t, w.Body.String(), "\"sortable\":[\"id\",\"name\"]")
+	assert.Contains(t, w.Body.String(), "\"required\":[\"name\"]")
+	assert.Contains(t, w.Body.String(), "\"table\":[\"id\",\"name\",\"description\"]")
+	assert.Contains(t, w.Body.String(), "\"form\":[\"name\",\"description\"]")
 
 	// Get the ETag from the response
 	etag := w.Header().Get("ETag")
@@ -87,7 +245,7 @@ func TestRegisterOptionsEndpoint(t *testing.T) {
 	apiGroup := r.Group("/api")
 
 	// Create a mock resource
-	mockResource := new(MockResource)
+	mockResource := new(OptionsMockResource)
 
 	// Setup expectations
 	mockResource.On("GetName").Return("test_resource")
@@ -105,6 +263,11 @@ func TestRegisterOptionsEndpoint(t *testing.T) {
 	mockResource.On("GetRelations").Return([]resource.Relation{})
 	mockResource.On("GetIDFieldName").Return("ID")
 	mockResource.On("GetSearchable").Return([]string{})
+	mockResource.On("GetFilterableFields").Return([]string{"id"})
+	mockResource.On("GetSortableFields").Return([]string{"id"})
+	mockResource.On("GetRequiredFields").Return([]string{})
+	mockResource.On("GetTableFields").Return([]string{"id"})
+	mockResource.On("GetFormFields").Return([]string{"id"})
 
 	// Register the options endpoint
 	RegisterOptionsEndpoint(apiGroup, mockResource)
@@ -119,6 +282,7 @@ func TestRegisterOptionsEndpoint(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "\"name\":\"test_resource\"")
+	assert.Contains(t, w.Body.String(), "\"lists\":{")
 
 	// Verify all expectations were met
 	mockResource.AssertExpectations(t)
@@ -131,8 +295,8 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	apiGroup := r.Group("/api")
 
 	// Create mock resources
-	userResource := new(MockResource)
-	postResource := new(MockResource)
+	userResource := new(OptionsMockResource)
+	postResource := new(OptionsMockResource)
 
 	// Setup expectations for user resource
 	userResource.On("GetName").Return("users")
@@ -154,6 +318,11 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	userResource.On("GetRelations").Return([]resource.Relation{})
 	userResource.On("GetIDFieldName").Return("ID")
 	userResource.On("GetSearchable").Return([]string{"name"})
+	userResource.On("GetFilterableFields").Return([]string{"id", "name"})
+	userResource.On("GetSortableFields").Return([]string{"id", "name"})
+	userResource.On("GetRequiredFields").Return([]string{"name"})
+	userResource.On("GetTableFields").Return([]string{"id", "name"})
+	userResource.On("GetFormFields").Return([]string{"name"})
 
 	// Setup expectations for post resource
 	postResource.On("GetName").Return("posts")
@@ -174,6 +343,11 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	postResource.On("GetRelations").Return([]resource.Relation{})
 	postResource.On("GetIDFieldName").Return("ID")
 	postResource.On("GetSearchable").Return([]string{"title", "content"})
+	postResource.On("GetFilterableFields").Return([]string{"id", "title"})
+	postResource.On("GetSortableFields").Return([]string{"id", "title", "content"})
+	postResource.On("GetRequiredFields").Return([]string{"title"})
+	postResource.On("GetTableFields").Return([]string{"id", "title"})
+	postResource.On("GetFormFields").Return([]string{"title", "content"})
 
 	// Register options endpoints for both resources
 	RegisterOptionsEndpoint(apiGroup, userResource)
@@ -189,6 +363,7 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	assert.Contains(t, w1.Body.String(), "\"name\":\"users\"")
 	assert.Contains(t, w1.Body.String(), "\"label\":\"Users\"")
 	assert.Contains(t, w1.Body.String(), "\"icon\":\"user\"")
+	assert.Contains(t, w1.Body.String(), "\"lists\":{")
 	assert.Contains(t, w1.Body.String(), "\"searchable\":[\"name\"]")
 
 	// Test OPTIONS for posts resource
@@ -200,6 +375,7 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w2.Code)
 	assert.Contains(t, w2.Body.String(), "\"name\":\"posts\"")
 	assert.Contains(t, w2.Body.String(), "\"label\":\"Blog Posts\"")
+	assert.Contains(t, w2.Body.String(), "\"lists\":{")
 	assert.Contains(t, w2.Body.String(), "\"searchable\":[\"title\",\"content\"]")
 
 	// Verify all expectations were met

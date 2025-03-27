@@ -103,6 +103,46 @@ func (m *MetadataMockResource) GetSearchable() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MetadataMockResource) GetFilterableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MetadataMockResource) GetSortableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MetadataMockResource) GetRequiredFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MetadataMockResource) GetTableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MetadataMockResource) GetFormFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 func TestGenerateResourceMetadata(t *testing.T) {
 	// Create a sample resource
 	fields := []Field{

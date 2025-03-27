@@ -41,6 +41,21 @@ func (r MockResource) GetField(name string) *resource.Field {
 func (r MockResource) GetSearchable() []string {
 	return []string{"name", "email"}
 }
+func (r MockResource) GetFilterableFields() []string {
+	return []string{"id", "name", "email"}
+}
+func (r MockResource) GetSortableFields() []string {
+	return []string{"id", "name", "email"}
+}
+func (r MockResource) GetRequiredFields() []string {
+	return r.requiredFields
+}
+func (r MockResource) GetTableFields() []string {
+	return []string{"id", "name", "email"}
+}
+func (r MockResource) GetFormFields() []string {
+	return []string{"name", "email"}
+}
 func (r MockResource) HasOperation(op resource.Operation) bool {
 	for _, o := range r.ops {
 		if o == op {
@@ -51,9 +66,6 @@ func (r MockResource) HasOperation(op resource.Operation) bool {
 }
 func (r MockResource) GetOptions() resource.Options {
 	return resource.Options{}
-}
-func (r MockResource) GetRequiredFields() []string {
-	return r.requiredFields
 }
 
 func TestDefaultSwaggerInfo(t *testing.T) {

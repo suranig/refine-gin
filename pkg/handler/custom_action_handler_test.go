@@ -209,6 +209,46 @@ func (m *MockResource) GetSearchable() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MockResource) GetFilterableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetSortableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetRequiredFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetTableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetFormFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 func TestRegisterResourceForRefineWithRelations(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

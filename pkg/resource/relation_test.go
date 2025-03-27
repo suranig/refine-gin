@@ -112,6 +112,51 @@ func (m *MockResource) GetSearchable() []string {
 	return args.Get(0).([]string)
 }
 
+// GetFilterableFields returns filterable field names
+func (m *MockResource) GetFilterableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// GetSortableFields returns sortable field names
+func (m *MockResource) GetSortableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// GetRequiredFields returns required field names
+func (m *MockResource) GetRequiredFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// GetTableFields returns table field names
+func (m *MockResource) GetTableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// GetFormFields returns form field names
+func (m *MockResource) GetFormFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 // TestModels for relation tests
 type User struct {
 	ID      string   `json:"id" gorm:"primaryKey"`

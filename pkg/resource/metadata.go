@@ -31,6 +31,13 @@ type ResourceMetadata struct {
 
 	// ID field name
 	IDFieldName string `json:"idFieldName,omitempty"`
+
+	// Additional field lists for UI
+	FilterableFields []string `json:"filterableFields,omitempty"`
+	SortableFields   []string `json:"sortableFields,omitempty"`
+	TableFields      []string `json:"tableFields,omitempty"`
+	FormFields       []string `json:"formFields,omitempty"`
+	RequiredFields   []string `json:"requiredFields,omitempty"`
 }
 
 // FieldMetadata represents metadata for a resource field
@@ -129,14 +136,19 @@ type RelationMetadata struct {
 // GenerateResourceMetadata generates resource metadata from a resource
 func GenerateResourceMetadata(res Resource) ResourceMetadata {
 	metadata := ResourceMetadata{
-		Name:        res.GetName(),
-		Label:       res.GetLabel(),
-		Icon:        res.GetIcon(),
-		Operations:  res.GetOperations(),
-		IDFieldName: res.GetIDFieldName(),
-		DefaultSort: res.GetDefaultSort(),
-		Filters:     res.GetFilters(),
-		Searchable:  res.GetSearchable(),
+		Name:             res.GetName(),
+		Label:            res.GetLabel(),
+		Icon:             res.GetIcon(),
+		Operations:       res.GetOperations(),
+		IDFieldName:      res.GetIDFieldName(),
+		DefaultSort:      res.GetDefaultSort(),
+		Filters:          res.GetFilters(),
+		Searchable:       res.GetSearchable(),
+		FilterableFields: res.GetFilterableFields(),
+		SortableFields:   res.GetSortableFields(),
+		TableFields:      res.GetTableFields(),
+		FormFields:       res.GetFormFields(),
+		RequiredFields:   res.GetRequiredFields(),
 	}
 
 	// Generate field metadata

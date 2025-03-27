@@ -533,6 +533,112 @@ ETag generation and cache control settings can be customized through the options
 
 This caching mechanism is fully documented in the Swagger UI to help API consumers implement efficient client-side caching.
 
+## Relations
+
+The library provides comprehensive support for resource relations:
+
+### Supported Relation Types
+- `one-to-one` - For single related resource (e.g., User -> Profile)
+- `one-to-many` - For collections of related resources (e.g., User -> Posts)
+- `many-to-one` - For reverse one-to-many relations (e.g., Post -> Author)
+- `many-to-many` - For many-to-many relations through pivot tables
+
+### Defining Relations
+
+Relations can be defined in two ways:
+
+1. Using struct tags:
+```go
+type User struct {
+    ID      string   `json:"id" gorm:"primaryKey"`
+    Posts   []Post   `relation:"resource=posts;type=one-to-many;field=author_id;reference=id;include=false"`
+    Profile *Profile `relation:"resource=profiles;type=one-to-one;field=user_id;reference=id;include=true"`
+}
+```
+
+2. Using resource configuration:
+```go
+userResource := resource.NewResource(resource.ResourceConfig{
+    Name: "users",
+    Model: User{},
+    Relations: []resource.Relation{
+        {
+            Name:             "posts",
+            Type:            resource.RelationTypeOneToMany,
+            Resource:        "posts",
+            Field:           "author_id",
+            ReferenceField:  "id",
+            IncludeByDefault: false,
+        },
+        {
+            Name:             "profile",
+            Type:            resource.RelationTypeOneToOne,
+            Resource:        "profiles",
+            Field:           "user_id",
+            ReferenceField:  "id",
+            IncludeByDefault: true,
+        },
+    },
+})
+```
+
+### Relation Features
+
+1. **Automatic Loading**:
+   - Use `?include=posts,profile` to load specific relations
+   - Configure `IncludeByDefault` for automatic loading
+   - Efficient preloading through GORM
+
+2. **Relation Actions**:
+   ```go
+   // Register resource with relation actions
+   handler.RegisterResourceForRefineWithRelations(
+       router, 
+       userResource, 
+       userRepo, 
+       "id",
+       []string{"posts", "profile"},
+   )
+   ```
+   
+   This generates endpoints for:
+   - `POST /users/:id/actions/attach-posts` - Connect posts to user
+   - `POST /users/:id/actions/detach-posts` - Disconnect posts from user
+   - `GET /users/:id/actions/list-posts` - List related posts
+
+3. **Validation**:
+   - Required relations validation
+   - Min/max items for to-many relations
+   - Foreign key validation
+   - Cascade delete/update support
+
+4. **Advanced Configuration**:
+   ```go
+   {
+       Name:             "groups",
+       Type:            resource.RelationTypeManyToMany,
+       Resource:        "groups",
+       PivotTable:      "user_groups",
+       PivotFields:     map[string]string{"user_id": "id", "group_id": "id"},
+       Required:        true,
+       MinItems:        1,
+       MaxItems:        5,
+       Cascade:         true,
+       OnDelete:        "CASCADE",
+       OnUpdate:        "CASCADE",
+   }
+   ```
+
+### Performance Optimization
+
+Relations are loaded efficiently using GORM's preloading mechanism. You can control loading behavior through:
+
+1. Query parameters: `?include=relation1,relation2`
+2. Default includes: `IncludeByDefault: true`
+3. Eager loading configuration in repository layer
+
+The system automatically optimizes queries to prevent N+1 problems and unnecessary data loading.
+
 ## Recent Updates
 
 ### Version 0.4.0
@@ -614,3 +720,53 @@ HTTP/1.1 304 Not Modified
 ```
 
 This caching mechanism is fully documented in the Swagger UI to help API consumers implement efficient client-side caching.
+
+## Resource Interface
+
+The `Resource` interface defines the contract for all resources in the application. Each resource must implement the following methods:
+
+### Core Methods
+- `GetName() string` - Returns the resource name
+- `GetLabel() string` - Returns the display label for the resource
+- `GetIcon() string` - Returns the icon name for the resource
+- `GetModel() interface{}` - Returns the underlying data model
+- `GetIDFieldName() string` - Returns the name of the ID field
+
+### Field Methods
+- `GetFields() []Field` - Returns all fields defined for the resource
+- `GetField(name string) *Field` - Returns a specific field by name
+- `GetSearchable() []string` - Returns fields that can be searched
+- `GetFilterableFields() []string` - Returns fields that can be filtered
+- `GetSortableFields() []string` - Returns fields that can be sorted
+- `GetRequiredFields() []string` - Returns fields that are required
+- `GetTableFields() []string` - Returns fields to display in table view
+- `GetFormFields() []string` - Returns fields to display in form view
+
+### Operation Methods
+- `GetOperations() []Operation` - Returns all supported operations
+- `HasOperation(op Operation) bool` - Checks if an operation is supported
+
+### Relation Methods
+- `GetRelations() []Relation` - Returns all defined relations
+- `HasRelation(name string) bool` - Checks if a relation exists
+- `GetRelation(name string) *Relation` - Returns a specific relation
+
+### Configuration Methods
+- `GetDefaultSort() *Sort` - Returns default sorting configuration
+- `GetFilters() []Filter` - Returns predefined filters
+- `GetMiddlewares() []interface{}` - Returns middleware configurations
+
+## Recent Changes
+
+### 2024-03-XX - Field List Methods Enhancement
+- Added comprehensive field list methods to the Resource interface
+- Implemented consistent mock implementations across test files
+- Improved test coverage for field-related functionality
+- Standardized method behavior for nil value handling
+
+### 2024-03-XX - Relations Support
+- Added comprehensive support for resource relations
+- Implemented relation actions (attach, detach, list)
+- Added relation validation and configuration options
+- Optimized relation loading with GORM preloading
+- Added documentation for relation features and usage
