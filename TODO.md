@@ -110,6 +110,34 @@
 - [x] Implement form builder (already supported via Form configuration)
 - [ ] Add dashboard builder
 
+### 9. Advanced JSON Handling
+- [ ] Add support for complex nested JSON structures
+  ```go
+  // Example from domain.go
+  type DomainConfig struct {
+      Email EmailConfig `json:"email,omitempty"`
+      OAuth OAuthConfig `json:"oauth,omitempty"`
+      PushNotifications PushConfig `json:"push_notifications,omitempty"`
+      // ...
+  }
+  ```
+- [ ] Implement JSON path querying for nested fields
+  ```go
+  // Allow filtering by JSON paths
+  GET /domains?config.oauth.google_client_id=xyz
+  ```
+- [ ] Add JSON schema validation for complex config objects
+- [ ] Create UI components for editing nested JSON structures
+  ```tsx
+  <JsonConfigEditor 
+      path="config.oauth" 
+      schema={oauthSchema} 
+      defaultExpanded={true} 
+  />
+  ```
+- [ ] Support JSON field indexing for efficient querying
+- [ ] Add custom operators for JSON field filtering (contains, has_key, etc.)
+
 ## Technical Debt
 
 ### 1. Code Quality
