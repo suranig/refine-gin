@@ -68,6 +68,7 @@ release-patch:
 	git commit -m "Bump version to $$NEW_VERSION"; \
 	git tag -a "v$$NEW_VERSION" -m "Version $$NEW_VERSION"; \
 	echo "Version bumped to $$NEW_VERSION"
+	git push origin --tags
 
 release-minor:
 	@echo "Releasing minor version..."
@@ -78,6 +79,7 @@ release-minor:
 	git commit -m "Bump version to $$NEW_VERSION"; \
 	git tag -a "v$$NEW_VERSION" -m "Version $$NEW_VERSION"; \
 	echo "Version bumped to $$NEW_VERSION"
+	git push origin --tags
 
 release-major:
 	@echo "Releasing major version..."
@@ -88,3 +90,4 @@ release-major:
 	git commit -m "Bump version to $$NEW_VERSION"; \
 	git tag -a "v$$NEW_VERSION" -m "Version $$NEW_VERSION"; \
 	echo "Version bumped to $$NEW_VERSION" 
+	git push origin --tags
