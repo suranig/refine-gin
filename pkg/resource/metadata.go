@@ -68,6 +68,9 @@ type FieldMetadata struct {
 
 	// Field validators
 	Validators []ValidatorMetadata `json:"validators,omitempty"`
+
+	// JSON configuration (for object/jsonb fields)
+	Json *JsonConfigMetadata `json:"json,omitempty"`
 }
 
 // ValidatorMetadata represents metadata for a field validator
@@ -131,6 +134,63 @@ type RelationMetadata struct {
 
 	// On update behavior
 	OnUpdate string `json:"onUpdate,omitempty"`
+}
+
+// JsonConfigMetadata represents metadata for JSON fields
+type JsonConfigMetadata struct {
+	// Schema for JSON field validation and UI
+	Schema map[string]interface{} `json:"schema,omitempty"`
+
+	// Properties defines nested fields in the JSON structure
+	Properties []JsonPropertyMetadata `json:"properties,omitempty"`
+
+	// Default expanded state in UI
+	DefaultExpanded bool `json:"defaultExpanded,omitempty"`
+
+	// JSON path prefix for filtering nested fields
+	PathPrefix string `json:"pathPrefix,omitempty"`
+
+	// Editor type (json, form, tree)
+	EditorType string `json:"editorType,omitempty"`
+}
+
+// JsonPropertyMetadata represents metadata for a JSON property
+type JsonPropertyMetadata struct {
+	// Property path (e.g. "config.oauth.client_id")
+	Path string `json:"path,omitempty"`
+
+	// Property label for display
+	Label string `json:"label,omitempty"`
+
+	// Property type (string, number, boolean, object, array)
+	Type string `json:"type,omitempty"`
+
+	// Additional validation for the property
+	Validation *ValidationMetadata `json:"validation,omitempty"`
+
+	// For object types, nested properties
+	Properties []JsonPropertyMetadata `json:"properties,omitempty"`
+
+	// UI configuration
+	Form *FormConfigMetadata `json:"form,omitempty"`
+}
+
+// ValidationMetadata represents metadata for validation rules
+type ValidationMetadata struct {
+	Required  bool    `json:"required,omitempty"`
+	Min       float64 `json:"min,omitempty"`
+	Max       float64 `json:"max,omitempty"`
+	MinLength int     `json:"minLength,omitempty"`
+	MaxLength int     `json:"maxLength,omitempty"`
+	Pattern   string  `json:"pattern,omitempty"`
+	Message   string  `json:"message,omitempty"`
+}
+
+// FormConfigMetadata represents metadata for form configuration
+type FormConfigMetadata struct {
+	Placeholder string `json:"placeholder,omitempty"`
+	Help        string `json:"help,omitempty"`
+	Tooltip     string `json:"tooltip,omitempty"`
 }
 
 // GenerateResourceMetadata generates resource metadata from a resource
@@ -198,6 +258,11 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 		// Add validators metadata
 		if len(field.Validators) > 0 {
 			fieldMeta.Validators = GenerateValidatorsMetadata(field.Validators)
+		}
+
+		// Add JSON metadata if field is a JSON type
+		if field.Json != nil {
+			fieldMeta.Json = GenerateJsonConfigMetadata(field.Json)
 		}
 
 		result = append(result, fieldMeta)
@@ -281,4 +346,71 @@ func GenerateRelationsMetadata(relations []Relation) []RelationMetadata {
 	}
 
 	return result
+}
+
+// GenerateJsonConfigMetadata generates metadata for JSON configuration
+func GenerateJsonConfigMetadata(config *JsonConfig) *JsonConfigMetadata {
+	if config == nil {
+		return nil
+	}
+
+	meta := &JsonConfigMetadata{
+		Schema:          config.Schema,
+		DefaultExpanded: config.DefaultExpanded,
+		PathPrefix:      config.PathPrefix,
+		EditorType:      config.EditorType,
+	}
+
+	// Generate properties metadata
+	if len(config.Properties) > 0 {
+		meta.Properties = make([]JsonPropertyMetadata, 0, len(config.Properties))
+
+		for _, prop := range config.Properties {
+			meta.Properties = append(meta.Properties, GenerateJsonPropertyMetadata(prop))
+		}
+	}
+
+	return meta
+}
+
+// GenerateJsonPropertyMetadata generates metadata for a JSON property
+func GenerateJsonPropertyMetadata(prop JsonProperty) JsonPropertyMetadata {
+	propMeta := JsonPropertyMetadata{
+		Path:  prop.Path,
+		Label: prop.Label,
+		Type:  prop.Type,
+	}
+
+	// Add validation metadata if present
+	if prop.Validation != nil {
+		propMeta.Validation = &ValidationMetadata{
+			Required:  prop.Validation.Required,
+			Min:       prop.Validation.Min,
+			Max:       prop.Validation.Max,
+			MinLength: prop.Validation.MinLength,
+			MaxLength: prop.Validation.MaxLength,
+			Pattern:   prop.Validation.Pattern,
+			Message:   prop.Validation.Message,
+		}
+	}
+
+	// Add form metadata if present
+	if prop.Form != nil {
+		propMeta.Form = &FormConfigMetadata{
+			Placeholder: prop.Form.Placeholder,
+			Help:        prop.Form.Help,
+			Tooltip:     prop.Form.Tooltip,
+		}
+	}
+
+	// Generate nested properties metadata recursively
+	if len(prop.Properties) > 0 {
+		propMeta.Properties = make([]JsonPropertyMetadata, 0, len(prop.Properties))
+
+		for _, nestedProp := range prop.Properties {
+			propMeta.Properties = append(propMeta.Properties, GenerateJsonPropertyMetadata(nestedProp))
+		}
+	}
+
+	return propMeta
 }
