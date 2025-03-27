@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -446,4 +447,212 @@ func TestGenerateRelationsMetadata(t *testing.T) {
 	assert.Equal(t, map[string]string{"post_id": "id", "tag_id": "id"}, metadata[2].PivotFields)
 	assert.Equal(t, "name", metadata[2].DisplayField)
 	assert.Equal(t, "id", metadata[2].ValueField)
+}
+
+func TestGenerateFieldsMetadataWithJson(t *testing.T) {
+	// Create a field with JSON configuration
+	fields := []Field{
+		{
+			Name: "config",
+			Type: "json",
+			Json: &JsonConfig{
+				DefaultExpanded: true,
+				EditorType:      "form",
+				Properties: []JsonProperty{
+					{
+						Path:  "email",
+						Label: "Email Configuration",
+						Type:  "object",
+						Properties: []JsonProperty{
+							{
+								Path:  "email.host",
+								Label: "SMTP Host",
+								Type:  "string",
+								Validation: &Validation{
+									Required: true,
+								},
+								Form: &FormConfig{
+									Placeholder: "smtp.example.com",
+									Help:        "Enter your SMTP server host",
+								},
+							},
+							{
+								Path:  "email.port",
+								Label: "SMTP Port",
+								Type:  "number",
+								Validation: &Validation{
+									Required: true,
+									Min:      0,
+									Max:      65535,
+								},
+							},
+						},
+					},
+					{
+						Path:  "oauth",
+						Label: "OAuth Settings",
+						Type:  "object",
+						Properties: []JsonProperty{
+							{
+								Path:  "oauth.google_client_id",
+								Label: "Google Client ID",
+								Type:  "string",
+							},
+							{
+								Path:  "oauth.google_client_secret",
+								Label: "Google Client Secret",
+								Type:  "string",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Generate metadata for the field
+	metadata := GenerateFieldsMetadata(fields)
+
+	// Verify JSON metadata
+	assert.Len(t, metadata, 1)
+	assert.Equal(t, "config", metadata[0].Name)
+	assert.Equal(t, "json", metadata[0].Type)
+
+	// Check JSON configuration
+	assert.NotNil(t, metadata[0].Json)
+	assert.True(t, metadata[0].Json.DefaultExpanded)
+	assert.Equal(t, "form", metadata[0].Json.EditorType)
+
+	// Check properties
+	assert.Len(t, metadata[0].Json.Properties, 2)
+
+	// Check email configuration
+	emailProperty := metadata[0].Json.Properties[0]
+	assert.Equal(t, "email", emailProperty.Path)
+	assert.Equal(t, "Email Configuration", emailProperty.Label)
+	assert.Equal(t, "object", emailProperty.Type)
+	assert.Len(t, emailProperty.Properties, 2)
+
+	// Check nested email.host property
+	hostProperty := emailProperty.Properties[0]
+	assert.Equal(t, "email.host", hostProperty.Path)
+	assert.Equal(t, "SMTP Host", hostProperty.Label)
+	assert.Equal(t, "string", hostProperty.Type)
+	assert.NotNil(t, hostProperty.Validation)
+	assert.True(t, hostProperty.Validation.Required)
+	assert.NotNil(t, hostProperty.Form)
+	assert.Equal(t, "smtp.example.com", hostProperty.Form.Placeholder)
+	assert.Equal(t, "Enter your SMTP server host", hostProperty.Form.Help)
+
+	// Check nested email.port property
+	portProperty := emailProperty.Properties[1]
+	assert.Equal(t, "email.port", portProperty.Path)
+	assert.Equal(t, "SMTP Port", portProperty.Label)
+	assert.Equal(t, "number", portProperty.Type)
+	assert.NotNil(t, portProperty.Validation)
+	assert.True(t, portProperty.Validation.Required)
+	assert.Equal(t, float64(0), portProperty.Validation.Min)
+	assert.Equal(t, float64(65535), portProperty.Validation.Max)
+
+	// Check OAuth configuration
+	oauthProperty := metadata[0].Json.Properties[1]
+	assert.Equal(t, "oauth", oauthProperty.Path)
+	assert.Equal(t, "OAuth Settings", oauthProperty.Label)
+	assert.Equal(t, "object", oauthProperty.Type)
+	assert.Len(t, oauthProperty.Properties, 2)
+
+	// Check Google OAuth properties
+	googleClientIdProperty := oauthProperty.Properties[0]
+	assert.Equal(t, "oauth.google_client_id", googleClientIdProperty.Path)
+	assert.Equal(t, "Google Client ID", googleClientIdProperty.Label)
+	assert.Equal(t, "string", googleClientIdProperty.Type)
+
+	googleClientSecretProperty := oauthProperty.Properties[1]
+	assert.Equal(t, "oauth.google_client_secret", googleClientSecretProperty.Path)
+	assert.Equal(t, "Google Client Secret", googleClientSecretProperty.Label)
+	assert.Equal(t, "string", googleClientSecretProperty.Type)
+}
+
+// Add test for automatic extraction of JSON properties from struct
+func TestExtractJsonSchemaAndProperties(t *testing.T) {
+	// Define a test struct similar to domain.go
+	type EmailConfig struct {
+		Host     string `json:"host,omitempty"`
+		Port     int    `json:"port,omitempty"`
+		Username string `json:"username,omitempty"`
+		Password string `json:"password,omitempty"`
+	}
+
+	type OAuthConfig struct {
+		GoogleClientID     string `json:"google_client_id,omitempty"`
+		GoogleClientSecret string `json:"google_client_secret,omitempty"`
+		GoogleRedirectURL  string `json:"google_redirect_url,omitempty"`
+	}
+
+	type DomainConfig struct {
+		Email     EmailConfig `json:"email,omitempty"`
+		OAuth     OAuthConfig `json:"oauth,omitempty"`
+		Active    bool        `json:"active,omitempty"`
+		CreatedAt string      `json:"created_at,omitempty"`
+	}
+
+	type Domain struct {
+		ID     uint         `json:"id"`
+		Name   string       `json:"name"`
+		Config DomainConfig `json:"config"`
+	}
+
+	// Create a model field for testing
+	testDomain := Domain{}
+	modelType := reflect.TypeOf(testDomain)
+	configField := modelType.Field(2) // Config field is the third field
+
+	// Test isJsonField function
+	assert.True(t, isJsonField(configField.Type))
+
+	// Extract JSON schema and properties
+	schema, properties := extractJsonSchemaAndProperties(configField.Type)
+
+	// Verify schema
+	assert.NotNil(t, schema)
+	assert.Equal(t, "object", schema["type"])
+	assert.NotNil(t, schema["properties"])
+
+	// Verify properties
+	assert.NotEmpty(t, properties)
+
+	// Get all property paths for easier testing
+	var propertyPaths []string
+	for _, prop := range properties {
+		propertyPaths = append(propertyPaths, prop.Path)
+	}
+
+	// Check for expected top-level properties
+	assert.Contains(t, propertyPaths, "email")
+	assert.Contains(t, propertyPaths, "oauth")
+	assert.Contains(t, propertyPaths, "active")
+	assert.Contains(t, propertyPaths, "created_at")
+
+	// Check for nested properties
+	assert.Contains(t, propertyPaths, "email.host")
+	assert.Contains(t, propertyPaths, "email.port")
+	assert.Contains(t, propertyPaths, "email.username")
+	assert.Contains(t, propertyPaths, "email.password")
+
+	assert.Contains(t, propertyPaths, "oauth.google_client_id")
+	assert.Contains(t, propertyPaths, "oauth.google_client_secret")
+	assert.Contains(t, propertyPaths, "oauth.google_redirect_url")
+
+	// Check types
+	for _, prop := range properties {
+		if prop.Path == "active" {
+			assert.Equal(t, "boolean", prop.Type)
+		} else if prop.Path == "email.port" {
+			assert.Equal(t, "number", prop.Type)
+		} else if prop.Path == "email" || prop.Path == "oauth" {
+			assert.Equal(t, "object", prop.Type)
+		} else {
+			assert.Equal(t, "string", prop.Type)
+		}
+	}
 }
