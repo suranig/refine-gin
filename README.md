@@ -156,6 +156,145 @@ Supported relationship types:
 - `many-to-one`
 - `many-to-many`
 
+### JSON Fields and Nested Structures
+
+Refine-Gin provides full support for working with JSON fields containing complex nested structures. This is particularly useful for configuration settings, metadata, user preferences, and other structured data that doesn't require separate tables.
+
+#### JSON Field Definition
+
+You can define JSON fields in two ways:
+
+1. **Using struct with JSON configuration:**
+
+```go
+// Domain model with JSON configuration field
+type Domain struct {
+    ID        uint      `json:"id" gorm:"primaryKey"`
+    Name      string    `json:"name" gorm:"uniqueIndex"`
+    Config    Config    `json:"config" gorm:"type:jsonb"` // JSON field stored in database
+}
+
+// Nested configuration structure
+type Config struct {
+    Email     EmailConfig  `json:"email,omitempty"`
+    OAuth     OAuthConfig  `json:"oauth,omitempty"`
+    Features  FeatureFlags `json:"features,omitempty"`
+    Active    bool         `json:"active,omitempty"`
+}
+
+// Email settings structure
+type EmailConfig struct {
+    Host     string `json:"host,omitempty" validate:"required"`
+    Port     int    `json:"port,omitempty" validate:"min=1,max=65535"`
+    Username string `json:"username,omitempty"`
+    Password string `json:"password,omitempty"`
+}
+```
+
+2. **Using explicit JSON configuration:**
+
+```go
+domainResource := resource.NewResource(resource.ResourceConfig{
+    Name:  "domains",
+    Model: Domain{},
+    Fields: []resource.Field{
+        {
+            Name:  "config",
+            Type:  "json",
+            Label: "Configuration",
+            Json: &resource.JsonConfig{
+                DefaultExpanded: true,
+                EditorType:      "form", // Available: "form", "json", "tree"
+                Properties: []resource.JsonProperty{
+                    {
+                        Path:  "email",
+                        Label: "Email Configuration",
+                        Type:  "object",
+                        Properties: []resource.JsonProperty{
+                            {
+                                Path:  "email.host",
+                                Label: "SMTP Host",
+                                Type:  "string",
+                                Validation: &resource.Validation{
+                                    Required: true,
+                                },
+                                Form: &resource.FormConfig{
+                                    Placeholder: "smtp.example.com",
+                                    Help:        "Enter your SMTP server host",
+                                },
+                            },
+                            {
+                                Path:  "email.port",
+                                Label: "SMTP Port",
+                                Type:  "number",
+                                Validation: &resource.Validation{
+                                    Required: true,
+                                    Min:      1,
+                                    Max:      65535,
+                                },
+                            }
+                        },
+                    },
+                    {
+                        Path:  "active",
+                        Label: "Active",
+                        Type:  "boolean",
+                    },
+                },
+            },
+        },
+    },
+})
+```
+
+#### Automatic JSON Field Detection
+
+Refine-Gin automatically detects JSON fields in your models by analyzing struct fields with:
+- Fields of type `json.RawMessage`
+- Map fields with string keys
+- Struct fields with JSON tags
+- Fields tagged with SQL type `jsonb` or `json`
+
+#### JSON Validation
+
+JSON fields and their nested properties support the same validation rules as regular fields:
+
+```go
+// Field-level validation
+{
+    Path:  "email.host",
+    Type:  "string",
+    Validation: &resource.Validation{
+        Required:  true,
+        MinLength: 3,
+        MaxLength: 100,
+        Pattern:   "^[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+        Message:   "Must be a valid hostname",
+    },
+}
+```
+
+#### UI Configuration for JSON Fields
+
+Each JSON property can have its own UI configuration:
+
+```go
+{
+    Path:  "email.host",
+    Label: "SMTP Host",
+    Type:  "string",
+    Form: &resource.FormConfig{
+        Placeholder: "smtp.example.com",
+        Help:        "Enter your SMTP server host",
+        Tooltip:     "The hostname of your mail server",
+    },
+}
+```
+
+#### Complete Example
+
+See a complete example in the [examples/json_fields](./examples/json_fields) directory.
+
 ### Relation Validation
 
 Refine-Gin automatically validates relations between resources during create and update operations. The validation ensures that:
