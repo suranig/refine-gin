@@ -22,13 +22,30 @@ func GenerateOptionsHandler(res resource.Resource) gin.HandlerFunc {
 			return
 		}
 
-		// Generate resource metadata
-		metadata := resource.GenerateResourceMetadata(res)
+		// Generate metadata for the resource
+		metadata := gin.H{
+			"name":        res.GetName(),
+			"label":       res.GetLabel(),
+			"icon":        res.GetIcon(),
+			"operations":  res.GetOperations(),
+			"fields":      res.GetFields(),
+			"defaultSort": res.GetDefaultSort(),
+			"relations":   res.GetRelations(),
+			"filters":     res.GetFilters(),
+			"idField":     res.GetIDFieldName(),
+			"lists": gin.H{
+				"filterable": res.GetFilterableFields(),
+				"searchable": res.GetSearchable(),
+				"sortable":   res.GetSortableFields(),
+				"required":   res.GetRequiredFields(),
+				"table":      res.GetTableFields(),
+				"form":       res.GetFormFields(),
+			},
+		}
 
 		// Set cache headers
 		utils.SetCacheHeaders(c.Writer, 300, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
 
-		// Return metadata
 		c.JSON(http.StatusOK, metadata)
 	}
 }
