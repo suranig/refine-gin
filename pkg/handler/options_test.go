@@ -382,3 +382,127 @@ func TestOptionsHandlerWithMultipleResources(t *testing.T) {
 	userResource.AssertExpectations(t)
 	postResource.AssertExpectations(t)
 }
+
+func TestOptionsHandlerWithJsonFields(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	// Create a mock resource
+	mockResource := new(OptionsMockResource)
+
+	// Setup fields with JSON configuration
+	jsonField := resource.Field{
+		Name: "config",
+		Type: "json",
+		Json: &resource.JsonConfig{
+			DefaultExpanded: true,
+			EditorType:      "form",
+			Properties: []resource.JsonProperty{
+				{
+					Path:  "email",
+					Label: "Email Configuration",
+					Type:  "object",
+					Properties: []resource.JsonProperty{
+						{
+							Path:  "email.host",
+							Label: "SMTP Host",
+							Type:  "string",
+							Validation: &resource.Validation{
+								Required: true,
+							},
+						},
+						{
+							Path:  "email.port",
+							Label: "SMTP Port",
+							Type:  "number",
+						},
+					},
+				},
+				{
+					Path:  "oauth",
+					Label: "OAuth Settings",
+					Type:  "object",
+					Properties: []resource.JsonProperty{
+						{
+							Path:  "oauth.google_client_id",
+							Label: "Google Client ID",
+							Type:  "string",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Setup expectations
+	mockResource.On("GetName").Return("domains")
+	mockResource.On("GetLabel").Return("Domains")
+	mockResource.On("GetIcon").Return("domain")
+	mockResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "int"},
+		{Name: "name", Type: "string"},
+		jsonField,
+	})
+	mockResource.On("GetOperations").Return([]resource.Operation{
+		resource.OperationCreate,
+		resource.OperationRead,
+		resource.OperationUpdate,
+		resource.OperationList,
+	})
+	mockResource.On("GetDefaultSort").Return(nil)
+	mockResource.On("GetFilters").Return([]resource.Filter{})
+	mockResource.On("GetRelations").Return([]resource.Relation{})
+	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetSearchable").Return([]string{"name"})
+	mockResource.On("GetFilterableFields").Return([]string{"id", "name"})
+	mockResource.On("GetSortableFields").Return([]string{"id", "name"})
+	mockResource.On("GetRequiredFields").Return([]string{"name"})
+	mockResource.On("GetTableFields").Return([]string{"id", "name"})
+	mockResource.On("GetFormFields").Return([]string{"name", "config"})
+
+	// Register the options handler
+	r.OPTIONS("/domains", GenerateOptionsHandler(mockResource))
+
+	// Test request
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("OPTIONS", "/domains", nil)
+	r.ServeHTTP(w, req)
+
+	// Verify response status
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Print response body for debugging
+	t.Logf("Response body: %s", w.Body.String())
+
+	// Check basic resource properties
+	assert.Contains(t, w.Body.String(), `"name":"domains"`)
+	assert.Contains(t, w.Body.String(), `"label":"Domains"`)
+
+	// Check JSON field exists
+	assert.Contains(t, w.Body.String(), `"config"`)
+	assert.Contains(t, w.Body.String(), `"type":"json"`)
+
+	// Check JSON properties
+	assert.Contains(t, w.Body.String(), `"defaultExpanded":true`)
+	assert.Contains(t, w.Body.String(), `"editorType":"form"`)
+
+	// Check nested properties
+	assert.Contains(t, w.Body.String(), `"email"`)
+	assert.Contains(t, w.Body.String(), `"Email Configuration"`)
+	assert.Contains(t, w.Body.String(), `"email.host"`)
+	assert.Contains(t, w.Body.String(), `"SMTP Host"`)
+	assert.Contains(t, w.Body.String(), `"email.port"`)
+	assert.Contains(t, w.Body.String(), `"SMTP Port"`)
+	assert.Contains(t, w.Body.String(), `"oauth"`)
+	assert.Contains(t, w.Body.String(), `"OAuth Settings"`)
+	assert.Contains(t, w.Body.String(), `"oauth.google_client_id"`)
+	assert.Contains(t, w.Body.String(), `"Google Client ID"`)
+
+	// Verify metadata format includes lists
+	assert.Contains(t, w.Body.String(), `"lists":`)
+	assert.Contains(t, w.Body.String(), `"form":["name","config"]`)
+
+	// Verify all expectations were met
+	mockResource.AssertExpectations(t)
+}

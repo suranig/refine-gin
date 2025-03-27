@@ -22,31 +22,34 @@ func GenerateOptionsHandler(res resource.Resource) gin.HandlerFunc {
 			return
 		}
 
-		// Generate metadata for the resource
-		metadata := gin.H{
-			"name":        res.GetName(),
-			"label":       res.GetLabel(),
-			"icon":        res.GetIcon(),
-			"operations":  res.GetOperations(),
-			"fields":      res.GetFields(),
-			"defaultSort": res.GetDefaultSort(),
-			"relations":   res.GetRelations(),
-			"filters":     res.GetFilters(),
-			"idField":     res.GetIDFieldName(),
+		// Generate full metadata for the resource
+		metadata := resource.GenerateResourceMetadata(res)
+
+		// Format metadata as gin.H for response
+		responseMetadata := gin.H{
+			"name":        metadata.Name,
+			"label":       metadata.Label,
+			"icon":        metadata.Icon,
+			"operations":  metadata.Operations,
+			"fields":      metadata.Fields,
+			"defaultSort": metadata.DefaultSort,
+			"relations":   metadata.Relations,
+			"filters":     metadata.Filters,
+			"idField":     metadata.IDFieldName,
 			"lists": gin.H{
-				"filterable": res.GetFilterableFields(),
-				"searchable": res.GetSearchable(),
-				"sortable":   res.GetSortableFields(),
-				"required":   res.GetRequiredFields(),
-				"table":      res.GetTableFields(),
-				"form":       res.GetFormFields(),
+				"filterable": metadata.FilterableFields,
+				"searchable": metadata.Searchable,
+				"sortable":   metadata.SortableFields,
+				"required":   metadata.RequiredFields,
+				"table":      metadata.TableFields,
+				"form":       metadata.FormFields,
 			},
 		}
 
 		// Set cache headers
 		utils.SetCacheHeaders(c.Writer, 300, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
 
-		c.JSON(http.StatusOK, metadata)
+		c.JSON(http.StatusOK, responseMetadata)
 	}
 }
 
