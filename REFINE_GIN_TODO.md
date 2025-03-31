@@ -135,8 +135,9 @@
 
 ## 10. Testy i jakość kodu
 
-- [ ] Dodać kompleksowe testy dla nowych funkcjonalności:
-  - [ ] Testy jednostkowe dla walidacji zagnieżdżonych struktur
+- [x] Dodać kompleksowe testy dla nowych funkcjonalności:
+  - [x] Testy jednostkowe dla walidacji zagnieżdżonych struktur
+  - [x] Testy dla metadanych specjalnych typów pól (File, RichText, Select, Computed)
   - [ ] Testy integracyjne dla widoków formularzy
   - [ ] Testy wydajnościowe dla złożonych struktur JSON
 
