@@ -52,6 +52,10 @@ type Resource interface {
 	GetFormFields() []string
 	GetRequiredFields() []string
 	GetEditableFields() []string
+
+	// Permissions related methods
+	GetPermissions() map[string][]string
+	HasPermission(operation string, role string) bool
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -66,7 +70,8 @@ type ResourceConfig struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
-	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+	IDFieldName string              // Nazwa pola identyfikatora (domyślnie "ID")
+	Permissions map[string][]string // Map of operations to roles with permission
 
 	// Field lists for different purposes
 	FilterableFields []string
@@ -91,7 +96,8 @@ type DefaultResource struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
-	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+	IDFieldName string              // Nazwa pola identyfikatora (domyślnie "ID")
+	Permissions map[string][]string // Map of operations to roles with permission
 
 	// Field lists for different purposes
 	FilterableFields []string
@@ -247,6 +253,7 @@ func NewResource(config ResourceConfig) Resource {
 		Middlewares: config.Middlewares,
 		Relations:   relations,
 		IDFieldName: config.IDFieldName,
+		Permissions: config.Permissions,
 
 		// Field lists
 		FilterableFields: filterableFields,
@@ -723,4 +730,28 @@ func (r *DefaultResource) GetRequiredFields() []string {
 
 func (r *DefaultResource) GetEditableFields() []string {
 	return r.EditableFields
+}
+
+func (r *DefaultResource) GetPermissions() map[string][]string {
+	return r.Permissions
+}
+
+func (r *DefaultResource) HasPermission(operation string, role string) bool {
+	if r.Permissions == nil {
+		return true // If no permissions are defined, allow access by default
+	}
+
+	roles, exists := r.Permissions[operation]
+	if !exists {
+		return true // If the operation doesn't have defined permissions, allow access
+	}
+
+	// Check if the role exists in the list of allowed roles
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+
+	return false
 }

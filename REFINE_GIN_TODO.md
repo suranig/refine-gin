@@ -71,13 +71,13 @@
 
 ## 5. System uprawnień na poziomie pól i zasobów
 
-- [ ] Dodać mapę `Permissions` do struktur `Field` i `ResourceConfig`:
-  - [ ] Klucze: operacje ("create", "read", "update", "delete")
-  - [ ] Wartości: tablice ról mających uprawnienia
+- [x] Dodać mapę `Permissions` do struktur `Field` i `ResourceConfig`:
+  - [x] Klucze: operacje ("create", "read", "update", "delete")
+  - [x] Wartości: tablice ról mających uprawnienia
 
-- [ ] Rozszerzyć metadane OPTIONS o informacje o uprawnieniach
-- [ ] Zaimplementować middleware do sprawdzania uprawnień na poziomie operacji CRUD
-- [ ] Zaimplementować filtrowanie pól w odpowiedziach na podstawie uprawnień
+- [x] Rozszerzyć metadane OPTIONS o informacje o uprawnieniach
+- [x] Zaimplementować middleware do sprawdzania uprawnień na poziomie operacji CRUD
+- [x] Zaimplementować filtrowanie pól w odpowiedziach na podstawie uprawnień
 
 ## 6. Walidacja i metadane walidacji
 

@@ -25,6 +25,53 @@ func GenerateOptionsHandler(res resource.Resource) gin.HandlerFunc {
 		// Generate full metadata for the resource
 		metadata := resource.GenerateResourceMetadata(res)
 
+		// Get user roles from context if available
+		var userRoles []string
+		userRolesValue, exists := c.Get("userRoles")
+		if exists {
+			if roles, ok := userRolesValue.([]string); ok {
+				userRoles = roles
+			}
+		}
+
+		// If user roles are available, filter fields based on permissions
+		if len(userRoles) > 0 {
+			filteredFields := make([]resource.FieldMetadata, 0, len(metadata.Fields))
+
+			// Filter field metadata based on read permissions
+			for _, field := range metadata.Fields {
+				if field.Permissions == nil {
+					filteredFields = append(filteredFields, field)
+					continue
+				}
+
+				allowedRoles, exists := field.Permissions["read"]
+				if !exists || len(allowedRoles) == 0 {
+					filteredFields = append(filteredFields, field)
+					continue
+				}
+
+				hasPermission := false
+				for _, userRole := range userRoles {
+					for _, allowedRole := range allowedRoles {
+						if userRole == allowedRole {
+							hasPermission = true
+							break
+						}
+					}
+					if hasPermission {
+						break
+					}
+				}
+
+				if hasPermission {
+					filteredFields = append(filteredFields, field)
+				}
+			}
+
+			metadata.Fields = filteredFields
+		}
+
 		// Format metadata as gin.H for response
 		responseMetadata := gin.H{
 			"name":        metadata.Name,
@@ -36,6 +83,7 @@ func GenerateOptionsHandler(res resource.Resource) gin.HandlerFunc {
 			"relations":   metadata.Relations,
 			"filters":     metadata.Filters,
 			"idField":     metadata.IDFieldName,
+			"permissions": metadata.Permissions,
 			"lists": gin.H{
 				"filterable": metadata.FilterableFields,
 				"searchable": metadata.Searchable,

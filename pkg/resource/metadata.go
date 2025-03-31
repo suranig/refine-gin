@@ -42,6 +42,9 @@ type ResourceMetadata struct {
 	TableFields      []string `json:"tableFields,omitempty"`
 	FormFields       []string `json:"formFields,omitempty"`
 	RequiredFields   []string `json:"requiredFields,omitempty"`
+
+	// Permissions at resource level (operation -> roles)
+	Permissions map[string][]string `json:"permissions,omitempty"`
 }
 
 // FieldMetadata represents metadata for a resource field
@@ -96,6 +99,9 @@ type FieldMetadata struct {
 
 	// Ant Design specific configuration
 	AntDesign *AntDesignConfigMetadata `json:"antDesign,omitempty"`
+
+	// Permissions at field level (operation -> roles)
+	Permissions map[string][]string `json:"permissions,omitempty"`
 }
 
 // ValidatorMetadata represents metadata for a field validator
@@ -482,6 +488,7 @@ func GenerateResourceMetadata(res Resource) ResourceMetadata {
 		TableFields:      res.GetTableFields(),
 		FormFields:       res.GetFormFields(),
 		RequiredFields:   res.GetRequiredFields(),
+		Permissions:      res.GetPermissions(),
 	}
 
 	// Generate field metadata
@@ -514,15 +521,16 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 		}
 
 		fieldMeta := FieldMetadata{
-			Name:       field.Name,
-			Type:       field.Type,
-			Filterable: isFilterable,
-			Sortable:   isSortable,
-			Searchable: isSearchable,
-			Required:   isRequired,
-			Unique:     isUnique,
-			ReadOnly:   field.ReadOnly,
-			Hidden:     field.Hidden,
+			Name:        field.Name,
+			Type:        field.Type,
+			Filterable:  isFilterable,
+			Sortable:    isSortable,
+			Searchable:  isSearchable,
+			Required:    isRequired,
+			Unique:      isUnique,
+			ReadOnly:    field.ReadOnly,
+			Hidden:      field.Hidden,
+			Permissions: field.Permissions,
 		}
 
 		// Dodaj label jeśli istnieje

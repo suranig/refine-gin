@@ -8,23 +8,24 @@ import (
 
 // Field represents a resource field
 type Field struct {
-	Name       string
-	Type       string
-	Label      string
-	Validation *Validation
-	Options    []Option
-	Relation   *RelationConfig
-	List       *ListConfig
-	Form       *FormConfig
-	Validators []Validator
-	Json       *JsonConfig
-	ReadOnly   bool                 // Indicates if the field is read-only (not editable)
-	Hidden     bool                 // Indicates if the field should be hidden in UI
-	File       *FileConfig          // Configuration for file/image fields
-	RichText   *RichTextConfig      // Configuration for rich text fields
-	Select     *SelectConfig        // Configuration for select fields
-	Computed   *ComputedFieldConfig // Configuration for computed fields
-	AntDesign  *AntDesignConfig     // Configuration specific to Ant Design
+	Name        string
+	Type        string
+	Label       string
+	Validation  *Validation
+	Options     []Option
+	Relation    *RelationConfig
+	List        *ListConfig
+	Form        *FormConfig
+	Validators  []Validator
+	Json        *JsonConfig
+	ReadOnly    bool                 // Indicates if the field is read-only (not editable)
+	Hidden      bool                 // Indicates if the field should be hidden in UI
+	File        *FileConfig          // Configuration for file/image fields
+	RichText    *RichTextConfig      // Configuration for rich text fields
+	Select      *SelectConfig        // Configuration for select fields
+	Computed    *ComputedFieldConfig // Configuration for computed fields
+	AntDesign   *AntDesignConfig     // Configuration specific to Ant Design
+	Permissions map[string][]string  // Map of operations to roles with permission
 }
 
 // JsonConfig defines configuration for JSON fields
