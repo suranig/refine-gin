@@ -63,7 +63,7 @@ This document outlines the tasks needed to implement owner-based resources in th
 - [x] Write owner resource tests
 - [x] Write owner repository tests
 - [x] Write handler tests
-- [ ] Create example app
+- [x] Create example app
 
 ## Implementation Notes
 
