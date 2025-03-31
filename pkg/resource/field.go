@@ -38,21 +38,47 @@ type JsonConfig struct {
 
 	// Editor type (json, form, tree)
 	EditorType string `json:"editorType,omitempty"`
+
+	// Nested indicates if the JSON structure is nested (objects within objects)
+	Nested bool `json:"nested,omitempty"`
+
+	// RenderAs defines the UI presentation style ("tabs", "form", "tree", "grid")
+	RenderAs string `json:"renderAs,omitempty"`
+
+	// TabsConfig holds configuration for rendering in tabs format
+	TabsConfig *JsonTabsConfig `json:"tabsConfig,omitempty"`
+
+	// GridConfig holds configuration for grid layout
+	GridConfig *JsonGridConfig `json:"gridConfig,omitempty"`
+
+	// ObjectLabels provides display labels for nested objects by their path
+	ObjectLabels map[string]string `json:"objectLabels,omitempty"`
 }
 
-// JsonProperty defines a property in a JSON field
+// JsonValidation defines validation rules for JSON properties
+type JsonValidation struct {
+	Required  bool    `json:"required,omitempty"`
+	Min       float64 `json:"min,omitempty"`
+	Max       float64 `json:"max,omitempty"`
+	MinLength int     `json:"minLength,omitempty"`
+	MaxLength int     `json:"maxLength,omitempty"`
+	Pattern   string  `json:"pattern,omitempty"`
+	Message   string  `json:"message,omitempty"`
+}
+
+// JsonProperty defines a property in a JSON structure
 type JsonProperty struct {
 	// Property path (e.g. "config.oauth.client_id")
-	Path string `json:"path,omitempty"`
+	Path string `json:"path"`
 
 	// Property label for display
 	Label string `json:"label,omitempty"`
 
 	// Property type (string, number, boolean, object, array)
-	Type string `json:"type,omitempty"`
+	Type string `json:"type"`
 
 	// Additional validation for the property
-	Validation *Validation `json:"validation,omitempty"`
+	Validation *JsonValidation `json:"validation,omitempty"`
 
 	// For object types, nested properties
 	Properties []JsonProperty `json:"properties,omitempty"`
@@ -222,4 +248,58 @@ type Filter struct {
 type Sort struct {
 	Field string
 	Order string
+}
+
+// JsonTabsConfig defines configuration for rendering JSON in tabs
+type JsonTabsConfig struct {
+	// Tabs collection for the JSON structure
+	Tabs []JsonTab `json:"tabs,omitempty"`
+
+	// TabPosition specifies where tabs are placed ("top", "right", "bottom", "left")
+	TabPosition string `json:"tabPosition,omitempty"`
+
+	// DefaultActiveTab specifies the key of the default active tab
+	DefaultActiveTab string `json:"defaultActiveTab,omitempty"`
+}
+
+// JsonTab defines a single tab in a tabs-based JSON editor
+type JsonTab struct {
+	// Key uniquely identifies the tab
+	Key string `json:"key"`
+
+	// Title is the display name of the tab
+	Title string `json:"title,omitempty"`
+
+	// Icon specifies an optional icon for the tab
+	Icon string `json:"icon,omitempty"`
+
+	// Fields lists the JSON property paths included in this tab
+	Fields []string `json:"fields,omitempty"`
+}
+
+// JsonGridConfig defines configuration for grid layout of JSON fields
+type JsonGridConfig struct {
+	// Columns defines the number of columns in the grid
+	Columns int `json:"columns,omitempty"`
+
+	// Gutter defines the space between grid items
+	Gutter int `json:"gutter,omitempty"`
+
+	// FieldLayouts maps field paths to their layout configuration
+	FieldLayouts map[string]*JsonFieldLayout `json:"fieldLayouts,omitempty"`
+}
+
+// JsonFieldLayout defines the grid position and span of a field
+type JsonFieldLayout struct {
+	// Column specifies the starting column (1-based)
+	Column int `json:"column,omitempty"`
+
+	// Row specifies the starting row (1-based)
+	Row int `json:"row,omitempty"`
+
+	// ColSpan specifies how many columns the field spans
+	ColSpan int `json:"colSpan,omitempty"`
+
+	// RowSpan specifies how many rows the field spans
+	RowSpan int `json:"rowSpan,omitempty"`
 }
