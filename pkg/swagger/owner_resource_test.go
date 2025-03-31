@@ -191,6 +191,10 @@ func (m *MockOwnerResource) HasPermission(operation string, role string) bool {
 	return args.Bool(0)
 }
 
+func (m *MockOwnerResource) GetFormLayout() *resource.FormLayout {
+	return nil
+}
+
 // TestRegisterOwnerResourceSwagger tests the RegisterOwnerResourceSwagger function
 func TestRegisterOwnerResourceSwagger(t *testing.T) {
 	// Create mock owner resource

@@ -316,3 +316,8 @@ func TestCountWithConstraints(t *testing.T) {
 	// Verify overall resource expectations
 	mockResource.AssertExpectations(t)
 }
+
+// GetFormLayout returns the form layout
+func (m *MockResource) GetFormLayout() *resource.FormLayout {
+	return nil
+}

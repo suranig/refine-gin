@@ -164,6 +164,11 @@ func (m *MockResourceForTest) HasPermission(operation string, role string) bool 
 	return true
 }
 
+// Implement GetFormLayout method for MockResourceForTest
+func (m *MockResourceForTest) GetFormLayout() *resource.FormLayout {
+	return nil
+}
+
 func TestAttachAndDetachActions(t *testing.T) {
 	// Test the attachment action
 	t.Run("AttachAction", func(t *testing.T) {

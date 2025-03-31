@@ -173,6 +173,15 @@ func (m *OptionsMockResource) HasPermission(operation string, role string) bool 
 	return args.Bool(0)
 }
 
+// GetFormLayout returns the form layout configuration
+func (m *OptionsMockResource) GetFormLayout() *resource.FormLayout {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.FormLayout)
+}
+
 func TestGenerateOptionsHandler(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)

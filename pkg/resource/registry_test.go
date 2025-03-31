@@ -108,6 +108,11 @@ func (r *RegistryMockResource) HasPermission(operation string, role string) bool
 	return true
 }
 
+// Implement GetFormLayout method for RegistryMockResource
+func (r *RegistryMockResource) GetFormLayout() *FormLayout {
+	return nil
+}
+
 // TestResourceRegistry tests the ResourceRegistry and GlobalResourceRegistry
 func TestResourceRegistry(t *testing.T) {
 	// Reset GlobalResourceRegistry for testing

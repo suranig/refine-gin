@@ -76,6 +76,9 @@ func (r MockResource) HasOperation(op resource.Operation) bool {
 func (r MockResource) GetOptions() resource.Options {
 	return resource.Options{}
 }
+func (m MockResource) GetFormLayout() *resource.FormLayout {
+	return nil
+}
 
 func TestDefaultSwaggerInfo(t *testing.T) {
 	info := DefaultSwaggerInfo()

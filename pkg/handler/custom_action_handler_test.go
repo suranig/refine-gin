@@ -273,6 +273,15 @@ func (m *MockResource) HasPermission(operation string, role string) bool {
 	return args.Bool(0)
 }
 
+// GetFormLayout returns the form layout configuration
+func (r *MockResource) GetFormLayout() *resource.FormLayout {
+	args := r.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.FormLayout)
+}
+
 func TestRegisterResourceForRefineWithRelations(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

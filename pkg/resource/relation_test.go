@@ -130,6 +130,11 @@ func (m *MockResource) HasPermission(operation string, role string) bool {
 	return true
 }
 
+// Implement GetFormLayout method for MockResource
+func (m *MockResource) GetFormLayout() *FormLayout {
+	return nil
+}
+
 // TestModels for relation tests
 type User struct {
 	ID      string   `json:"id" gorm:"primaryKey"`

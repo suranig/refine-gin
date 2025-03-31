@@ -408,3 +408,7 @@ func (m *MockResource) HasPermission(operation string, role string) bool {
 	args := m.Called(operation, role)
 	return args.Bool(0)
 }
+
+func (m *MockResource) GetFormLayout() *resource.FormLayout {
+	return nil
+}
