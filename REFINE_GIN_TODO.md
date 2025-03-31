@@ -93,21 +93,21 @@
 
 ## 7. Formularze i układ formularzy
 
-- [ ] Dodać strukturę `FormLayout` do konfiguracji układu formularzy:
-  - [ ] Grupowanie pól
-  - [ ] Definiowanie sekcji
-  - [ ] Wielokolumnowy układ
+- [x] Dodać strukturę `FormLayout` do konfiguracji układu formularzy:
+  - [x] Grupowanie pól
+  - [x] Definiowanie sekcji
+  - [x] Wielokolumnowy układ
   - [ ] Ukryte sekcje rozwijane
 
 - [ ] Rozszerzyć strukturę `FormConfig` o dodatkowe opcje:
   - [ ] `Width` (procent szerokości formularza)
-  - [ ] `Dependent` (zależność od innych pól)
+  - [x] `Dependent` (zależność od innych pól)
   - [ ] `Condition` (warunek wyświetlania)
 
-- [ ] Zaimplementować endpoint dedykowany dla metadanych formularza, który zwraca:
-  - [ ] Pełną definicję układu
-  - [ ] Wstępnie wypełnione wartości
-  - [ ] Zależności między polami
+- [x] Zaimplementować endpoint dedykowany dla metadanych formularza, który zwraca:
+  - [x] Pełną definicję układu
+  - [x] Wstępnie wypełnione wartości
+  - [x] Zależności między polami
 
 ## 8. Pre/post processing danych
 
