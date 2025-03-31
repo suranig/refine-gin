@@ -1114,3 +1114,353 @@ func findFieldMetadata(fields []FieldMetadata, name string) *FieldMetadata {
 	}
 	return nil
 }
+
+func TestGenerateAntDesignConfigMetadata(t *testing.T) {
+	// Create an Ant Design config for testing
+	antDesignConfig := &AntDesignConfig{
+		ComponentType: "Select",
+		Props: map[string]interface{}{
+			"allowClear":  true,
+			"mode":        "multiple",
+			"placeholder": "Select options",
+		},
+		Rules: []AntDesignRule{
+			{
+				Type:    "required",
+				Message: "This field is required",
+			},
+			{
+				Type:    "min",
+				Value:   2,
+				Message: "Please select at least 2 options",
+			},
+		},
+		FormItemProps: map[string]interface{}{
+			"tooltip": "Select multiple options",
+		},
+		Dependencies: []string{"category", "type"},
+	}
+
+	// Generate metadata
+	metadata := GenerateAntDesignConfigMetadata(antDesignConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, "Select", metadata.ComponentType)
+
+	// Verify props
+	assert.NotNil(t, metadata.Props)
+	assert.Equal(t, true, metadata.Props["allowClear"])
+	assert.Equal(t, "multiple", metadata.Props["mode"])
+	assert.Equal(t, "Select options", metadata.Props["placeholder"])
+
+	// Verify rules
+	assert.Len(t, metadata.Rules, 2)
+	assert.Equal(t, "required", metadata.Rules[0].Type)
+	assert.Equal(t, "This field is required", metadata.Rules[0].Message)
+	assert.Equal(t, "min", metadata.Rules[1].Type)
+	assert.Equal(t, 2, metadata.Rules[1].Value)
+	assert.Equal(t, "Please select at least 2 options", metadata.Rules[1].Message)
+
+	// Verify form item props
+	assert.NotNil(t, metadata.FormItemProps)
+	assert.Equal(t, "Select multiple options", metadata.FormItemProps["tooltip"])
+
+	// Verify dependencies
+	assert.Equal(t, []string{"category", "type"}, metadata.Dependencies)
+
+	// Test null case
+	assert.Nil(t, GenerateAntDesignConfigMetadata(nil))
+}
+
+func TestMapValidationToAntDesignRules(t *testing.T) {
+	// Create validation rules
+	validation := &Validation{
+		Required:  true,
+		Min:       10,
+		Max:       100,
+		MinLength: 5,
+		MaxLength: 50,
+		Pattern:   "^[a-zA-Z0-9]+$",
+		Message:   "Custom validation message",
+	}
+
+	// Map to Ant Design rules
+	rules := MapValidationToAntDesignRules(validation)
+
+	// Verify rules
+	assert.Len(t, rules, 6)
+
+	// Find and verify each rule type
+	var requiredRule, minLengthRule, maxLengthRule, patternRule, minRule, maxRule *AntDesignRule
+
+	for i := range rules {
+		rule := &rules[i]
+		switch rule.Type {
+		case "required":
+			requiredRule = rule
+		case "min":
+			if rule.Value == validation.MinLength {
+				minLengthRule = rule
+			} else if rule.Value == validation.Min {
+				minRule = rule
+			}
+		case "max":
+			if rule.Value == validation.MaxLength {
+				maxLengthRule = rule
+			} else if rule.Value == validation.Max {
+				maxRule = rule
+			}
+		case "pattern":
+			patternRule = rule
+		}
+	}
+
+	// Verify required rule
+	assert.NotNil(t, requiredRule)
+	assert.Equal(t, "required", requiredRule.Type)
+	assert.Equal(t, validation.Message, requiredRule.Message)
+
+	// Verify min length rule
+	assert.NotNil(t, minLengthRule)
+	assert.Equal(t, "min", minLengthRule.Type)
+	assert.Equal(t, validation.MinLength, minLengthRule.Value)
+
+	// Verify max length rule
+	assert.NotNil(t, maxLengthRule)
+	assert.Equal(t, "max", maxLengthRule.Type)
+	assert.Equal(t, validation.MaxLength, maxLengthRule.Value)
+
+	// Verify pattern rule
+	assert.NotNil(t, patternRule)
+	assert.Equal(t, "pattern", patternRule.Type)
+	assert.Equal(t, validation.Pattern, patternRule.Pattern)
+
+	// Verify min value rule
+	assert.NotNil(t, minRule)
+	assert.Equal(t, "min", minRule.Type)
+	assert.Equal(t, validation.Min, minRule.Value)
+
+	// Verify max value rule
+	assert.NotNil(t, maxRule)
+	assert.Equal(t, "max", maxRule.Type)
+	assert.Equal(t, validation.Max, maxRule.Value)
+
+	// Test null case
+	assert.Nil(t, MapValidationToAntDesignRules(nil))
+}
+
+func TestAutoDetectAntDesignComponent(t *testing.T) {
+	// Test detection for various field types
+	testCases := []struct {
+		name     string
+		field    Field
+		expected string
+	}{
+		{
+			name: "String field",
+			field: Field{
+				Name: "title",
+				Type: "string",
+			},
+			expected: "Input",
+		},
+		{
+			name: "Password field",
+			field: Field{
+				Name: "password",
+				Type: "string",
+			},
+			expected: "Password",
+		},
+		{
+			name: "Number field",
+			field: Field{
+				Name: "age",
+				Type: "number",
+			},
+			expected: "InputNumber",
+		},
+		{
+			name: "Boolean field",
+			field: Field{
+				Name: "active",
+				Type: "boolean",
+			},
+			expected: "Switch",
+		},
+		{
+			name: "Date field",
+			field: Field{
+				Name: "birthDate",
+				Type: "date",
+			},
+			expected: "DatePicker",
+		},
+		{
+			name: "Select field with options",
+			field: Field{
+				Name: "category",
+				Type: "string",
+				Options: []Option{
+					{Value: "a", Label: "A"},
+					{Value: "b", Label: "B"},
+				},
+			},
+			expected: "Select",
+		},
+		{
+			name: "File field",
+			field: Field{
+				Name: "document",
+				Type: "file",
+				File: &FileConfig{
+					IsImage: false,
+				},
+			},
+			expected: "Upload",
+		},
+		{
+			name: "Image field",
+			field: Field{
+				Name: "avatar",
+				Type: "file",
+				File: &FileConfig{
+					IsImage: true,
+				},
+			},
+			expected: "Upload.Image",
+		},
+		{
+			name: "Rich text field",
+			field: Field{
+				Name:     "content",
+				Type:     "string",
+				RichText: &RichTextConfig{},
+			},
+			expected: "TextArea",
+		},
+		{
+			name: "JSON field",
+			field: Field{
+				Name: "config",
+				Type: "json",
+			},
+			expected: "JsonEditor",
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			component := AutoDetectAntDesignComponent(&tc.field)
+			assert.Equal(t, tc.expected, component)
+		})
+	}
+
+	// Test null case
+	assert.Equal(t, "Input", AutoDetectAntDesignComponent(nil))
+}
+
+func TestGenerateFieldsMetadataWithAntDesign(t *testing.T) {
+	// Create fields with explicit and implicit Ant Design configuration
+	fields := []Field{
+		{
+			Name: "name",
+			Type: "string",
+			Validation: &Validation{
+				Required:  true,
+				MinLength: 3,
+				MaxLength: 50,
+			},
+			Form: &FormConfig{
+				Placeholder: "Enter your name",
+			},
+			// Explicit Ant Design config
+			AntDesign: &AntDesignConfig{
+				ComponentType: "Input",
+				Props: map[string]interface{}{
+					"allowClear": true,
+				},
+			},
+		},
+		{
+			Name: "age",
+			Type: "number",
+			Validation: &Validation{
+				Required: true,
+				Min:      18,
+				Max:      120,
+			},
+			// No explicit Ant Design config - should be auto-generated
+		},
+		{
+			Name: "isActive",
+			Type: "boolean",
+			// No explicit Ant Design config - should be auto-generated
+		},
+		{
+			Name: "role",
+			Type: "select",
+			Options: []Option{
+				{Value: "admin", Label: "Administrator"},
+				{Value: "user", Label: "Regular User"},
+			},
+			// No explicit Ant Design config - should be auto-generated
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFieldsMetadata(fields)
+
+	// Verify metadata
+	assert.Len(t, metadata, 4)
+
+	// Check name field with explicit config
+	nameMeta := findFieldMetadata(metadata, "name")
+	assert.NotNil(t, nameMeta)
+	assert.NotNil(t, nameMeta.AntDesign)
+	assert.Equal(t, "Input", nameMeta.AntDesign.ComponentType)
+	assert.Equal(t, true, nameMeta.AntDesign.Props["allowClear"])
+
+	// Check age field with auto-generated config
+	ageMeta := findFieldMetadata(metadata, "age")
+	assert.NotNil(t, ageMeta)
+	assert.NotNil(t, ageMeta.AntDesign)
+	assert.Equal(t, "InputNumber", ageMeta.AntDesign.ComponentType)
+	assert.Equal(t, float64(18), ageMeta.AntDesign.Props["min"])
+	assert.Equal(t, float64(120), ageMeta.AntDesign.Props["max"])
+
+	// Check rules for age field
+	assert.NotEmpty(t, ageMeta.AntDesign.Rules)
+	hasRequiredRule := false
+	for _, rule := range ageMeta.AntDesign.Rules {
+		if rule.Type == "required" {
+			hasRequiredRule = true
+			break
+		}
+	}
+	assert.True(t, hasRequiredRule)
+
+	// Check isActive field
+	isActiveMeta := findFieldMetadata(metadata, "isActive")
+	assert.NotNil(t, isActiveMeta)
+	assert.NotNil(t, isActiveMeta.AntDesign)
+	assert.Equal(t, "Switch", isActiveMeta.AntDesign.ComponentType)
+	assert.Equal(t, "checked", isActiveMeta.AntDesign.FormItemProps["valuePropName"])
+
+	// Check role field
+	roleMeta := findFieldMetadata(metadata, "role")
+	assert.NotNil(t, roleMeta)
+	assert.NotNil(t, roleMeta.AntDesign)
+	assert.Equal(t, "Select", roleMeta.AntDesign.ComponentType)
+
+	// Verify options in Select
+	options, ok := roleMeta.AntDesign.Props["options"].([]map[string]interface{})
+	assert.True(t, ok)
+	assert.Len(t, options, 2)
+	assert.Equal(t, "admin", options[0]["value"])
+	assert.Equal(t, "Administrator", options[0]["label"])
+	assert.Equal(t, "user", options[1]["value"])
+	assert.Equal(t, "Regular User", options[1]["label"])
+}

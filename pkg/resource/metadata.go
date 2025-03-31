@@ -1,5 +1,9 @@
 package resource
 
+import (
+	"strings"
+)
+
 // ResourceMetadata represents the metadata for a resource
 type ResourceMetadata struct {
 	// Resource name (identifier)
@@ -89,6 +93,9 @@ type FieldMetadata struct {
 
 	// Computed field configuration
 	Computed *ComputedFieldConfigMetadata `json:"computed,omitempty"`
+
+	// Ant Design specific configuration
+	AntDesign *AntDesignConfigMetadata `json:"antDesign,omitempty"`
 }
 
 // ValidatorMetadata represents metadata for a field validator
@@ -417,6 +424,48 @@ type ComputedFieldConfigMetadata struct {
 	ComputeOrder int `json:"computeOrder,omitempty"`
 }
 
+// AntDesignConfigMetadata represents metadata for Ant Design components
+type AntDesignConfigMetadata struct {
+	// Component type to use (Input, Select, DatePicker, etc.)
+	ComponentType string `json:"componentType,omitempty"`
+
+	// Props to pass to the component
+	Props map[string]interface{} `json:"props,omitempty"`
+
+	// Rules for form validation in Ant Design format
+	Rules []AntDesignRuleMetadata `json:"rules,omitempty"`
+
+	// FormItemProps to pass to Form.Item component
+	FormItemProps map[string]interface{} `json:"formItemProps,omitempty"`
+
+	// Dependencies for field dependencies (array of field names)
+	Dependencies []string `json:"dependencies,omitempty"`
+}
+
+// AntDesignRuleMetadata defines a validation rule metadata for Ant Design Form
+type AntDesignRuleMetadata struct {
+	// Rule type (required, max, min, etc.)
+	Type string `json:"type,omitempty"`
+
+	// Message to display when validation fails
+	Message string `json:"message,omitempty"`
+
+	// Value for the rule (e.g. minimum length for "min" rule)
+	Value interface{} `json:"value,omitempty"`
+
+	// Whether to validate on blur
+	ValidateOnBlur bool `json:"validateOnBlur,omitempty"`
+
+	// Whether to validate on change
+	ValidateOnChange bool `json:"validateOnChange,omitempty"`
+
+	// Pattern for regexp validation
+	Pattern string `json:"pattern,omitempty"`
+
+	// When to validate (onChange, onBlur, onSubmit)
+	ValidateTrigger string `json:"validateTrigger,omitempty"`
+}
+
 // GenerateResourceMetadata generates resource metadata from a resource
 func GenerateResourceMetadata(res Resource) ResourceMetadata {
 	metadata := ResourceMetadata{
@@ -511,10 +560,141 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 			fieldMeta.Computed = GenerateComputedFieldConfigMetadata(field.Computed)
 		}
 
+		// Add Ant Design metadata if field has Ant Design configuration
+		if field.AntDesign != nil {
+			fieldMeta.AntDesign = GenerateAntDesignConfigMetadata(field.AntDesign)
+		} else {
+			// Automatically generate Ant Design configuration
+			antDesignConfig := generateDefaultAntDesignConfig(&field)
+			if antDesignConfig != nil {
+				fieldMeta.AntDesign = antDesignConfig
+			}
+		}
+
 		result = append(result, fieldMeta)
 	}
 
 	return result
+}
+
+// generateDefaultAntDesignConfig creates default Ant Design configuration for a field
+func generateDefaultAntDesignConfig(field *Field) *AntDesignConfigMetadata {
+	if field == nil {
+		return nil
+	}
+
+	// Create basic config
+	config := &AntDesignConfigMetadata{
+		ComponentType: AutoDetectAntDesignComponent(field),
+		Props:         make(map[string]interface{}),
+		FormItemProps: make(map[string]interface{}),
+	}
+
+	// Map validation rules
+	if field.Validation != nil {
+		antDesignRules := MapValidationToAntDesignRules(field.Validation)
+		if len(antDesignRules) > 0 {
+			config.Rules = make([]AntDesignRuleMetadata, 0, len(antDesignRules))
+			for _, rule := range antDesignRules {
+				config.Rules = append(config.Rules, AntDesignRuleMetadata{
+					Type:             rule.Type,
+					Message:          rule.Message,
+					Value:            rule.Value,
+					ValidateOnBlur:   rule.ValidateOnBlur,
+					ValidateOnChange: rule.ValidateOnChange,
+					Pattern:          rule.Pattern,
+					ValidateTrigger:  rule.ValidateTrigger,
+				})
+			}
+		}
+	}
+
+	// Add field-specific props
+	switch field.Type {
+	case "string":
+		if field.Form != nil && field.Form.Placeholder != "" {
+			config.Props["placeholder"] = field.Form.Placeholder
+		}
+
+		// Detect password field
+		if strings.Contains(strings.ToLower(field.Name), "password") {
+			config.ComponentType = "Password"
+		}
+
+	case "number", "integer", "float", "double", "decimal":
+		config.ComponentType = "InputNumber"
+		if field.Validation != nil {
+			if field.Validation.Min != 0 {
+				config.Props["min"] = field.Validation.Min
+			}
+			if field.Validation.Max != 0 {
+				config.Props["max"] = field.Validation.Max
+			}
+		}
+
+	case "boolean":
+		config.ComponentType = "Switch"
+		config.FormItemProps["valuePropName"] = "checked"
+
+	case "date":
+		config.ComponentType = "DatePicker"
+		if field.Form != nil && field.Form.Placeholder != "" {
+			config.Props["placeholder"] = field.Form.Placeholder
+		}
+
+	case "datetime":
+		config.ComponentType = "DatePicker"
+		config.Props["showTime"] = true
+		if field.Form != nil && field.Form.Placeholder != "" {
+			config.Props["placeholder"] = field.Form.Placeholder
+		}
+
+	case "select", "multiselect":
+		config.ComponentType = "Select"
+		if field.Type == "multiselect" || (field.Select != nil && field.Select.Multiple) {
+			config.Props["mode"] = "multiple"
+		}
+
+		// Add options if available
+		if len(field.Options) > 0 {
+			options := make([]map[string]interface{}, 0, len(field.Options))
+			for _, opt := range field.Options {
+				options = append(options, map[string]interface{}{
+					"value": opt.Value,
+					"label": opt.Label,
+				})
+			}
+			config.Props["options"] = options
+		}
+
+		// Add placeholder if available
+		if field.Form != nil && field.Form.Placeholder != "" {
+			config.Props["placeholder"] = field.Form.Placeholder
+		} else if field.Select != nil && field.Select.Placeholder != "" {
+			config.Props["placeholder"] = field.Select.Placeholder
+		}
+
+	case "file":
+		if field.File != nil && field.File.IsImage {
+			config.ComponentType = "Upload.Image"
+			config.Props["listType"] = "picture-card"
+		} else {
+			config.ComponentType = "Upload"
+			config.Props["listType"] = "text"
+		}
+
+		// Add FormItemProps for Upload components
+		config.FormItemProps["valuePropName"] = "fileList"
+		config.FormItemProps["getValueFromEvent"] = "normFile"
+	}
+
+	// Add disabled state for read-only fields
+	if field.ReadOnly {
+		config.Props["disabled"] = true
+	}
+
+	// Return the configuration
+	return config
 }
 
 // GenerateValidatorsMetadata generates metadata for validators
@@ -813,4 +993,36 @@ func GenerateComputedFieldConfigMetadata(config *ComputedFieldConfig) *ComputedF
 		Persist:      config.Persist,
 		ComputeOrder: config.ComputeOrder,
 	}
+}
+
+// GenerateAntDesignConfigMetadata generates metadata for Ant Design configuration
+func GenerateAntDesignConfigMetadata(config *AntDesignConfig) *AntDesignConfigMetadata {
+	if config == nil {
+		return nil
+	}
+
+	meta := &AntDesignConfigMetadata{
+		ComponentType: config.ComponentType,
+		Props:         config.Props,
+		FormItemProps: config.FormItemProps,
+		Dependencies:  config.Dependencies,
+	}
+
+	// Convert rules
+	if len(config.Rules) > 0 {
+		meta.Rules = make([]AntDesignRuleMetadata, 0, len(config.Rules))
+		for _, rule := range config.Rules {
+			meta.Rules = append(meta.Rules, AntDesignRuleMetadata{
+				Type:             rule.Type,
+				Message:          rule.Message,
+				Value:            rule.Value,
+				ValidateOnBlur:   rule.ValidateOnBlur,
+				ValidateOnChange: rule.ValidateOnChange,
+				Pattern:          rule.Pattern,
+				ValidateTrigger:  rule.ValidateTrigger,
+			})
+		}
+	}
+
+	return meta
 }

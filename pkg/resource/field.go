@@ -24,6 +24,7 @@ type Field struct {
 	RichText   *RichTextConfig      // Configuration for rich text fields
 	Select     *SelectConfig        // Configuration for select fields
 	Computed   *ComputedFieldConfig // Configuration for computed fields
+	AntDesign  *AntDesignConfig     // Configuration specific to Ant Design
 }
 
 // JsonConfig defines configuration for JSON fields
@@ -434,4 +435,46 @@ type ComputedFieldConfig struct {
 
 	// Order in which fields should be computed (if there are dependencies between computed fields)
 	ComputeOrder int `json:"computeOrder,omitempty"`
+}
+
+// AntDesignConfig defines configuration specific to Ant Design components
+type AntDesignConfig struct {
+	// Component type to use (Input, Select, DatePicker, etc.)
+	ComponentType string `json:"componentType,omitempty"`
+
+	// Props to pass to the component
+	Props map[string]interface{} `json:"props,omitempty"`
+
+	// Rules for form validation in Ant Design format
+	Rules []AntDesignRule `json:"rules,omitempty"`
+
+	// FormItemProps to pass to Form.Item component
+	FormItemProps map[string]interface{} `json:"formItemProps,omitempty"`
+
+	// Dependencies for field dependencies (array of field names)
+	Dependencies []string `json:"dependencies,omitempty"`
+}
+
+// AntDesignRule defines a validation rule for Ant Design Form
+type AntDesignRule struct {
+	// Rule type (required, max, min, etc.)
+	Type string `json:"type,omitempty"`
+
+	// Message to display when validation fails
+	Message string `json:"message,omitempty"`
+
+	// Value for the rule (e.g. minimum length for "min" rule)
+	Value interface{} `json:"value,omitempty"`
+
+	// Whether to validate on blur
+	ValidateOnBlur bool `json:"validateOnBlur,omitempty"`
+
+	// Whether to validate on change
+	ValidateOnChange bool `json:"validateOnChange,omitempty"`
+
+	// Pattern for regexp validation
+	Pattern string `json:"pattern,omitempty"`
+
+	// When to validate (onChange, onBlur, onSubmit)
+	ValidateTrigger string `json:"validateTrigger,omitempty"`
 }

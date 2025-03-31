@@ -453,3 +453,132 @@ func getValueByPath(data map[string]interface{}, path string) (interface{}, erro
 
 	return current, nil
 }
+
+// MapValidationToAntDesignRules maps standard validation rules to Ant Design Form rules
+func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
+	if validation == nil {
+		return nil
+	}
+
+	rules := make([]AntDesignRule, 0)
+
+	// Required rule
+	if validation.Required {
+		rules = append(rules, AntDesignRule{
+			Type:            "required",
+			Message:         validation.Message,
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// MinLength rule for strings
+	if validation.MinLength > 0 {
+		rules = append(rules, AntDesignRule{
+			Type:            "min",
+			Value:           validation.MinLength,
+			Message:         fmt.Sprintf("Minimum length is %d characters", validation.MinLength),
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// MaxLength rule for strings
+	if validation.MaxLength > 0 {
+		rules = append(rules, AntDesignRule{
+			Type:            "max",
+			Value:           validation.MaxLength,
+			Message:         fmt.Sprintf("Maximum length is %d characters", validation.MaxLength),
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// Pattern rule
+	if validation.Pattern != "" {
+		rules = append(rules, AntDesignRule{
+			Type:            "pattern",
+			Pattern:         validation.Pattern,
+			Message:         validation.Message,
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// Min value rule for numbers
+	if validation.Min != 0 {
+		rules = append(rules, AntDesignRule{
+			Type:            "min",
+			Value:           validation.Min,
+			Message:         fmt.Sprintf("Minimum value is %v", validation.Min),
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// Max value rule for numbers
+	if validation.Max != 0 {
+		rules = append(rules, AntDesignRule{
+			Type:            "max",
+			Value:           validation.Max,
+			Message:         fmt.Sprintf("Maximum value is %v", validation.Max),
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	return rules
+}
+
+// AutoDetectAntDesignComponent automatically detects the appropriate Ant Design component
+// based on the field type and configuration
+func AutoDetectAntDesignComponent(field *Field) string {
+	if field == nil {
+		return "Input" // Default
+	}
+
+	// Map field type to Ant Design component
+	switch field.Type {
+	case "string":
+		// Check if it's an enum/select type
+		if len(field.Options) > 0 || field.Select != nil {
+			return "Select"
+		}
+		// Check if it's a password field
+		if strings.Contains(strings.ToLower(field.Name), "password") {
+			return "Password"
+		}
+		// Check if it's a rich text field
+		if field.RichText != nil {
+			return "TextArea"
+		}
+		// Default to Input
+		return "Input"
+	case "text":
+		if field.RichText != nil {
+			return "TextArea"
+		}
+		return "TextArea"
+	case "number", "integer", "float", "double", "decimal":
+		return "InputNumber"
+	case "boolean":
+		return "Switch"
+	case "date":
+		return "DatePicker"
+	case "time":
+		return "TimePicker"
+	case "datetime":
+		return "DatePicker" // With showTime prop
+	case "json":
+		return "JsonEditor" // Custom component
+	case "file":
+		if field.File != nil && field.File.IsImage {
+			return "Upload.Image"
+		}
+		return "Upload"
+	case "select":
+		return "Select"
+	case "multiselect":
+		return "Select" // With mode="multiple" prop
+	case "checkbox":
+		return "Checkbox"
+	case "radio":
+		return "Radio"
+	default:
+		return "Input"
+	}
+}
