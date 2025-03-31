@@ -60,14 +60,14 @@
 
 ## 4. Dostosowanie do Ant Design
 
-- [ ] Dodać strukturę `AntDesignConfig` do `Field` z konfiguracją specyficzną dla Ant Design:
-  - [ ] Typ komponentu (np. "Input", "Select", "DatePicker")
-  - [ ] Właściwości przekazywane do komponentu (props)
-  - [ ] Reguły walidacji zgodne z formatem Ant Design Form
+- [x] Dodać strukturę `AntDesignConfig` do `Field` z konfiguracją specyficzną dla Ant Design:
+  - [x] Typ komponentu (np. "Input", "Select", "DatePicker")
+  - [x] Właściwości przekazywane do komponentu (props)
+  - [x] Reguły walidacji zgodne z formatem Ant Design Form
 
-- [ ] Dodać funkcję mapującą standardową walidację na reguły Ant Design
-- [ ] Zmodyfikować generator metadanych, aby zawierał informacje specyficzne dla Ant Design
-- [ ] Dostosować formaty danych do oczekiwań komponentów Ant Design w refine.dev
+- [x] Dodać funkcję mapującą standardową walidację na reguły Ant Design
+- [x] Zmodyfikować generator metadanych, aby zawierał informacje specyficzne dla Ant Design
+- [x] Dodać automatyczne wykrywanie typu komponentu Ant Design na podstawie typu pola
 
 ## 5. System uprawnień na poziomie pól i zasobów
 
