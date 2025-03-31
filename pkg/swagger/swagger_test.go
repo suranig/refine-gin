@@ -56,6 +56,15 @@ func (r MockResource) GetTableFields() []string {
 func (r MockResource) GetFormFields() []string {
 	return []string{"name", "email"}
 }
+func (r MockResource) GetEditableFields() []string {
+	return []string{"name", "email", "age"}
+}
+func (r MockResource) GetPermissions() map[string][]string {
+	return nil
+}
+func (r MockResource) HasPermission(operation string, role string) bool {
+	return true
+}
 func (r MockResource) HasOperation(op resource.Operation) bool {
 	for _, o := range r.ops {
 		if o == op {
@@ -66,6 +75,9 @@ func (r MockResource) HasOperation(op resource.Operation) bool {
 }
 func (r MockResource) GetOptions() resource.Options {
 	return resource.Options{}
+}
+func (m MockResource) GetFormLayout() *resource.FormLayout {
+	return nil
 }
 
 func TestDefaultSwaggerInfo(t *testing.T) {

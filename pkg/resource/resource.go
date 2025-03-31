@@ -51,6 +51,14 @@ type Resource interface {
 	GetTableFields() []string
 	GetFormFields() []string
 	GetRequiredFields() []string
+	GetEditableFields() []string
+
+	// Permissions related methods
+	GetPermissions() map[string][]string
+	HasPermission(operation string, role string) bool
+
+	// Returns form layout configuration
+	GetFormLayout() *FormLayout
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -65,7 +73,8 @@ type ResourceConfig struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
-	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+	IDFieldName string              // Nazwa pola identyfikatora (domyślnie "ID")
+	Permissions map[string][]string // Map of operations to roles with permission
 
 	// Field lists for different purposes
 	FilterableFields []string
@@ -75,6 +84,7 @@ type ResourceConfig struct {
 	FormFields       []string
 	RequiredFields   []string
 	UniqueFields     []string
+	EditableFields   []string // Fields that can be edited
 }
 
 // DefaultResource implements the Resource interface
@@ -89,7 +99,8 @@ type DefaultResource struct {
 	Filters     []Filter
 	Middlewares []interface{}
 	Relations   []Relation
-	IDFieldName string // Nazwa pola identyfikatora (domyślnie "ID")
+	IDFieldName string              // Nazwa pola identyfikatora (domyślnie "ID")
+	Permissions map[string][]string // Map of operations to roles with permission
 
 	// Field lists for different purposes
 	FilterableFields []string
@@ -99,6 +110,10 @@ type DefaultResource struct {
 	FormFields       []string
 	RequiredFields   []string
 	UniqueFields     []string
+	EditableFields   []string // Fields that can be edited
+
+	// Form layout configuration
+	FormLayout *FormLayout
 }
 
 func (r *DefaultResource) GetName() string {
@@ -222,6 +237,16 @@ func NewResource(config ResourceConfig) Resource {
 		}
 	}
 
+	// Editable fields (all fields that are not marked as readonly)
+	editableFields := config.EditableFields
+	if len(editableFields) == 0 {
+		for _, f := range fields {
+			if !f.ReadOnly && f.Name != "ID" && f.Name != "id" {
+				editableFields = append(editableFields, f.Name)
+			}
+		}
+	}
+
 	return &DefaultResource{
 		Name:        config.Name,
 		Label:       label,
@@ -234,6 +259,7 @@ func NewResource(config ResourceConfig) Resource {
 		Middlewares: config.Middlewares,
 		Relations:   relations,
 		IDFieldName: config.IDFieldName,
+		Permissions: config.Permissions,
 
 		// Field lists
 		FilterableFields: filterableFields,
@@ -243,6 +269,7 @@ func NewResource(config ResourceConfig) Resource {
 		FormFields:       formFields,
 		RequiredFields:   requiredFields,
 		UniqueFields:     config.UniqueFields,
+		EditableFields:   editableFields,
 	}
 }
 
@@ -392,6 +419,17 @@ func ParseFieldTag(field *Field, tag string) {
 			continue
 		}
 
+		// Handle readOnly and hidden tags
+		if part == "readOnly" {
+			field.ReadOnly = true
+			continue
+		}
+
+		if part == "hidden" {
+			field.Hidden = true
+			continue
+		}
+
 		// Validation rules
 		if strings.HasPrefix(part, "min=") {
 			if value, err := strconv.Atoi(part[4:]); err == nil {
@@ -537,9 +575,9 @@ func getJsonPropertyType(t reflect.Type) string {
 	}
 }
 
-// parseValidationTag parses validation tag into Validation struct
-func parseValidationTag(tag string) *Validation {
-	validation := &Validation{}
+// parseValidationTag parses validation tag into JsonValidation struct
+func parseValidationTag(tag string) *JsonValidation {
+	validation := &JsonValidation{}
 	parts := strings.Split(tag, ",")
 
 	for _, part := range parts {
@@ -694,4 +732,37 @@ func (r *DefaultResource) GetFormFields() []string {
 
 func (r *DefaultResource) GetRequiredFields() []string {
 	return r.RequiredFields
+}
+
+func (r *DefaultResource) GetEditableFields() []string {
+	return r.EditableFields
+}
+
+func (r *DefaultResource) GetPermissions() map[string][]string {
+	return r.Permissions
+}
+
+func (r *DefaultResource) HasPermission(operation string, role string) bool {
+	if r.Permissions == nil {
+		return true // If no permissions are defined, allow access by default
+	}
+
+	roles, exists := r.Permissions[operation]
+	if !exists {
+		return true // If the operation doesn't have defined permissions, allow access
+	}
+
+	// Check if the role exists in the list of allowed roles
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetFormLayout returns the form layout configuration
+func (r *DefaultResource) GetFormLayout() *FormLayout {
+	return r.FormLayout
 }

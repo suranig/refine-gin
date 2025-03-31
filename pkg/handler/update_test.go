@@ -29,6 +29,8 @@ type UserUpdateDTO struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
+// Note: MockResource is defined in handler_test.go
+
 func TestGenerateUpdateHandler(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
@@ -43,6 +45,13 @@ func TestGenerateUpdateHandler(t *testing.T) {
 	mockResource.On("GetModel").Return(UpdateUser{}).Maybe()
 	mockResource.On("GetIDFieldName").Return("ID").Maybe()
 	mockResource.On("GetRelations").Return([]resource.Relation{}).Maybe()
+	mockResource.On("GetEditableFields").Return([]string{"name", "email"}).Maybe()
+	mockResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "int"},
+		{Name: "name", Type: "string"},
+		{Name: "email", Type: "string"},
+		{Name: "updated_at", Type: "time.Time"},
+	}).Maybe()
 
 	// Test case 1: Successful update
 	t.Run("Successful update", func(t *testing.T) {
@@ -258,4 +267,121 @@ func TestGenerateUpdateHandler(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 		mockDTO.AssertExpectations(t)
 	})
+}
+
+func TestValidateNestedJsonFields(t *testing.T) {
+	// Sample model with nested JSON
+	type Config struct {
+		Email struct {
+			Host     string `json:"host"`
+			Port     int    `json:"port"`
+			Username string `json:"username"`
+		} `json:"email"`
+		Active bool `json:"active"`
+	}
+
+	type TestModel struct {
+		ID     int    `json:"id"`
+		Name   string `json:"name"`
+		Config Config `json:"config"`
+	}
+
+	// Create a mock resource with JSON configuration
+	mockResource := new(MockResource)
+
+	// Set up fields with JSON config
+	fields := []resource.Field{
+		{
+			Name: "Config",
+			Type: "json",
+			Json: &resource.JsonConfig{
+				Nested: true,
+				Properties: []resource.JsonProperty{
+					{
+						Path: "email.host",
+						Type: "string",
+						Validation: &resource.JsonValidation{
+							Required:  true,
+							MinLength: 3,
+						},
+					},
+					{
+						Path: "email.port",
+						Type: "number",
+						Validation: &resource.JsonValidation{
+							Required: true,
+							Min:      1,
+							Max:      65535,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockResource.On("GetFields").Return(fields)
+	mockResource.On("GetEditableFields").Return([]string{}).Maybe()
+
+	// Test 1: Valid model
+	validModel := TestModel{
+		ID:   1,
+		Name: "Test",
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "smtp.example.com",
+				Port: 587,
+			},
+			Active: true,
+		},
+	}
+
+	err := validateNestedJsonFields(mockResource, &validModel)
+	assert.NoError(t, err)
+
+	// Test 2: Invalid model - host too short
+	invalidModel1 := TestModel{
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "a", // Too short
+				Port: 587,
+			},
+		},
+	}
+
+	err = validateNestedJsonFields(mockResource, &invalidModel1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "less than minimum length")
+
+	// Test 3: Invalid model - port out of range
+	invalidModel2 := TestModel{
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "smtp.example.com",
+				Port: 70000, // Out of range
+			},
+		},
+	}
+
+	err = validateNestedJsonFields(mockResource, &invalidModel2)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "greater than maximum")
+
+	// Test 4: Nil model
+	err = validateNestedJsonFields(mockResource, nil)
+	assert.NoError(t, err)
+
+	// Verify expectations
+	mockResource.AssertExpectations(t)
 }

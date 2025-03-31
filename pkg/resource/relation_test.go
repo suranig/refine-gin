@@ -8,153 +8,131 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-// MockResource for testing
+// MockResource implements a minimal Resource interface for testing
 type MockResource struct {
-	mock.Mock
+	RelationsValue []Relation
+	FieldsValue    []Field
+	ModelValue     interface{}
 }
 
 func (m *MockResource) GetName() string {
-	args := m.Called()
-	return args.String(0)
+	return "mock-resource"
 }
 
 func (m *MockResource) GetLabel() string {
-	args := m.Called()
-	return args.String(0)
+	return "Mock Resource"
 }
 
 func (m *MockResource) GetIcon() string {
-	args := m.Called()
-	return args.String(0)
+	return "test-icon"
 }
 
 func (m *MockResource) GetModel() interface{} {
-	args := m.Called()
-	return args.Get(0)
+	return m.ModelValue
 }
 
 func (m *MockResource) GetFields() []Field {
-	args := m.Called()
-	return args.Get(0).([]Field)
+	return m.FieldsValue
 }
 
 func (m *MockResource) GetOperations() []Operation {
-	args := m.Called()
-	return args.Get(0).([]Operation)
+	return []Operation{}
 }
 
 func (m *MockResource) HasOperation(op Operation) bool {
-	args := m.Called(op)
-	return args.Bool(0)
+	return false
 }
 
 func (m *MockResource) GetDefaultSort() *Sort {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*Sort)
+	return nil
 }
 
 func (m *MockResource) GetFilters() []Filter {
-	args := m.Called()
-	return args.Get(0).([]Filter)
+	return []Filter{}
 }
 
 func (m *MockResource) GetMiddlewares() []interface{} {
-	args := m.Called()
-	return args.Get(0).([]interface{})
+	return []interface{}{}
 }
 
 func (m *MockResource) GetRelations() []Relation {
-	args := m.Called()
-	return args.Get(0).([]Relation)
+	return m.RelationsValue
 }
 
 func (m *MockResource) HasRelation(name string) bool {
-	args := m.Called(name)
-	return args.Bool(0)
+	for _, rel := range m.RelationsValue {
+		if rel.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *MockResource) GetRelation(name string) *Relation {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
+	for _, rel := range m.RelationsValue {
+		if rel.Name == name {
+			return &rel
+		}
 	}
-	return args.Get(0).(*Relation)
+	return nil
 }
 
 func (m *MockResource) GetIDFieldName() string {
-	args := m.Called()
-	return args.String(0)
+	return "ID"
 }
 
-// GetField returns a field by name
 func (m *MockResource) GetField(name string) *Field {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
+	for _, field := range m.FieldsValue {
+		if field.Name == name {
+			return &field
+		}
 	}
-	return args.Get(0).(*Field)
+	return nil
 }
 
-// GetSearchable returns searchable field names
 func (m *MockResource) GetSearchable() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
+	return []string{}
 }
 
-// GetFilterableFields returns filterable field names
 func (m *MockResource) GetFilterableFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
+	return []string{}
 }
 
-// GetSortableFields returns sortable field names
 func (m *MockResource) GetSortableFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
+	return []string{}
 }
 
-// GetRequiredFields returns required field names
-func (m *MockResource) GetRequiredFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
-}
-
-// GetTableFields returns table field names
 func (m *MockResource) GetTableFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
+	return []string{}
 }
 
-// GetFormFields returns form field names
 func (m *MockResource) GetFormFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
+	return []string{}
+}
+
+func (m *MockResource) GetRequiredFields() []string {
+	return []string{}
+}
+
+func (m *MockResource) GetEditableFields() []string {
+	return []string{}
+}
+
+func (m *MockResource) GetPermissions() map[string][]string {
+	return nil
+}
+
+func (m *MockResource) HasPermission(operation string, role string) bool {
+	return true
+}
+
+// Implement GetFormLayout method for MockResource
+func (m *MockResource) GetFormLayout() *FormLayout {
+	return nil
 }
 
 // TestModels for relation tests
@@ -382,18 +360,12 @@ func TestInferRelationFromField(t *testing.T) {
 }
 
 func TestIncludeRelations(t *testing.T) {
-	// Create a mock gin context
-	gin.SetMode(gin.TestMode)
-
-	// Test with no include parameter (should return default includes)
+	// Create a test context
 	c, _ := gin.CreateTestContext(nil)
 	req, _ := http.NewRequest("GET", "/", nil)
 	c.Request = req
 
 	// Create a mock resource
-	res := new(MockResource)
-
-	// Setup relations
 	relations := []Relation{
 		{
 			Name:             "Posts",
@@ -409,24 +381,10 @@ func TestIncludeRelations(t *testing.T) {
 		},
 	}
 
-	// Setup expectations
-	res.On("GetRelations").Return(relations)
-	res.On("GetIDFieldName").Return("ID")
-	res.On("GetField", mock.Anything).Return(nil)
-	res.On("GetSearchable").Return([]string{})
-
-	// Ważne: HasRelation musi być wywoływane z dokładnymi parametrami, które będą używane w funkcji
-	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
-		return name == "Posts"
-	})).Return(true)
-
-	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
-		return name == "Profile"
-	})).Return(true)
-
-	res.On("HasRelation", mock.MatchedBy(func(name string) bool {
-		return name == "Invalid"
-	})).Return(false)
+	// Setup mock resource with our relations
+	res := &MockResource{
+		RelationsValue: relations,
+	}
 
 	// Test with no include parameter (should return default includes)
 	includes := IncludeRelations(c, res)
@@ -516,9 +474,6 @@ func TestLoadRelations(t *testing.T) {
 	err = db.Create(&post2).Error
 	assert.NoError(t, err)
 
-	// Create a mock resource
-	res := new(MockResource)
-
 	// Setup relations
 	relations := []Relation{
 		{
@@ -539,14 +494,10 @@ func TestLoadRelations(t *testing.T) {
 		},
 	}
 
-	// Setup expectations
-	res.On("GetRelations").Return(relations)
-	res.On("GetRelation", "Posts").Return(&relations[0])
-	res.On("GetRelation", "Profile").Return(&relations[1])
-	res.On("GetRelation", "Invalid").Return(nil)
-	res.On("GetIDFieldName").Return("ID")
-	res.On("GetField", mock.Anything).Return(nil)
-	res.On("GetSearchable").Return([]string{})
+	// Create a mock resource with our relations
+	res := &MockResource{
+		RelationsValue: relations,
+	}
 
 	// Test LoadRelations with a single record
 	var loadedUser User

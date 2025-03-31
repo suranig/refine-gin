@@ -91,46 +91,26 @@ func RegisterResourceWithDTO(router *gin.RouterGroup, res resource.Resource, rep
 	}
 }
 
-// RegisterResourceWithOptions registers a resource with custom options
+// RegisterResourceWithOptions registers a resource with customizable options
 func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource, repo repository.Repository, opts resource.Options) {
 	// Register resource to registry
 	resource.RegisterToRegistry(res)
 
-	// Przygotuj middleware dla cache
-	var middlewares []gin.HandlerFunc
-
-	// Zawsze dodaj middleware konwencji nazewnictwa
-	middlewares = append(middlewares, middleware.NamingConventionMiddleware(opts.NamingConvention))
-
-	// Dodaj middleware cache jeśli jest włączone
-	if opts.Cache.Enabled {
-		cacheConfig := middleware.CacheConfig{
-			MaxAge:       opts.Cache.MaxAge,
-			DisableCache: !opts.Cache.Enabled,
-			Methods:      []string{"GET", "HEAD", "OPTIONS"},
-			VaryHeaders:  opts.Cache.VaryHeaders,
-		}
-		middlewares = append(middlewares, middleware.CacheByResource(res.GetName(), cacheConfig))
+	// Extract options
+	idParamName := "id"
+	if paramName, ok := opts.GetQueryOption("IDParamName").(string); ok && paramName != "" {
+		idParamName = paramName
 	}
 
-	// Create resource router with middlewares
-	resourceRouter := router.Group("/"+res.GetName(), middlewares...)
-
-	// Use default DTO provider for this resource
+	// Create default DTO provider if not specified
 	dtoProvider := &dto.DefaultDTOProvider{
 		Model: res.GetModel(),
 	}
 
-	// Determine ID parameter name (use default "id" if not specified)
-	idParamName := "id"
-	if idParam, ok := opts.QueryOptions["IDParamName"]; ok {
-		if idParamStr, ok := idParam.(string); ok && idParamStr != "" {
-			idParamName = idParamStr
-		}
-	}
-
-	// Register OPTIONS handler for metadata
-	resourceRouter.OPTIONS("", GenerateOptionsHandler(res))
+	// Create resource router with naming convention middleware
+	resourceRouter := router.Group("/"+res.GetName(),
+		middleware.NamingConventionMiddleware(opts.NamingConvention),
+	)
 
 	// Register handlers for allowed operations
 	if res.HasOperation(resource.OperationList) {
@@ -147,7 +127,15 @@ func RegisterResourceWithOptions(router *gin.RouterGroup, res resource.Resource,
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		// Check if we have a custom ID field
+		hasCustomID := res.GetIDFieldName() != "ID" && res.GetIDFieldName() != "id"
+		if hasCustomID {
+			// Use custom update handler for resources with non-standard ID fields
+			resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateCustomUpdateHandler(res, repo, idParamName))
+		} else {
+			// Use standard update handler
+			resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		}
 	}
 
 	if res.HasOperation(resource.OperationDelete) {
@@ -204,7 +192,15 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	}
 
 	if res.HasOperation(resource.OperationUpdate) {
-		resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		// Check if we have a custom ID field
+		hasCustomID := res.GetIDFieldName() != "ID" && res.GetIDFieldName() != "id"
+		if hasCustomID {
+			// Use custom update handler for resources with non-standard ID fields
+			resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateCustomUpdateHandler(res, repo, idParamName))
+		} else {
+			// Use standard update handler
+			resourceRouter.PUT("/:"+idParamName, middleware.NoCacheMiddleware(), GenerateUpdateHandlerWithParam(res, repo, dtoProvider, idParamName))
+		}
 	}
 
 	if res.HasOperation(resource.OperationDelete) {

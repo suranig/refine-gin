@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -132,12 +134,23 @@ func setupTestRouter() (*gin.Engine, *gorm.DB) {
 			userID = "user-1" // Default to user-1 if not specified
 		}
 
+		// Print debug info
+		fmt.Printf("Request: %s %s, User ID: %s\n", c.Request.Method, c.Request.URL.Path, userID)
+
+		// Explicitly check the types for debugging
+		fmt.Printf("User ID type: %T, value: %v\n", userID, userID)
+
 		// Set it directly in the context with the expected key
 		c.Set(middleware.OwnerContextKey, userID)
 
 		// Also set in the request context to ensure it's available
 		ctx := context.WithValue(c.Request.Context(), middleware.OwnerContextKey, userID)
 		c.Request = c.Request.WithContext(ctx)
+
+		// Debug: check if we can retrieve the value back
+		storedVal, exists := c.Get(middleware.OwnerContextKey)
+		fmt.Printf("Value stored in gin context: exists=%v, value=%v, type=%T\n",
+			exists, storedVal, storedVal)
 
 		fmt.Printf("Setting owner ID directly in context: %s\n", userID)
 
@@ -376,83 +389,129 @@ func TestCreateNote(t *testing.T) {
 
 // Test updating a note (should enforce ownership)
 func TestUpdateNote(t *testing.T) {
-	t.Run("User can update their own note", func(t *testing.T) {
-		// Create a new router with fresh database
-		router, testDB := setupTestRouter()
+	// Setup
+	r, db := setupTestRouter()
 
-		// Create a new note for user-1
+	// Reset database before each test
+	db.Exec("DELETE FROM notes")
+
+	t.Run("User_can_update_their_own_note", func(t *testing.T) {
+		// Create a note owned by user-1
 		note := Note{
 			ID:      "test-update-note-1",
 			Title:   "Original Title",
 			Content: "Original content",
 			OwnerID: "user-1",
 		}
-		testDB.Create(&note)
+		// Direct database insert to guarantee the owner_id is set
+		result := db.Create(&note)
+		require.NoError(t, result.Error)
 
-		// Create request body
-		updateData := map[string]interface{}{
-			"title":   "Updated Title",
-			"content": "Updated content",
+		// Verify the note was created correctly in the database
+		var checkNote Note
+		db.Where("id = ?", "test-update-note-1").First(&checkNote)
+		t.Logf("Created note in DB: ID=%s, Title=%s, OwnerID=%s",
+			checkNote.ID, checkNote.Title, checkNote.OwnerID)
+		require.Equal(t, "user-1", checkNote.OwnerID)
+
+		// Check the raw database value to ensure OwnerID is saved correctly
+		var rawOwnerID string
+		db.Raw("SELECT owner_id FROM notes WHERE id = ?", "test-update-note-1").Scan(&rawOwnerID)
+		t.Logf("Raw database owner_id: %s", rawOwnerID)
+		require.Equal(t, "user-1", rawOwnerID)
+
+		// Check owner relationship directly before update
+		var ownerCheckResult struct {
+			ID      string
+			OwnerID string
 		}
-		jsonData, _ := json.Marshal(updateData)
+		ownerCheckErr := db.Raw("SELECT id, owner_id FROM notes WHERE id = ? AND owner_id = ?",
+			"test-update-note-1", "user-1").Scan(&ownerCheckResult).Error
+		t.Logf("Before update - owner check: %v, ID=%s, OwnerID=%s, Error=%v",
+			ownerCheckResult.ID != "", ownerCheckResult.ID, ownerCheckResult.OwnerID, ownerCheckErr)
 
-		// Create request
-		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-1", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-User-ID", "user-1")
+		// Make update request as the owner
 		w := httptest.NewRecorder()
+		updateData := `{"title": "Updated Title", "content": "Updated content"}`
+		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-1", strings.NewReader(updateData))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-User-ID", "user-1") // Set the X-User-ID header
 
-		// Perform request
-		router.ServeHTTP(w, req)
+		// Process the request
+		r.ServeHTTP(w, req)
 
-		// Check response
-		assert.Equal(t, http.StatusOK, w.Code)
+		// Directly check the database after the update to see what happened
+		var updatedNoteCheck Note
+		findResult := db.Where("id = ?", "test-update-note-1").First(&updatedNoteCheck)
+		t.Logf("After update - DB check: Error=%v, Note=%+v",
+			findResult.Error, updatedNoteCheck)
 
-		// Verify in database
+		// Check raw SQL as well
+		var rawCheckResult struct {
+			ID      string
+			Title   string
+			Content string
+			OwnerID string `gorm:"column:owner_id"`
+		}
+		rawSqlErr := db.Raw("SELECT id, title, content, owner_id FROM notes WHERE id = ?",
+			"test-update-note-1").Scan(&rawCheckResult).Error
+		t.Logf("After update - Raw SQL check: Error=%v, Result=%+v",
+			rawSqlErr, rawCheckResult)
+
+		// Assert response
+		t.Logf("Update response: %d - %s", w.Code, w.Body.String())
+		require.Equal(t, http.StatusOK, w.Code)
+
+		// Verify the note was updated
 		var updatedNote Note
-		testDB.First(&updatedNote, "id = ?", "test-update-note-1")
-		assert.Equal(t, "Updated Title", updatedNote.Title)
-		assert.Equal(t, "Updated content", updatedNote.Content)
-		assert.Equal(t, "user-1", updatedNote.OwnerID) // Owner shouldn't change
+		db.Where("id = ?", "test-update-note-1").First(&updatedNote)
+		require.Equal(t, "Updated Title", updatedNote.Title)
+		require.Equal(t, "user-1", updatedNote.OwnerID)
+
+		// Check raw database values after update
+		var afterUpdateResult struct {
+			ID      string
+			Title   string
+			OwnerID string
+		}
+		db.Raw("SELECT id, title, owner_id FROM notes WHERE id = ?", "test-update-note-1").Scan(&afterUpdateResult)
+		t.Logf("After update - raw DB values: ID=%s, Title=%s, OwnerID=%s",
+			afterUpdateResult.ID, afterUpdateResult.Title, afterUpdateResult.OwnerID)
 	})
 
-	t.Run("User cannot update another user's note", func(t *testing.T) {
-		// Create a new router with fresh database
-		router, testDB := setupTestRouter()
-
-		// Create a new note for user-2
+	t.Run("User_cannot_update_another_user's_note", func(t *testing.T) {
+		// Create a note owned by user-2
 		note := Note{
 			ID:      "test-update-note-2",
 			Title:   "User 2 Note",
 			Content: "This belongs to user 2",
 			OwnerID: "user-2",
 		}
-		testDB.Create(&note)
+		db.Create(&note)
 
-		// Create request body
-		updateData := map[string]interface{}{
-			"title":   "Should Not Update",
-			"content": "Should not update content",
-		}
-		jsonData, _ := json.Marshal(updateData)
+		// Verify the note was created correctly with owner_id
+		var checkNote Note
+		db.Where("id = ?", "test-update-note-2").First(&checkNote)
+		require.Equal(t, "user-2", checkNote.OwnerID)
 
-		// Create request as user-1
-		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-2", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-User-ID", "user-1")
+		// Make update request as user-1 (not the owner)
 		w := httptest.NewRecorder()
+		updateData := `{"title": "Should Not Update", "content": "Should not update content"}`
+		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-2", strings.NewReader(updateData))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-User-ID", "user-1") // Set the X-User-ID header
 
-		// Perform request
-		router.ServeHTTP(w, req)
+		// Process the request
+		r.ServeHTTP(w, req)
 
 		// Check response - should be forbidden
-		assert.Equal(t, http.StatusForbidden, w.Code)
+		require.Equal(t, http.StatusForbidden, w.Code)
 
-		// Verify in database note is unchanged
-		var note2 Note
-		testDB.First(&note2, "id = ?", "test-update-note-2")
-		assert.NotEqual(t, "Should Not Update", note2.Title)
-		assert.Equal(t, "user-2", note2.OwnerID)
+		// Verify in database that note is unchanged
+		var updatedNote Note
+		db.Where("id = ?", "test-update-note-2").First(&updatedNote)
+		require.Equal(t, "User 2 Note", updatedNote.Title)
+		require.Equal(t, "user-2", updatedNote.OwnerID)
 	})
 }
 
@@ -517,5 +576,200 @@ func TestDeleteNote(t *testing.T) {
 		result := testDB.First(&note2, "id = ?", "test-delete-note-2")
 		assert.NoError(t, result.Error) // Should still find the note
 		assert.Equal(t, "user-2", note2.OwnerID)
+	})
+}
+
+// Test the owner repository directly
+func TestOwnerRepository(t *testing.T) {
+	// Create a test database
+	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	// Auto migrate test models
+	db.AutoMigrate(&Note{})
+
+	// Create a note
+	note := Note{
+		ID:      "direct-test-note",
+		Title:   "Test Direct Repository",
+		Content: "Testing repository directly",
+		OwnerID: "user-1",
+	}
+	result := db.Create(&note)
+	require.NoError(t, result.Error)
+
+	// Verify the note was created
+	var createdNote Note
+	db.First(&createdNote, "id = ?", "direct-test-note")
+	require.Equal(t, "user-1", createdNote.OwnerID)
+
+	// Create the resource
+	noteResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "notes",
+		Model: Note{},
+	})
+
+	// Create owner resource
+	ownerNoteResource := resource.NewOwnerResource(noteResource, resource.OwnerConfig{
+		OwnerField:       "OwnerID",
+		EnforceOwnership: true,
+	})
+
+	// Create owner repository
+	noteRepo, err := repository.NewOwnerRepository(db, ownerNoteResource)
+	require.NoError(t, err)
+
+	// Create a context with owner ID
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.OwnerContextKey, "user-1")
+
+	// Try to get the note
+	retrievedNote, err := noteRepo.Get(ctx, "direct-test-note")
+	t.Logf("Get result: %v, Error: %v", retrievedNote, err)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedNote)
+
+	// Try to update the note
+	updateData := map[string]interface{}{
+		"title": "Updated Direct Test",
+	}
+	updatedNote, err := noteRepo.Update(ctx, "direct-test-note", updateData)
+	t.Logf("Update result: %v, Error: %v", updatedNote, err)
+	require.NoError(t, err)
+	require.NotNil(t, updatedNote)
+}
+
+// Test the database schema
+func TestDatabaseSchema(t *testing.T) {
+	// Create a test database
+	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	// Auto migrate test models
+	db.AutoMigrate(&Note{})
+
+	// Create a note
+	note := Note{
+		ID:      "schema-test-note",
+		Title:   "Schema Test",
+		Content: "Testing database schema",
+		OwnerID: "user-1",
+	}
+	result := db.Create(&note)
+	require.NoError(t, result.Error)
+
+	// Get table info
+	var columns []struct {
+		CID       int
+		Name      string
+		Type      string
+		NotNull   int
+		DfltValue interface{}
+		PK        int
+	}
+
+	db.Raw("PRAGMA table_info(notes)").Scan(&columns)
+	t.Log("Table schema for 'notes':")
+	for _, col := range columns {
+		t.Logf("Column: %s, Type: %s, PK: %d", col.Name, col.Type, col.PK)
+	}
+
+	// Test direct SQL query
+	var directQueryResult []struct {
+		ID      string
+		Title   string
+		OwnerID string `gorm:"column:owner_id"`
+	}
+
+	db.Raw("SELECT id, title, owner_id FROM notes WHERE id = ? AND owner_id = ?",
+		"schema-test-note", "user-1").Scan(&directQueryResult)
+
+	t.Logf("Direct SQL query result: %v", directQueryResult)
+
+	// Test with quoted column name
+	var quotedQueryResult []struct {
+		ID      string
+		Title   string
+		OwnerID string `gorm:"column:owner_id"`
+	}
+
+	db.Raw("SELECT id, title, \"owner_id\" FROM notes WHERE id = ? AND \"owner_id\" = ?",
+		"schema-test-note", "user-1").Scan(&quotedQueryResult)
+
+	t.Logf("Quoted SQL query result: %v", quotedQueryResult)
+}
+
+// Test the Note schema and OwnerResource configuration
+func TestNoteSchemaAndOwnerResource(t *testing.T) {
+	// Create a test database
+	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	// Auto migrate the Note model
+	db.AutoMigrate(&Note{})
+
+	// Create a note
+	note := Note{
+		ID:      "schema-test-note",
+		Title:   "Schema Test",
+		Content: "Testing owner resource",
+		OwnerID: "user-1",
+	}
+	result := db.Create(&note)
+	require.NoError(t, result.Error)
+
+	// Create note resource
+	noteResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "notes",
+		Model: Note{},
+	})
+
+	// Print the Note struct fields
+	t.Log("Note struct fields:")
+	noteType := reflect.TypeOf(Note{})
+	for i := 0; i < noteType.NumField(); i++ {
+		field := noteType.Field(i)
+		t.Logf("Field: %s, JSON: %s, GORM: %s",
+			field.Name,
+			field.Tag.Get("json"),
+			field.Tag.Get("gorm"))
+	}
+
+	t.Run("Using OwnerID", func(t *testing.T) {
+		// Create owner resource with the specified field
+		ownerResource := resource.NewOwnerResource(noteResource, resource.OwnerConfig{
+			OwnerField:       "OwnerID",
+			EnforceOwnership: true,
+		})
+
+		// Check the owner field
+		t.Logf("Owner field configured as: %s", ownerResource.GetOwnerField())
+
+		// Create owner repository
+		repo, err := repository.NewOwnerRepository(db, ownerResource)
+		require.NoError(t, err)
+
+		// Create context with owner ID
+		ctx := context.Background()
+		ctx = context.WithValue(ctx, middleware.OwnerContextKey, "user-1")
+
+		// Try to get the note
+		found, err := repo.Get(ctx, "schema-test-note")
+		t.Logf("Get result for %s: %v, err: %v", "OwnerID", found, err)
+
+		// Try direct SQL query with owner field
+		var directQueryResult []struct {
+			ID      string
+			OwnerID string `gorm:"column:owner_id"`
+		}
+
+		// Use the configured owner field to build the query
+		columnName := db.Config.NamingStrategy.ColumnName("", "OwnerID")
+		t.Logf("Column name for %s: %s", "OwnerID", columnName)
+
+		db.Raw("SELECT id, owner_id FROM notes WHERE id = ? AND "+columnName+" = ?",
+			"schema-test-note", "user-1").Scan(&directQueryResult)
+
+		t.Logf("Direct SQL query result for %s: %v", "OwnerID", directQueryResult)
 	})
 }

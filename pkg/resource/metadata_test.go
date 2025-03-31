@@ -468,7 +468,7 @@ func TestGenerateFieldsMetadataWithJson(t *testing.T) {
 								Path:  "email.host",
 								Label: "SMTP Host",
 								Type:  "string",
-								Validation: &Validation{
+								Validation: &JsonValidation{
 									Required: true,
 								},
 								Form: &FormConfig{
@@ -480,7 +480,7 @@ func TestGenerateFieldsMetadataWithJson(t *testing.T) {
 								Path:  "email.port",
 								Label: "SMTP Port",
 								Type:  "number",
-								Validation: &Validation{
+								Validation: &JsonValidation{
 									Required: true,
 									Min:      0,
 									Max:      65535,
@@ -655,4 +655,812 @@ func TestExtractJsonSchemaAndProperties(t *testing.T) {
 			assert.Equal(t, "string", prop.Type)
 		}
 	}
+}
+
+func TestGenerateJsonConfigMetadataWithNestedOptions(t *testing.T) {
+	// Create a field with nested JSON configuration
+	jsonConfig := &JsonConfig{
+		DefaultExpanded: true,
+		EditorType:      "form",
+		Nested:          true,
+		RenderAs:        "tabs",
+		TabsConfig: &JsonTabsConfig{
+			TabPosition:      "top",
+			DefaultActiveTab: "basic",
+			Tabs: []JsonTab{
+				{
+					Key:    "basic",
+					Title:  "Basic Settings",
+					Icon:   "settings",
+					Fields: []string{"name", "description", "active"},
+				},
+				{
+					Key:    "advanced",
+					Title:  "Advanced",
+					Icon:   "advanced-settings",
+					Fields: []string{"config.email", "config.oauth"},
+				},
+			},
+		},
+		ObjectLabels: map[string]string{
+			"config.email": "Email Settings",
+			"config.oauth": "OAuth Configuration",
+		},
+		Properties: []JsonProperty{
+			{
+				Path:  "name",
+				Label: "Name",
+				Type:  "string",
+				Validation: &JsonValidation{
+					Required:  true,
+					MinLength: 3,
+				},
+			},
+			{
+				Path:  "config",
+				Label: "Configuration",
+				Type:  "object",
+				Properties: []JsonProperty{
+					{
+						Path:  "config.email",
+						Label: "Email",
+						Type:  "object",
+					},
+					{
+						Path:  "config.oauth",
+						Label: "OAuth",
+						Type:  "object",
+					},
+				},
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateJsonConfigMetadata(jsonConfig)
+
+	// Verify base metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.DefaultExpanded)
+	assert.Equal(t, "form", metadata.EditorType)
+	assert.True(t, metadata.Nested)
+	assert.Equal(t, "tabs", metadata.RenderAs)
+
+	// Verify tabs configuration
+	assert.NotNil(t, metadata.TabsConfig)
+	assert.Equal(t, "top", metadata.TabsConfig.TabPosition)
+	assert.Equal(t, "basic", metadata.TabsConfig.DefaultActiveTab)
+	assert.Len(t, metadata.TabsConfig.Tabs, 2)
+
+	// First tab
+	assert.Equal(t, "basic", metadata.TabsConfig.Tabs[0].Key)
+	assert.Equal(t, "Basic Settings", metadata.TabsConfig.Tabs[0].Title)
+	assert.Equal(t, "settings", metadata.TabsConfig.Tabs[0].Icon)
+	assert.Equal(t, []string{"name", "description", "active"}, metadata.TabsConfig.Tabs[0].Fields)
+
+	// Second tab
+	assert.Equal(t, "advanced", metadata.TabsConfig.Tabs[1].Key)
+	assert.Equal(t, "Advanced", metadata.TabsConfig.Tabs[1].Title)
+	assert.Contains(t, metadata.TabsConfig.Tabs[1].Fields, "config.email")
+
+	// Verify object labels
+	assert.NotNil(t, metadata.ObjectLabels)
+	assert.Equal(t, "Email Settings", metadata.ObjectLabels["config.email"])
+	assert.Equal(t, "OAuth Configuration", metadata.ObjectLabels["config.oauth"])
+
+	// Verify properties
+	assert.Len(t, metadata.Properties, 2)
+	assert.Equal(t, "name", metadata.Properties[0].Path)
+	assert.Equal(t, "config", metadata.Properties[1].Path)
+}
+
+func TestGenerateJsonConfigMetadataWithGridLayout(t *testing.T) {
+	// Create a field with grid layout JSON configuration
+	jsonConfig := &JsonConfig{
+		DefaultExpanded: true,
+		EditorType:      "form",
+		Nested:          true,
+		RenderAs:        "grid",
+		GridConfig: &JsonGridConfig{
+			Columns: 12,
+			Gutter:  16,
+			FieldLayouts: map[string]*JsonFieldLayout{
+				"name": {
+					Column:  1,
+					Row:     1,
+					ColSpan: 6,
+					RowSpan: 1,
+				},
+				"description": {
+					Column:  7,
+					Row:     1,
+					ColSpan: 6,
+					RowSpan: 1,
+				},
+				"config.email": {
+					Column:  1,
+					Row:     2,
+					ColSpan: 12,
+					RowSpan: 2,
+				},
+			},
+		},
+		Properties: []JsonProperty{
+			{
+				Path:  "name",
+				Label: "Name",
+				Type:  "string",
+			},
+			{
+				Path:  "description",
+				Label: "Description",
+				Type:  "string",
+			},
+			{
+				Path:  "config.email",
+				Label: "Email Configuration",
+				Type:  "object",
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateJsonConfigMetadata(jsonConfig)
+
+	// Verify base metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.Nested)
+	assert.Equal(t, "grid", metadata.RenderAs)
+
+	// Verify grid configuration
+	assert.NotNil(t, metadata.GridConfig)
+	assert.Equal(t, 12, metadata.GridConfig.Columns)
+	assert.Equal(t, 16, metadata.GridConfig.Gutter)
+	assert.Len(t, metadata.GridConfig.FieldLayouts, 3)
+
+	// Verify field layouts
+	nameLayout := metadata.GridConfig.FieldLayouts["name"]
+	assert.NotNil(t, nameLayout)
+	assert.Equal(t, 1, nameLayout.Column)
+	assert.Equal(t, 1, nameLayout.Row)
+	assert.Equal(t, 6, nameLayout.ColSpan)
+	assert.Equal(t, 1, nameLayout.RowSpan)
+
+	emailLayout := metadata.GridConfig.FieldLayouts["config.email"]
+	assert.NotNil(t, emailLayout)
+	assert.Equal(t, 1, emailLayout.Column)
+	assert.Equal(t, 2, emailLayout.Row)
+	assert.Equal(t, 12, emailLayout.ColSpan)
+	assert.Equal(t, 2, emailLayout.RowSpan)
+}
+
+func TestGenerateFileConfigMetadata(t *testing.T) {
+	// Create a file config for testing
+	fileConfig := &FileConfig{
+		AllowedTypes:       []string{"image/jpeg", "image/png", "application/pdf"},
+		MaxSize:            10485760, // 10MB
+		BaseURL:            "/uploads/images",
+		IsImage:            true,
+		MaxWidth:           1920,
+		MaxHeight:          1080,
+		GenerateThumbnails: true,
+		ThumbnailSizes: []ThumbnailSize{
+			{
+				Name:            "small",
+				Width:           150,
+				Height:          150,
+				KeepAspectRatio: true,
+			},
+			{
+				Name:            "medium",
+				Width:           400,
+				Height:          300,
+				KeepAspectRatio: true,
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFileConfigMetadata(fileConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, []string{"image/jpeg", "image/png", "application/pdf"}, metadata.AllowedTypes)
+	assert.Equal(t, int64(10485760), metadata.MaxSize)
+	assert.Equal(t, "/uploads/images", metadata.BaseURL)
+	assert.True(t, metadata.IsImage)
+	assert.Equal(t, 1920, metadata.MaxWidth)
+	assert.Equal(t, 1080, metadata.MaxHeight)
+	assert.True(t, metadata.GenerateThumbnails)
+
+	// Verify thumbnail sizes
+	assert.Len(t, metadata.ThumbnailSizes, 2)
+	assert.Equal(t, "small", metadata.ThumbnailSizes[0].Name)
+	assert.Equal(t, 150, metadata.ThumbnailSizes[0].Width)
+	assert.Equal(t, 150, metadata.ThumbnailSizes[0].Height)
+	assert.True(t, metadata.ThumbnailSizes[0].KeepAspectRatio)
+
+	assert.Equal(t, "medium", metadata.ThumbnailSizes[1].Name)
+	assert.Equal(t, 400, metadata.ThumbnailSizes[1].Width)
+	assert.Equal(t, 300, metadata.ThumbnailSizes[1].Height)
+	assert.True(t, metadata.ThumbnailSizes[1].KeepAspectRatio)
+
+	// Test null case
+	assert.Nil(t, GenerateFileConfigMetadata(nil))
+}
+
+func TestGenerateRichTextConfigMetadata(t *testing.T) {
+	// Create a rich text config for testing
+	richTextConfig := &RichTextConfig{
+		Toolbar: []string{
+			"bold", "italic", "underline", "link", "image", "heading",
+			"bulletList", "orderedList", "blockquote", "codeBlock",
+		},
+		Height:       "300px",
+		Placeholder:  "Enter your content here...",
+		EnableImages: true,
+		MaxLength:    10000,
+		ShowCounter:  true,
+		Format:       "html",
+	}
+
+	// Generate metadata
+	metadata := GenerateRichTextConfigMetadata(richTextConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Contains(t, metadata.Toolbar, "bold")
+	assert.Contains(t, metadata.Toolbar, "image")
+	assert.Contains(t, metadata.Toolbar, "blockquote")
+	assert.Equal(t, "300px", metadata.Height)
+	assert.Equal(t, "Enter your content here...", metadata.Placeholder)
+	assert.True(t, metadata.EnableImages)
+	assert.Equal(t, 10000, metadata.MaxLength)
+	assert.True(t, metadata.ShowCounter)
+	assert.Equal(t, "html", metadata.Format)
+
+	// Test null case
+	assert.Nil(t, GenerateRichTextConfigMetadata(nil))
+}
+
+func TestGenerateSelectConfigMetadata(t *testing.T) {
+	// Create options and dependent options for testing
+	userOptions := []Option{
+		{Value: 1, Label: "Admin"},
+		{Value: 2, Label: "Editor"},
+		{Value: 3, Label: "Viewer"},
+	}
+
+	categoryOptions := []Option{
+		{Value: "tech", Label: "Technology"},
+		{Value: "health", Label: "Health & Wellness"},
+		{Value: "finance", Label: "Finance"},
+	}
+
+	// Create a select config for testing
+	selectConfig := &SelectConfig{
+		Multiple:    true,
+		Searchable:  true,
+		Creatable:   false,
+		OptionsURL:  "/api/options/users",
+		DependsOn:   "category",
+		Placeholder: "Select user roles",
+		Clearable:   true,
+		DisplayMode: "tags",
+		DependentOptions: map[string][]Option{
+			"admin": userOptions,
+			"editor": {
+				{Value: 2, Label: "Editor"},
+				{Value: 3, Label: "Viewer"},
+			},
+			"category": categoryOptions,
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateSelectConfigMetadata(selectConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.Multiple)
+	assert.True(t, metadata.Searchable)
+	assert.False(t, metadata.Creatable)
+	assert.Equal(t, "/api/options/users", metadata.OptionsURL)
+	assert.Equal(t, "category", metadata.DependsOn)
+	assert.Equal(t, "Select user roles", metadata.Placeholder)
+	assert.True(t, metadata.Clearable)
+	assert.Equal(t, "tags", metadata.DisplayMode)
+
+	// Verify dependent options
+	assert.Len(t, metadata.DependentOptions, 3)
+	assert.Len(t, metadata.DependentOptions["admin"], 3)
+	assert.Len(t, metadata.DependentOptions["editor"], 2)
+	assert.Len(t, metadata.DependentOptions["category"], 3)
+
+	// Check specific option content
+	adminValue := metadata.DependentOptions["admin"][0].Value
+	assert.Equal(t, 1, adminValue)
+	assert.Equal(t, "Admin", metadata.DependentOptions["admin"][0].Label)
+	assert.Equal(t, "tech", metadata.DependentOptions["category"][0].Value)
+	assert.Equal(t, "Technology", metadata.DependentOptions["category"][0].Label)
+
+	// Test null case
+	assert.Nil(t, GenerateSelectConfigMetadata(nil))
+}
+
+func TestGenerateComputedFieldConfigMetadata(t *testing.T) {
+	// Create a computed field config for testing
+	computedConfig := &ComputedFieldConfig{
+		DependsOn:    []string{"firstName", "lastName"},
+		Expression:   "${firstName} + ' ' + ${lastName}",
+		ClientSide:   true,
+		Format:       "text",
+		Persist:      false,
+		ComputeOrder: 10,
+	}
+
+	// Generate metadata
+	metadata := GenerateComputedFieldConfigMetadata(computedConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, []string{"firstName", "lastName"}, metadata.DependsOn)
+	assert.Equal(t, "${firstName} + ' ' + ${lastName}", metadata.Expression)
+	assert.True(t, metadata.ClientSide)
+	assert.Equal(t, "text", metadata.Format)
+	assert.False(t, metadata.Persist)
+	assert.Equal(t, 10, metadata.ComputeOrder)
+
+	// Test null case
+	assert.Nil(t, GenerateComputedFieldConfigMetadata(nil))
+}
+
+func TestGenerateFieldsMetadataWithSpecialFields(t *testing.T) {
+	// Create sample fields with special field types
+	fields := []Field{
+		{
+			Name:  "avatar",
+			Type:  "file",
+			Label: "User Avatar",
+			File: &FileConfig{
+				IsImage:      true,
+				AllowedTypes: []string{"image/jpeg", "image/png"},
+				MaxSize:      2097152, // 2MB
+			},
+		},
+		{
+			Name:  "biography",
+			Type:  "richtext",
+			Label: "User Biography",
+			RichText: &RichTextConfig{
+				Toolbar:     []string{"bold", "italic", "link"},
+				MaxLength:   5000,
+				ShowCounter: true,
+			},
+		},
+		{
+			Name:  "role",
+			Type:  "select",
+			Label: "User Role",
+			Select: &SelectConfig{
+				Multiple:    false,
+				Searchable:  true,
+				DisplayMode: "dropdown",
+			},
+		},
+		{
+			Name:     "fullName",
+			Type:     "string",
+			Label:    "Full Name",
+			ReadOnly: true,
+			Computed: &ComputedFieldConfig{
+				DependsOn:  []string{"firstName", "lastName"},
+				Expression: "${firstName} + ' ' + ${lastName}",
+				ClientSide: true,
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFieldsMetadata(fields)
+
+	// Verify metadata
+	assert.Len(t, metadata, 4)
+
+	// Check avatar field (file type)
+	avatarMeta := findFieldMetadata(metadata, "avatar")
+	assert.NotNil(t, avatarMeta)
+	assert.Equal(t, "file", avatarMeta.Type)
+	assert.NotNil(t, avatarMeta.File)
+	assert.True(t, avatarMeta.File.IsImage)
+	assert.Equal(t, []string{"image/jpeg", "image/png"}, avatarMeta.File.AllowedTypes)
+	assert.Equal(t, int64(2097152), avatarMeta.File.MaxSize)
+
+	// Check biography field (richtext type)
+	bioMeta := findFieldMetadata(metadata, "biography")
+	assert.NotNil(t, bioMeta)
+	assert.Equal(t, "richtext", bioMeta.Type)
+	assert.NotNil(t, bioMeta.RichText)
+	assert.Contains(t, bioMeta.RichText.Toolbar, "bold")
+	assert.Equal(t, 5000, bioMeta.RichText.MaxLength)
+	assert.True(t, bioMeta.RichText.ShowCounter)
+
+	// Check role field (select type)
+	roleMeta := findFieldMetadata(metadata, "role")
+	assert.NotNil(t, roleMeta)
+	assert.Equal(t, "select", roleMeta.Type)
+	assert.NotNil(t, roleMeta.Select)
+	assert.False(t, roleMeta.Select.Multiple)
+	assert.True(t, roleMeta.Select.Searchable)
+	assert.Equal(t, "dropdown", roleMeta.Select.DisplayMode)
+
+	// Check fullName field (computed type)
+	nameMeta := findFieldMetadata(metadata, "fullName")
+	assert.NotNil(t, nameMeta)
+	assert.Equal(t, "string", nameMeta.Type)
+	assert.True(t, nameMeta.ReadOnly)
+	assert.NotNil(t, nameMeta.Computed)
+	assert.Equal(t, []string{"firstName", "lastName"}, nameMeta.Computed.DependsOn)
+	assert.Equal(t, "${firstName} + ' ' + ${lastName}", nameMeta.Computed.Expression)
+	assert.True(t, nameMeta.Computed.ClientSide)
+}
+
+// Helper function to find field metadata by name
+func findFieldMetadata(fields []FieldMetadata, name string) *FieldMetadata {
+	for _, field := range fields {
+		if field.Name == name {
+			return &field
+		}
+	}
+	return nil
+}
+
+func TestGenerateAntDesignConfigMetadata(t *testing.T) {
+	// Create an Ant Design config for testing
+	antDesignConfig := &AntDesignConfig{
+		ComponentType: "Select",
+		Props: map[string]interface{}{
+			"allowClear":  true,
+			"mode":        "multiple",
+			"placeholder": "Select options",
+		},
+		Rules: []AntDesignRuleMetadata{
+			{
+				Type:    "required",
+				Message: "This field is required",
+			},
+			{
+				Type:    "min",
+				Value:   2,
+				Message: "Please select at least 2 options",
+			},
+		},
+		FormItemProps: map[string]interface{}{
+			"tooltip": "Select multiple options",
+		},
+		Dependencies: []string{"category", "type"},
+	}
+
+	// Generate metadata
+	metadata := GenerateAntDesignConfigMetadata(antDesignConfig, nil)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, "Select", metadata.ComponentType)
+
+	// Verify props
+	assert.NotNil(t, metadata.Props)
+	assert.Equal(t, true, metadata.Props["allowClear"])
+	assert.Equal(t, "multiple", metadata.Props["mode"])
+	assert.Equal(t, "Select options", metadata.Props["placeholder"])
+
+	// Verify rules
+	assert.Len(t, metadata.Rules, 2)
+	assert.Equal(t, "required", metadata.Rules[0].Type)
+	assert.Equal(t, "This field is required", metadata.Rules[0].Message)
+	assert.Equal(t, "min", metadata.Rules[1].Type)
+	assert.Equal(t, 2, metadata.Rules[1].Value)
+	assert.Equal(t, "Please select at least 2 options", metadata.Rules[1].Message)
+
+	// Verify form item props
+	assert.NotNil(t, metadata.FormItemProps)
+	assert.Equal(t, "Select multiple options", metadata.FormItemProps["tooltip"])
+
+	// Verify dependencies
+	assert.Equal(t, []string{"category", "type"}, metadata.Dependencies)
+
+	// Test null case
+	assert.Nil(t, GenerateAntDesignConfigMetadata(nil, nil))
+}
+
+func TestMapValidationToAntDesignRules(t *testing.T) {
+	// Create validation rules
+	validation := &Validation{
+		Required:  true,
+		Min:       10,
+		Max:       100,
+		MinLength: 5,
+		MaxLength: 50,
+		Pattern:   "^[a-zA-Z0-9]+$",
+		Message:   "Custom validation message",
+	}
+
+	// Map to Ant Design rules
+	rules := MapValidationToAntDesignRules(validation)
+
+	// Verify rules
+	assert.Len(t, rules, 6)
+
+	// Find and verify each rule type
+	var requiredRule, minLengthRule, maxLengthRule, patternRule, minRule, maxRule *AntDesignRuleMetadata
+
+	for i := range rules {
+		rule := &rules[i]
+		switch rule.Type {
+		case "required":
+			requiredRule = rule
+		case "min":
+			if rule.Value == validation.MinLength {
+				minLengthRule = rule
+			} else if rule.Value == validation.Min {
+				minRule = rule
+			}
+		case "max":
+			if rule.Value == validation.MaxLength {
+				maxLengthRule = rule
+			} else if rule.Value == validation.Max {
+				maxRule = rule
+			}
+		case "pattern":
+			patternRule = rule
+		}
+	}
+
+	// Verify required rule
+	assert.NotNil(t, requiredRule)
+	assert.Equal(t, "required", requiredRule.Type)
+	assert.Equal(t, validation.Message, requiredRule.Message)
+
+	// Verify min length rule
+	assert.NotNil(t, minLengthRule)
+	assert.Equal(t, "min", minLengthRule.Type)
+	assert.Equal(t, validation.MinLength, minLengthRule.Value)
+
+	// Verify max length rule
+	assert.NotNil(t, maxLengthRule)
+	assert.Equal(t, "max", maxLengthRule.Type)
+	assert.Equal(t, validation.MaxLength, maxLengthRule.Value)
+
+	// Verify pattern rule
+	assert.NotNil(t, patternRule)
+	assert.Equal(t, "pattern", patternRule.Type)
+	assert.Equal(t, validation.Pattern, patternRule.Pattern)
+
+	// Verify min value rule
+	assert.NotNil(t, minRule)
+	assert.Equal(t, "min", minRule.Type)
+	assert.Equal(t, validation.Min, minRule.Value)
+
+	// Verify max value rule
+	assert.NotNil(t, maxRule)
+	assert.Equal(t, "max", maxRule.Type)
+	assert.Equal(t, validation.Max, maxRule.Value)
+
+	// Test null case
+	assert.Nil(t, MapValidationToAntDesignRules(nil))
+}
+
+func TestAutoDetectAntDesignComponent(t *testing.T) {
+	// Test detection for various field types
+	testCases := []struct {
+		name     string
+		field    Field
+		expected string
+	}{
+		{
+			name: "String field",
+			field: Field{
+				Name: "title",
+				Type: "string",
+			},
+			expected: "Input",
+		},
+		{
+			name: "Password field",
+			field: Field{
+				Name: "password",
+				Type: "string",
+			},
+			expected: "Password",
+		},
+		{
+			name: "Number field",
+			field: Field{
+				Name: "age",
+				Type: "number",
+			},
+			expected: "InputNumber",
+		},
+		{
+			name: "Boolean field",
+			field: Field{
+				Name: "active",
+				Type: "boolean",
+			},
+			expected: "Switch",
+		},
+		{
+			name: "Date field",
+			field: Field{
+				Name: "birthDate",
+				Type: "date",
+			},
+			expected: "DatePicker",
+		},
+		{
+			name: "Select field with options",
+			field: Field{
+				Name: "category",
+				Type: "string",
+				Options: []Option{
+					{Value: "a", Label: "A"},
+					{Value: "b", Label: "B"},
+				},
+			},
+			expected: "Select",
+		},
+		{
+			name: "File field",
+			field: Field{
+				Name: "document",
+				Type: "file",
+				File: &FileConfig{
+					IsImage: false,
+				},
+			},
+			expected: "Upload",
+		},
+		{
+			name: "Image field",
+			field: Field{
+				Name: "avatar",
+				Type: "file",
+				File: &FileConfig{
+					IsImage: true,
+				},
+			},
+			expected: "Upload.Image",
+		},
+		{
+			name: "Rich text field",
+			field: Field{
+				Name:     "content",
+				Type:     "string",
+				RichText: &RichTextConfig{},
+			},
+			expected: "TextArea",
+		},
+		{
+			name: "JSON field",
+			field: Field{
+				Name: "config",
+				Type: "json",
+			},
+			expected: "JsonEditor",
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			component := AutoDetectAntDesignComponent(&tc.field)
+			assert.Equal(t, tc.expected, component)
+		})
+	}
+
+	// Test null case
+	assert.Equal(t, "Input", AutoDetectAntDesignComponent(nil))
+}
+
+func TestGenerateFieldsMetadataWithAntDesign(t *testing.T) {
+	// Create fields with explicit and implicit Ant Design configuration
+	fields := []Field{
+		{
+			Name: "name",
+			Type: "string",
+			Validation: &Validation{
+				Required:  true,
+				MinLength: 3,
+				MaxLength: 50,
+			},
+			Form: &FormConfig{
+				Placeholder: "Enter your name",
+			},
+			// Explicit Ant Design config
+			AntDesign: &AntDesignConfig{
+				ComponentType: "Input",
+				Props: map[string]interface{}{
+					"allowClear": true,
+				},
+			},
+		},
+		{
+			Name: "age",
+			Type: "number",
+			Validation: &Validation{
+				Required: true,
+				Min:      18,
+				Max:      120,
+			},
+			// No explicit Ant Design config - should be auto-generated
+		},
+		{
+			Name: "isActive",
+			Type: "boolean",
+			// No explicit Ant Design config - should be auto-generated
+		},
+		{
+			Name: "role",
+			Type: "select",
+			Options: []Option{
+				{Value: "admin", Label: "Administrator"},
+				{Value: "user", Label: "Regular User"},
+			},
+			// No explicit Ant Design config - should be auto-generated
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFieldsMetadata(fields)
+
+	// Verify metadata
+	assert.Len(t, metadata, 4)
+
+	// Check name field with explicit config
+	nameMeta := findFieldMetadata(metadata, "name")
+	assert.NotNil(t, nameMeta)
+	assert.NotNil(t, nameMeta.AntDesign)
+	assert.Equal(t, "Input", nameMeta.AntDesign.ComponentType)
+	assert.Equal(t, true, nameMeta.AntDesign.Props["allowClear"])
+
+	// Check age field with auto-generated config
+	ageMeta := findFieldMetadata(metadata, "age")
+	assert.NotNil(t, ageMeta)
+	assert.NotNil(t, ageMeta.AntDesign)
+	assert.Equal(t, "InputNumber", ageMeta.AntDesign.ComponentType)
+	assert.Equal(t, float64(18), ageMeta.AntDesign.Props["min"])
+	assert.Equal(t, float64(120), ageMeta.AntDesign.Props["max"])
+
+	// Check rules for age field
+	assert.NotEmpty(t, ageMeta.AntDesign.Rules)
+	hasRequiredRule := false
+	for _, rule := range ageMeta.AntDesign.Rules {
+		if rule.Type == "required" {
+			hasRequiredRule = true
+			break
+		}
+	}
+	assert.True(t, hasRequiredRule)
+
+	// Check isActive field
+	isActiveMeta := findFieldMetadata(metadata, "isActive")
+	assert.NotNil(t, isActiveMeta)
+	assert.NotNil(t, isActiveMeta.AntDesign)
+	assert.Equal(t, "Switch", isActiveMeta.AntDesign.ComponentType)
+	assert.Equal(t, "checked", isActiveMeta.AntDesign.FormItemProps["valuePropName"])
+
+	// Check role field
+	roleMeta := findFieldMetadata(metadata, "role")
+	assert.NotNil(t, roleMeta)
+	assert.NotNil(t, roleMeta.AntDesign)
+	assert.Equal(t, "Select", roleMeta.AntDesign.ComponentType)
+
+	// Verify options in Select
+	options, ok := roleMeta.AntDesign.Props["options"].([]map[string]interface{})
+	assert.True(t, ok)
+	assert.Len(t, options, 2)
+	assert.Equal(t, "admin", options[0]["value"])
+	assert.Equal(t, "Administrator", options[0]["label"])
+	assert.Equal(t, "user", options[1]["value"])
+	assert.Equal(t, "Regular User", options[1]["label"])
 }

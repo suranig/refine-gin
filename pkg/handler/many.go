@@ -175,6 +175,9 @@ func GenerateUpdateManyHandler(res resource.Resource, repo repository.Repository
 			modelData = req.Values
 		}
 
+		// Filter out read-only fields from the update data
+		modelData = resource.FilterOutReadOnlyFields(modelData, res)
+
 		// Get the database connection from repository for validation
 		db := repo.Query(c.Request.Context())
 

@@ -111,6 +111,12 @@ func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]in
 	return args.Error(0)
 }
 
+// GetIDFieldName implements the repository.Repository interface
+func (m *MockRepository) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 // Mock resource for testing
 type MockResource struct {
 	mock.Mock
@@ -249,6 +255,27 @@ func (m *MockResource) GetTableFields() []string {
 		return []string{}
 	}
 	return args.Get(0).([]string)
+}
+
+// GetEditableFields returns editable field names
+func (m *MockResource) GetEditableFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+// GetPermissions returns permissions
+func (m *MockResource) GetPermissions() map[string][]string {
+	args := m.Called()
+	if result := args.Get(0); result != nil {
+		return result.(map[string][]string)
+	}
+	return nil
+}
+
+// HasPermission checks if a resource has a specific permission
+func (m *MockResource) HasPermission(operation string, role string) bool {
+	args := m.Called(operation, role)
+	return args.Bool(0)
 }
 
 // GetFormFields returns form field names
@@ -443,6 +470,9 @@ func TestUpdateHandler(t *testing.T) {
 	// Setup repository
 	mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(mockResult, nil)
 
+	// Add expectations for GetEditableFields
+	mockResource.On("GetEditableFields").Return([]string{"name"})
+
 	// Register handler
 	r.PUT("/tests/:id", GenerateUpdateHandler(mockResource, mockRepo, mockDTOProvider))
 
@@ -569,6 +599,9 @@ func TestUpdateHandlerWithParam(t *testing.T) {
 
 	// Setup repository
 	mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(mockResult, nil)
+
+	// Add expectations for GetEditableFields
+	mockResource.On("GetEditableFields").Return([]string{"name"})
 
 	// Register handler with custom parameter name
 	r.PUT("/tests/:uid", GenerateUpdateHandlerWithParam(mockResource, mockRepo, mockDTOProvider, "uid"))

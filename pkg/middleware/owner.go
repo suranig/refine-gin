@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -21,16 +22,37 @@ type ExtractOwnerIDFunc func(c *gin.Context) (interface{}, error)
 // OwnerContext middleware extracts and stores the owner ID in the context
 func OwnerContext(extractor ExtractOwnerIDFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Log request details
+		fmt.Printf("[DEBUG-MIDDLEWARE] Processing request: %s %s\n", c.Request.Method, c.Request.URL.Path)
+
+		// Log all headers
+		fmt.Printf("[DEBUG-MIDDLEWARE] Request headers:\n")
+		for k, v := range c.Request.Header {
+			fmt.Printf("[DEBUG-MIDDLEWARE] %s: %v\n", k, v)
+		}
+
 		ownerID, err := extractor(c)
 		if err != nil {
+			fmt.Printf("[DEBUG-MIDDLEWARE] Failed to extract owner ID: %v\n", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
 
+		// Log extracted owner ID
+		fmt.Printf("[DEBUG-MIDDLEWARE] Extracted owner ID: %v (type: %T)\n", ownerID, ownerID)
+
 		// Store owner ID in context
 		c.Set(OwnerContextKey, ownerID)
+
+		// Verify the value was stored correctly
+		if storedID, exists := c.Get(OwnerContextKey); exists {
+			fmt.Printf("[DEBUG-MIDDLEWARE] Verified stored owner ID: %v (type: %T)\n", storedID, storedID)
+		} else {
+			fmt.Printf("[DEBUG-MIDDLEWARE] WARNING: Owner ID not found in context after setting\n")
+		}
+
 		c.Next()
 	}
 }
@@ -41,16 +63,44 @@ func GetOwnerID(ctx context.Context) (interface{}, error) {
 	gc, ok := ctx.(*gin.Context)
 	if ok {
 		// Extract from gin context
-		if ownerID, exists := gc.Get(OwnerContextKey); exists {
+		ownerID, exists := gc.Get(OwnerContextKey)
+		if exists {
+			// Debug info about the found owner ID
+			switch v := ownerID.(type) {
+			case string:
+				println("[DEBUG-MIDDLEWARE] Found owner ID in Gin context: '" + v + "', type: string")
+			default:
+				println("[DEBUG-MIDDLEWARE] Found owner ID in Gin context, type:", gc.GetString(OwnerContextKey+"_type"))
+			}
 			return ownerID, nil
 		}
+		println("[DEBUG-MIDDLEWARE] Owner ID not found in Gin context")
+
+		// If we can't find the owner ID in the context, print all keys in the context
+		for k, v := range gc.Keys {
+			switch val := v.(type) {
+			case string:
+				println("[DEBUG-MIDDLEWARE] Gin context key:", k, "value:", val)
+			default:
+				println("[DEBUG-MIDDLEWARE] Gin context key:", k, "type:", gc.GetString(k+"_type"))
+			}
+		}
+	} else {
+		println("[DEBUG-MIDDLEWARE] Not a Gin context")
 	}
 
 	// Check if owner ID is set directly in the context
 	if ownerID := ctx.Value(OwnerContextKey); ownerID != nil {
+		switch v := ownerID.(type) {
+		case string:
+			println("[DEBUG-MIDDLEWARE] Found owner ID in regular context: '" + v + "', type: string")
+		default:
+			println("[DEBUG-MIDDLEWARE] Found owner ID in regular context, type not string")
+		}
 		return ownerID, nil
 	}
 
+	println("[DEBUG-MIDDLEWARE] Owner ID not found in any context")
 	return nil, ErrOwnerIDNotFound
 }
 

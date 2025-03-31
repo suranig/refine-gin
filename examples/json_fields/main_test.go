@@ -169,6 +169,10 @@ func TestUpdateDomainWithNestedJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
+	// Log response for debugging
+	t.Logf("Update response status: %d", w.Code)
+	t.Logf("Update response body: %s", w.Body.String())
+
 	// Assert successful update
 	assert.Equal(t, http.StatusOK, w.Code)
 

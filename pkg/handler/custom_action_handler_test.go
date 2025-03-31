@@ -113,6 +113,12 @@ func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]in
 	return args.Error(0)
 }
 
+// GetIDFieldName implements the repository.Repository interface
+func (m *MockRepository) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 // MockResource is a mock implementation of resource.Resource for testing
 type MockResource struct {
 	mock.Mock
@@ -247,6 +253,33 @@ func (m *MockResource) GetFormFields() []string {
 		return []string{}
 	}
 	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetEditableFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetPermissions() map[string][]string {
+	args := m.Called()
+	if result := args.Get(0); result != nil {
+		return result.(map[string][]string)
+	}
+	return nil
+}
+
+func (m *MockResource) HasPermission(operation string, role string) bool {
+	args := m.Called(operation, role)
+	return args.Bool(0)
+}
+
+// GetFormLayout returns the form layout configuration
+func (r *MockResource) GetFormLayout() *resource.FormLayout {
+	args := r.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.FormLayout)
 }
 
 func TestRegisterResourceForRefineWithRelations(t *testing.T) {

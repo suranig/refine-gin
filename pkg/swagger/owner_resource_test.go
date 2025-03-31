@@ -159,9 +159,12 @@ func (m *MockOwnerResource) GetDefaultOwnerID() interface{} {
 
 func (m *MockOwnerResource) GetFormFields() []string {
 	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
+	return args.Get(0).([]string)
+}
+
+// GetEditableFields returns a list of field names that can be edited
+func (m *MockOwnerResource) GetEditableFields() []string {
+	args := m.Called()
 	return args.Get(0).([]string)
 }
 
@@ -173,6 +176,23 @@ func (m *MockOwnerResource) GetOwnerConfig() resource.OwnerConfig {
 func (m *MockOwnerResource) IsOwnershipEnforced() bool {
 	args := m.Called()
 	return args.Bool(0)
+}
+
+func (m *MockOwnerResource) GetPermissions() map[string][]string {
+	args := m.Called()
+	if result := args.Get(0); result != nil {
+		return result.(map[string][]string)
+	}
+	return nil
+}
+
+func (m *MockOwnerResource) HasPermission(operation string, role string) bool {
+	args := m.Called(operation, role)
+	return args.Bool(0)
+}
+
+func (m *MockOwnerResource) GetFormLayout() *resource.FormLayout {
+	return nil
 }
 
 // TestRegisterOwnerResourceSwagger tests the RegisterOwnerResourceSwagger function
@@ -212,6 +232,7 @@ func TestRegisterOwnerResourceSwagger(t *testing.T) {
 	mockOwnerResource.On("GetIDFieldName").Return("id")
 	mockOwnerResource.On("GetDefaultOwnerID").Return(nil)
 	mockOwnerResource.On("GetFormFields").Return([]string{"title", "content"})
+	mockOwnerResource.On("GetEditableFields").Return([]string{"title", "content"})
 	mockOwnerResource.On("IsOwnershipEnforced").Return(true)
 	mockOwnerResource.On("GetOwnerConfig").Return(resource.OwnerConfig{
 		OwnerField:       "ownerId",

@@ -384,3 +384,31 @@ func (m *MockResource) GetFormFields() []string {
 	}
 	return args.Get(0).([]string)
 }
+
+// GetEditableFields returns editable field names
+func (m *MockResource) GetEditableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+// Add the GetPermissions method to MockResource to implement the Resource interface
+func (m *MockResource) GetPermissions() map[string][]string {
+	args := m.Called()
+	if result := args.Get(0); result != nil {
+		return result.(map[string][]string)
+	}
+	return nil
+}
+
+// Add the HasPermission method to MockResource to implement the Resource interface
+func (m *MockResource) HasPermission(operation string, role string) bool {
+	args := m.Called(operation, role)
+	return args.Bool(0)
+}
+
+func (m *MockResource) GetFormLayout() *resource.FormLayout {
+	return nil
+}

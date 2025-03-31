@@ -148,6 +148,27 @@ func (m *MockResourceForTest) GetFormFields() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MockResourceForTest) GetEditableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResourceForTest) GetPermissions() map[string][]string {
+	return nil
+}
+
+func (m *MockResourceForTest) HasPermission(operation string, role string) bool {
+	return true
+}
+
+// Implement GetFormLayout method for MockResourceForTest
+func (m *MockResourceForTest) GetFormLayout() *resource.FormLayout {
+	return nil
+}
+
 func TestAttachAndDetachActions(t *testing.T) {
 	// Test the attachment action
 	t.Run("AttachAction", func(t *testing.T) {
