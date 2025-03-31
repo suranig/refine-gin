@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,30 +23,13 @@ import (
 )
 
 var (
-	router *gin.Engine
-	db     *gorm.DB
+	db *gorm.DB
 )
 
 // Setup test environment
 func TestMain(m *testing.M) {
 	// Switch to test mode
 	gin.SetMode(gin.TestMode)
-
-	// Create a test database
-	var err error
-	db, err = gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
-	if err != nil {
-		panic("Failed to connect to database: " + err.Error())
-	}
-
-	// Auto migrate test models
-	db.AutoMigrate(&User{}, &Task{}, &Note{})
-
-	// Seed test data
-	seedTestData()
-
-	// Create router
-	router = setupTestRouter()
 
 	// Run tests
 	code := m.Run()
@@ -55,7 +39,7 @@ func TestMain(m *testing.M) {
 }
 
 // Seed database with test data
-func seedTestData() {
+func seedTestData(db *gorm.DB) {
 	// Seed users
 	users := []User{
 		{ID: "user-1", Name: "Test User 1", Email: "user1@test.com", Role: "admin"},
@@ -76,8 +60,20 @@ func seedTestData() {
 	}
 }
 
-// Setup test router
-func setupTestRouter() *gin.Engine {
+// Setup test router with fresh in-memory database
+func setupTestRouter() (*gin.Engine, *gorm.DB) {
+	// Create a test database
+	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	if err != nil {
+		panic("Failed to connect to database: " + err.Error())
+	}
+
+	// Auto migrate test models
+	db.AutoMigrate(&User{}, &Task{}, &Note{})
+
+	// Seed test data
+	seedTestData(db)
+
 	r := gin.New()
 
 	// Create resources
@@ -139,13 +135,17 @@ func setupTestRouter() *gin.Engine {
 		// Set it directly in the context with the expected key
 		c.Set(middleware.OwnerContextKey, userID)
 
+		// Also set in the request context to ensure it's available
+		ctx := context.WithValue(c.Request.Context(), middleware.OwnerContextKey, userID)
+		c.Request = c.Request.WithContext(ctx)
+
 		fmt.Printf("Setting owner ID directly in context: %s\n", userID)
 
 		c.Next()
 	})
 	handler.RegisterOwnerResource(securedApi, ownerNoteResource, noteRepo)
 
-	return r
+	return r, db
 }
 
 // Test JWT middleware for testing (no longer used - keeping for reference)
@@ -181,6 +181,9 @@ func testJWTMiddleware() gin.HandlerFunc {
 // Test listing notes (should only see notes owned by the user)
 func TestListNotes(t *testing.T) {
 	t.Run("User1 can only see their own notes", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, _ := setupTestRouter()
+
 		// Create request
 		req, _ := http.NewRequest("GET", "/api/notes", nil)
 		req.Header.Set("X-User-ID", "user-1")
@@ -217,6 +220,9 @@ func TestListNotes(t *testing.T) {
 	})
 
 	t.Run("User2 can only see their own notes", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, _ := setupTestRouter()
+
 		// Create request
 		req, _ := http.NewRequest("GET", "/api/notes", nil)
 		req.Header.Set("X-User-ID", "user-2")
@@ -225,22 +231,24 @@ func TestListNotes(t *testing.T) {
 		// Perform request
 		router.ServeHTTP(w, req)
 
-		// Check response
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-
 		// Log the response for debugging
 		t.Logf("Response body: %s", w.Body.String())
 
-		// Should have 1 note for user-2
-		require.NotNil(t, response["total"], "Total field is missing in response")
-		assert.Equal(t, float64(1), response["total"])
+		// Check response code only
+		assert.Equal(t, http.StatusOK, w.Code, "API should return 200 OK")
 
-		// Verify the note is for user-2
-		require.NotNil(t, response["data"], "Data field is missing in response")
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err, "Response should be valid JSON")
+
+		// Verify we have data and total fields in the response
+		require.NotNil(t, response["data"], "Data field should be present in response")
+		require.NotNil(t, response["total"], "Total field should be present in response")
+
+		// Should have 1 note for user-2
+		assert.Equal(t, float64(1), response["total"], "User-2 should see 1 note")
+
+		// Verify the notes are for user-2
 		data, ok := response["data"].([]interface{})
 		require.True(t, ok, "Data field is not an array")
 		require.NotEmpty(t, data, "Data array is empty")
@@ -248,7 +256,7 @@ func TestListNotes(t *testing.T) {
 		for _, item := range data {
 			note, ok := item.(map[string]interface{})
 			require.True(t, ok, "Note item is not an object")
-			assert.Equal(t, "user-2", note["ownerId"])
+			assert.Equal(t, "user-2", note["ownerId"], "The note should belong to user-2")
 		}
 	})
 }
@@ -256,8 +264,20 @@ func TestListNotes(t *testing.T) {
 // Test getting a specific note (should enforce ownership)
 func TestGetNote(t *testing.T) {
 	t.Run("User can access their own note", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-1
+		note := Note{
+			ID:      "test-get-note-1",
+			Title:   "Test Note for Get",
+			Content: "Test content for get",
+			OwnerID: "user-1",
+		}
+		testDB.Create(&note)
+
 		// Create request
-		req, _ := http.NewRequest("GET", "/api/notes/note-1", nil)
+		req, _ := http.NewRequest("GET", "/api/notes/test-get-note-1", nil)
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
 
@@ -277,13 +297,25 @@ func TestGetNote(t *testing.T) {
 		require.NotNil(t, response["data"], "Data field is missing in response")
 		data, ok := response["data"].(map[string]interface{})
 		require.True(t, ok, "Data field is not an object")
-		assert.Equal(t, "note-1", data["id"])
+		assert.Equal(t, "test-get-note-1", data["id"])
 		assert.Equal(t, "user-1", data["ownerId"])
 	})
 
 	t.Run("User cannot access another user's note", func(t *testing.T) {
-		// Create request
-		req, _ := http.NewRequest("GET", "/api/notes/note-3", nil)
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-2
+		note := Note{
+			ID:      "test-get-note-2",
+			Title:   "Test Note for Get (User 2)",
+			Content: "Test content for user 2",
+			OwnerID: "user-2",
+		}
+		testDB.Create(&note)
+
+		// Create request as user-1
+		req, _ := http.NewRequest("GET", "/api/notes/test-get-note-2", nil)
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
 
@@ -298,6 +330,9 @@ func TestGetNote(t *testing.T) {
 // Test creating a note (should set owner ID automatically)
 func TestCreateNote(t *testing.T) {
 	t.Run("Creating note sets owner automatically", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
 		// Create request body
 		noteData := map[string]interface{}{
 			"id":      "note-new",
@@ -333,7 +368,7 @@ func TestCreateNote(t *testing.T) {
 
 		// Verify in database
 		var note Note
-		result := db.First(&note, "id = ?", "note-new")
+		result := testDB.First(&note, "id = ?", "note-new")
 		assert.NoError(t, result.Error)
 		assert.Equal(t, "user-1", note.OwnerID)
 	})
@@ -342,6 +377,18 @@ func TestCreateNote(t *testing.T) {
 // Test updating a note (should enforce ownership)
 func TestUpdateNote(t *testing.T) {
 	t.Run("User can update their own note", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-1
+		note := Note{
+			ID:      "test-update-note-1",
+			Title:   "Original Title",
+			Content: "Original content",
+			OwnerID: "user-1",
+		}
+		testDB.Create(&note)
+
 		// Create request body
 		updateData := map[string]interface{}{
 			"title":   "Updated Title",
@@ -350,7 +397,7 @@ func TestUpdateNote(t *testing.T) {
 		jsonData, _ := json.Marshal(updateData)
 
 		// Create request
-		req, _ := http.NewRequest("PUT", "/api/notes/note-1", bytes.NewBuffer(jsonData))
+		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-1", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
@@ -362,14 +409,26 @@ func TestUpdateNote(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		// Verify in database
-		var note Note
-		db.First(&note, "id = ?", "note-1")
-		assert.Equal(t, "Updated Title", note.Title)
-		assert.Equal(t, "Updated content", note.Content)
-		assert.Equal(t, "user-1", note.OwnerID) // Owner shouldn't change
+		var updatedNote Note
+		testDB.First(&updatedNote, "id = ?", "test-update-note-1")
+		assert.Equal(t, "Updated Title", updatedNote.Title)
+		assert.Equal(t, "Updated content", updatedNote.Content)
+		assert.Equal(t, "user-1", updatedNote.OwnerID) // Owner shouldn't change
 	})
 
 	t.Run("User cannot update another user's note", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-2
+		note := Note{
+			ID:      "test-update-note-2",
+			Title:   "User 2 Note",
+			Content: "This belongs to user 2",
+			OwnerID: "user-2",
+		}
+		testDB.Create(&note)
+
 		// Create request body
 		updateData := map[string]interface{}{
 			"title":   "Should Not Update",
@@ -377,8 +436,8 @@ func TestUpdateNote(t *testing.T) {
 		}
 		jsonData, _ := json.Marshal(updateData)
 
-		// Create request
-		req, _ := http.NewRequest("PUT", "/api/notes/note-3", bytes.NewBuffer(jsonData))
+		// Create request as user-1
+		req, _ := http.NewRequest("PUT", "/api/notes/test-update-note-2", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
@@ -390,18 +449,30 @@ func TestUpdateNote(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 
 		// Verify in database note is unchanged
-		var note Note
-		db.First(&note, "id = ?", "note-3")
-		assert.NotEqual(t, "Should Not Update", note.Title)
-		assert.Equal(t, "user-2", note.OwnerID)
+		var note2 Note
+		testDB.First(&note2, "id = ?", "test-update-note-2")
+		assert.NotEqual(t, "Should Not Update", note2.Title)
+		assert.Equal(t, "user-2", note2.OwnerID)
 	})
 }
 
 // Test deleting a note (should enforce ownership)
 func TestDeleteNote(t *testing.T) {
 	t.Run("User can delete their own note", func(t *testing.T) {
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-1
+		note := Note{
+			ID:      "test-delete-note-1",
+			Title:   "Note to Delete",
+			Content: "This will be deleted",
+			OwnerID: "user-1",
+		}
+		testDB.Create(&note)
+
 		// Create request
-		req, _ := http.NewRequest("DELETE", "/api/notes/note-2", nil)
+		req, _ := http.NewRequest("DELETE", "/api/notes/test-delete-note-1", nil)
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
 
@@ -412,14 +483,26 @@ func TestDeleteNote(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		// Verify in database
-		var note Note
-		result := db.First(&note, "id = ?", "note-2")
+		var note1 Note
+		result := testDB.First(&note1, "id = ?", "test-delete-note-1")
 		assert.Error(t, result.Error) // Should not find the note
 	})
 
 	t.Run("User cannot delete another user's note", func(t *testing.T) {
-		// Create request
-		req, _ := http.NewRequest("DELETE", "/api/notes/note-3", nil)
+		// Create a new router with fresh database
+		router, testDB := setupTestRouter()
+
+		// Create a new note for user-2
+		note := Note{
+			ID:      "test-delete-note-2",
+			Title:   "User 2 Note for Delete Test",
+			Content: "This should not be deleted by user 1",
+			OwnerID: "user-2",
+		}
+		testDB.Create(&note)
+
+		// Create request as user-1
+		req, _ := http.NewRequest("DELETE", "/api/notes/test-delete-note-2", nil)
 		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
 
@@ -430,9 +513,9 @@ func TestDeleteNote(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 
 		// Verify in database note still exists
-		var note Note
-		result := db.First(&note, "id = ?", "note-3")
+		var note2 Note
+		result := testDB.First(&note2, "id = ?", "test-delete-note-2")
 		assert.NoError(t, result.Error) // Should still find the note
-		assert.Equal(t, "user-2", note.OwnerID)
+		assert.Equal(t, "user-2", note2.OwnerID)
 	})
 }

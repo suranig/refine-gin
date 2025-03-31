@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/suranig/refine-gin/pkg/middleware"
 	"github.com/suranig/refine-gin/pkg/query"
@@ -291,13 +292,62 @@ func (r *OwnerGenericRepository) List(ctx context.Context, options query.QueryOp
 
 // Get retrieves a single resource and verifies ownership
 func (r *OwnerGenericRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
-	result, err := r.GenericRepository.Get(ctx, id)
+	// If ownership is not enforced, use standard repository logic
+	if !r.Resource.IsOwnershipEnforced() {
+		return r.GenericRepository.Get(ctx, id)
+	}
+
+	// Extract owner ID from context
+	ownerID, err := r.extractOwnerID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify ownership
-	if err := r.verifyOwnership(ctx, id); err != nil {
+	// If no owner ID present, use standard repository logic
+	if ownerID == nil {
+		return r.GenericRepository.Get(ctx, id)
+	}
+
+	// Create a new instance of the model type
+	modelType := reflect.TypeOf(r.Model)
+	var result interface{}
+
+	// If the model is already a pointer, we need to create a pointer to the element type
+	if modelType.Kind() == reflect.Ptr {
+		result = reflect.New(modelType.Elem()).Interface()
+	} else {
+		// If the model is not a pointer, we need to create a pointer to the model type
+		result = reflect.New(modelType).Interface()
+	}
+
+	// Get the ID field name for the query
+	idFieldName := "id" // Default to "id"
+	if r.Resource != nil {
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+	}
+
+	// Get the owner field name
+	ownerField := r.Resource.GetOwnerField()
+	columnName := r.DB.Config.NamingStrategy.ColumnName("", ownerField)
+
+	// Execute query with both ID and owner filter - Start with fresh query
+	if err := r.DB.WithContext(ctx).
+		Model(r.Model). // Use Model to ensure we reset any previous conditions
+		Where(idFieldName+" = ?", id).
+		Where(columnName+" = ?", ownerID).
+		First(result).Error; err != nil {
+		// If record not found with owner check, check if it exists but belongs to another owner
+		var exists bool
+		r.DB.WithContext(ctx).
+			Model(r.Model). // Use Model to ensure we reset any previous conditions
+			Where(idFieldName+" = ?", id).
+			Select("COUNT(*) > 0").
+			Find(&exists)
+
+		if exists {
+			// Record exists but belongs to another owner
+			return nil, ErrOwnerMismatch
+		}
 		return nil, err
 	}
 
@@ -316,24 +366,139 @@ func (r *OwnerGenericRepository) Create(ctx context.Context, data interface{}) (
 
 // Update modifies an existing resource after verifying ownership
 func (r *OwnerGenericRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
-	// Verify ownership
-	if err := r.verifyOwnership(ctx, id); err != nil {
+	// If ownership is not enforced, use standard repository logic
+	if !r.Resource.IsOwnershipEnforced() {
+		return r.GenericRepository.Update(ctx, id, data)
+	}
+
+	// Extract owner ID from context
+	ownerID, err := r.extractOwnerID(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	// We apply the owner filter directly to the model being modified
-	return r.GenericRepository.Update(ctx, id, data)
+	// If no owner ID present, use standard repository logic
+	if ownerID == nil {
+		return r.GenericRepository.Update(ctx, id, data)
+	}
+
+	// Get the ID field name
+	idFieldName := "id" // Default to "id"
+	if r.Resource != nil {
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+	}
+
+	// Get the owner field name
+	ownerField := r.Resource.GetOwnerField()
+	columnName := r.DB.Config.NamingStrategy.ColumnName("", ownerField)
+
+	// Check if the record exists and belongs to the owner - Start with fresh query
+	var exists bool
+	result := r.DB.WithContext(ctx).
+		Model(r.Model). // Use Model to ensure we reset any previous conditions
+		Where(idFieldName+" = ?", id).
+		Where(columnName+" = ?", ownerID).
+		Select("COUNT(*) > 0").
+		Find(&exists)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if !exists {
+		// Check if record exists at all - Start with fresh query
+		var recordExists bool
+		r.DB.WithContext(ctx).
+			Model(r.Model). // Use Model to ensure we reset any previous conditions
+			Where(idFieldName+" = ?", id).
+			Select("COUNT(*) > 0").
+			Find(&recordExists)
+
+		if recordExists {
+			// Record exists but belongs to another owner
+			return nil, ErrOwnerMismatch
+		}
+		// Record doesn't exist
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	// Update with both ID and owner filter - Start with fresh query
+	if err := r.DB.WithContext(ctx).
+		Model(r.Model). // Use Model to ensure we reset any previous conditions
+		Where(idFieldName+" = ?", id).
+		Where(columnName+" = ?", ownerID).
+		Updates(data).Error; err != nil {
+		return nil, err
+	}
+
+	// Get the updated record
+	return r.Get(ctx, id)
 }
 
 // Delete removes a resource after verifying ownership
 func (r *OwnerGenericRepository) Delete(ctx context.Context, id interface{}) error {
-	// Verify ownership
-	if err := r.verifyOwnership(ctx, id); err != nil {
+	// If ownership is not enforced, use standard repository logic
+	if !r.Resource.IsOwnershipEnforced() {
+		return r.GenericRepository.Delete(ctx, id)
+	}
+
+	// Extract owner ID from context
+	ownerID, err := r.extractOwnerID(ctx)
+	if err != nil {
 		return err
 	}
 
-	// We apply owner verification directly so no need to filter query
-	return r.GenericRepository.Delete(ctx, id)
+	// If no owner ID present, use standard repository logic
+	if ownerID == nil {
+		return r.GenericRepository.Delete(ctx, id)
+	}
+
+	// Get the ID field name
+	idFieldName := "id" // Default to "id"
+	if r.Resource != nil {
+		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+	}
+
+	// Get the owner field name
+	ownerField := r.Resource.GetOwnerField()
+	columnName := r.DB.Config.NamingStrategy.ColumnName("", ownerField)
+
+	// Check if the record exists and belongs to the owner - Start with fresh query
+	var exists bool
+	result := r.DB.WithContext(ctx).
+		Model(r.Model). // Use Model to ensure we reset any previous conditions
+		Where(idFieldName+" = ?", id).
+		Where(columnName+" = ?", ownerID).
+		Select("COUNT(*) > 0").
+		Find(&exists)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if !exists {
+		// Check if record exists at all - Start with fresh query
+		var recordExists bool
+		r.DB.WithContext(ctx).
+			Model(r.Model). // Use Model to ensure we reset any previous conditions
+			Where(idFieldName+" = ?", id).
+			Select("COUNT(*) > 0").
+			Find(&recordExists)
+
+		if recordExists {
+			// Record exists but belongs to another owner
+			return ErrOwnerMismatch
+		}
+		// Record doesn't exist
+		return gorm.ErrRecordNotFound
+	}
+
+	// Delete with both ID and owner filter - Start with fresh query
+	return r.DB.WithContext(ctx).
+		Model(r.Model). // Use Model to ensure we reset any previous conditions
+		Where(idFieldName+" = ?", id).
+		Where(columnName+" = ?", ownerID).
+		Delete(r.Model).Error
 }
 
 // Count returns the total number of resources filtered by owner
