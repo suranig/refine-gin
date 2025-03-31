@@ -562,9 +562,9 @@ func getJsonPropertyType(t reflect.Type) string {
 	}
 }
 
-// parseValidationTag parses validation tag into Validation struct
-func parseValidationTag(tag string) *Validation {
-	validation := &Validation{}
+// parseValidationTag parses validation tag into JsonValidation struct
+func parseValidationTag(tag string) *JsonValidation {
+	validation := &JsonValidation{}
 	parts := strings.Split(tag, ",")
 
 	for _, part := range parts {
