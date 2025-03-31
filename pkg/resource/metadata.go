@@ -594,18 +594,7 @@ func generateDefaultAntDesignConfig(field *Field) *AntDesignConfigMetadata {
 	if field.Validation != nil {
 		antDesignRules := MapValidationToAntDesignRules(field.Validation)
 		if len(antDesignRules) > 0 {
-			config.Rules = make([]AntDesignRuleMetadata, 0, len(antDesignRules))
-			for _, rule := range antDesignRules {
-				config.Rules = append(config.Rules, AntDesignRuleMetadata{
-					Type:             rule.Type,
-					Message:          rule.Message,
-					Value:            rule.Value,
-					ValidateOnBlur:   rule.ValidateOnBlur,
-					ValidateOnChange: rule.ValidateOnChange,
-					Pattern:          rule.Pattern,
-					ValidateTrigger:  rule.ValidateTrigger,
-				})
-			}
+			config.Rules = antDesignRules
 		}
 	}
 
@@ -1008,20 +997,9 @@ func GenerateAntDesignConfigMetadata(config *AntDesignConfig) *AntDesignConfigMe
 		Dependencies:  config.Dependencies,
 	}
 
-	// Convert rules
+	// Copy rules
 	if len(config.Rules) > 0 {
-		meta.Rules = make([]AntDesignRuleMetadata, 0, len(config.Rules))
-		for _, rule := range config.Rules {
-			meta.Rules = append(meta.Rules, AntDesignRuleMetadata{
-				Type:             rule.Type,
-				Message:          rule.Message,
-				Value:            rule.Value,
-				ValidateOnBlur:   rule.ValidateOnBlur,
-				ValidateOnChange: rule.ValidateOnChange,
-				Pattern:          rule.Pattern,
-				ValidateTrigger:  rule.ValidateTrigger,
-			})
-		}
+		meta.Rules = config.Rules
 	}
 
 	return meta

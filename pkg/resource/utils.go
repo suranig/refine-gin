@@ -455,16 +455,16 @@ func getValueByPath(data map[string]interface{}, path string) (interface{}, erro
 }
 
 // MapValidationToAntDesignRules maps standard validation rules to Ant Design Form rules
-func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
+func MapValidationToAntDesignRules(validation *Validation) []AntDesignRuleMetadata {
 	if validation == nil {
 		return nil
 	}
 
-	rules := make([]AntDesignRule, 0)
+	rules := make([]AntDesignRuleMetadata, 0)
 
 	// Required rule
 	if validation.Required {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "required",
 			Message:         validation.Message,
 			ValidateTrigger: "onBlur",
@@ -473,7 +473,7 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
 
 	// MinLength rule for strings
 	if validation.MinLength > 0 {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "min",
 			Value:           validation.MinLength,
 			Message:         fmt.Sprintf("Minimum length is %d characters", validation.MinLength),
@@ -483,7 +483,7 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
 
 	// MaxLength rule for strings
 	if validation.MaxLength > 0 {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "max",
 			Value:           validation.MaxLength,
 			Message:         fmt.Sprintf("Maximum length is %d characters", validation.MaxLength),
@@ -493,7 +493,7 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
 
 	// Pattern rule
 	if validation.Pattern != "" {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "pattern",
 			Pattern:         validation.Pattern,
 			Message:         validation.Message,
@@ -503,7 +503,7 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
 
 	// Min value rule for numbers
 	if validation.Min != 0 {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "min",
 			Value:           validation.Min,
 			Message:         fmt.Sprintf("Minimum value is %v", validation.Min),
@@ -513,7 +513,7 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRule {
 
 	// Max value rule for numbers
 	if validation.Max != 0 {
-		rules = append(rules, AntDesignRule{
+		rules = append(rules, AntDesignRuleMetadata{
 			Type:            "max",
 			Value:           validation.Max,
 			Message:         fmt.Sprintf("Maximum value is %v", validation.Max),

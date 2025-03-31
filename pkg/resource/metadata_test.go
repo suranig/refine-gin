@@ -1124,7 +1124,7 @@ func TestGenerateAntDesignConfigMetadata(t *testing.T) {
 			"mode":        "multiple",
 			"placeholder": "Select options",
 		},
-		Rules: []AntDesignRule{
+		Rules: []AntDesignRuleMetadata{
 			{
 				Type:    "required",
 				Message: "This field is required",
@@ -1192,7 +1192,7 @@ func TestMapValidationToAntDesignRules(t *testing.T) {
 	assert.Len(t, rules, 6)
 
 	// Find and verify each rule type
-	var requiredRule, minLengthRule, maxLengthRule, patternRule, minRule, maxRule *AntDesignRule
+	var requiredRule, minLengthRule, maxLengthRule, patternRule, minRule, maxRule *AntDesignRuleMetadata
 
 	for i := range rules {
 		rule := &rules[i]
