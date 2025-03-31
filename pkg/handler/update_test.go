@@ -29,6 +29,134 @@ type UserUpdateDTO struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
+// MockResource is a mock implementation of the Resource interface
+type MockResource struct {
+	mock.Mock
+}
+
+func (m *MockResource) GetName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetLabel() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetIcon() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetModel() interface{} {
+	args := m.Called()
+	return args.Get(0)
+}
+
+func (m *MockResource) GetFields() []resource.Field {
+	args := m.Called()
+	return args.Get(0).([]resource.Field)
+}
+
+func (m *MockResource) GetOperations() []resource.Operation {
+	args := m.Called()
+	return args.Get(0).([]resource.Operation)
+}
+
+func (m *MockResource) HasOperation(op resource.Operation) bool {
+	args := m.Called(op)
+	return args.Bool(0)
+}
+
+func (m *MockResource) GetDefaultSort() *resource.Sort {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.Sort)
+}
+
+func (m *MockResource) GetFilters() []resource.Filter {
+	args := m.Called()
+	return args.Get(0).([]resource.Filter)
+}
+
+func (m *MockResource) GetMiddlewares() []interface{} {
+	args := m.Called()
+	return args.Get(0).([]interface{})
+}
+
+func (m *MockResource) GetRelations() []resource.Relation {
+	args := m.Called()
+	return args.Get(0).([]resource.Relation)
+}
+
+func (m *MockResource) HasRelation(name string) bool {
+	args := m.Called(name)
+	return args.Bool(0)
+}
+
+func (m *MockResource) GetRelation(name string) *resource.Relation {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*resource.Relation)
+}
+
+func (m *MockResource) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockResource) GetField(name string) *resource.Field {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil
+	}
+	field := args.Get(0).(resource.Field)
+	return &field
+}
+
+func (m *MockResource) GetSearchable() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetFilterableFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetSortableFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetTableFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetFormFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetRequiredFields() []string {
+	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetEditableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 func TestGenerateUpdateHandler(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
@@ -258,4 +386,121 @@ func TestGenerateUpdateHandler(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 		mockDTO.AssertExpectations(t)
 	})
+}
+
+func TestValidateNestedJsonFields(t *testing.T) {
+	// Sample model with nested JSON
+	type Config struct {
+		Email struct {
+			Host     string `json:"host"`
+			Port     int    `json:"port"`
+			Username string `json:"username"`
+		} `json:"email"`
+		Active bool `json:"active"`
+	}
+
+	type TestModel struct {
+		ID     int    `json:"id"`
+		Name   string `json:"name"`
+		Config Config `json:"config"`
+	}
+
+	// Create a mock resource with JSON configuration
+	mockResource := new(MockResource)
+
+	// Set up fields with JSON config
+	fields := []resource.Field{
+		{
+			Name: "Config",
+			Type: "json",
+			Json: &resource.JsonConfig{
+				Nested: true,
+				Properties: []resource.JsonProperty{
+					{
+						Path: "email.host",
+						Type: "string",
+						Validation: &resource.JsonValidation{
+							Required:  true,
+							MinLength: 3,
+						},
+					},
+					{
+						Path: "email.port",
+						Type: "number",
+						Validation: &resource.JsonValidation{
+							Required: true,
+							Min:      1,
+							Max:      65535,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockResource.On("GetFields").Return(fields)
+	mockResource.On("GetEditableFields").Return([]string{}).Maybe()
+
+	// Test 1: Valid model
+	validModel := TestModel{
+		ID:   1,
+		Name: "Test",
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "smtp.example.com",
+				Port: 587,
+			},
+			Active: true,
+		},
+	}
+
+	err := validateNestedJsonFields(mockResource, &validModel)
+	assert.NoError(t, err)
+
+	// Test 2: Invalid model - host too short
+	invalidModel1 := TestModel{
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "a", // Too short
+				Port: 587,
+			},
+		},
+	}
+
+	err = validateNestedJsonFields(mockResource, &invalidModel1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "less than minimum length")
+
+	// Test 3: Invalid model - port out of range
+	invalidModel2 := TestModel{
+		Config: Config{
+			Email: struct {
+				Host     string `json:"host"`
+				Port     int    `json:"port"`
+				Username string `json:"username"`
+			}{
+				Host: "smtp.example.com",
+				Port: 70000, // Out of range
+			},
+		},
+	}
+
+	err = validateNestedJsonFields(mockResource, &invalidModel2)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "greater than maximum")
+
+	// Test 4: Nil model
+	err = validateNestedJsonFields(mockResource, nil)
+	assert.NoError(t, err)
+
+	// Verify expectations
+	mockResource.AssertExpectations(t)
 }
