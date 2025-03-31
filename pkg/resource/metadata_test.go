@@ -468,7 +468,7 @@ func TestGenerateFieldsMetadataWithJson(t *testing.T) {
 								Path:  "email.host",
 								Label: "SMTP Host",
 								Type:  "string",
-								Validation: &Validation{
+								Validation: &JsonValidation{
 									Required: true,
 								},
 								Form: &FormConfig{
@@ -480,7 +480,7 @@ func TestGenerateFieldsMetadataWithJson(t *testing.T) {
 								Path:  "email.port",
 								Label: "SMTP Port",
 								Type:  "number",
-								Validation: &Validation{
+								Validation: &JsonValidation{
 									Required: true,
 									Min:      0,
 									Max:      65535,
@@ -655,4 +655,181 @@ func TestExtractJsonSchemaAndProperties(t *testing.T) {
 			assert.Equal(t, "string", prop.Type)
 		}
 	}
+}
+
+func TestGenerateJsonConfigMetadataWithNestedOptions(t *testing.T) {
+	// Create a field with nested JSON configuration
+	jsonConfig := &JsonConfig{
+		DefaultExpanded: true,
+		EditorType:      "form",
+		Nested:          true,
+		RenderAs:        "tabs",
+		TabsConfig: &JsonTabsConfig{
+			TabPosition:      "top",
+			DefaultActiveTab: "basic",
+			Tabs: []JsonTab{
+				{
+					Key:    "basic",
+					Title:  "Basic Settings",
+					Icon:   "settings",
+					Fields: []string{"name", "description", "active"},
+				},
+				{
+					Key:    "advanced",
+					Title:  "Advanced",
+					Icon:   "advanced-settings",
+					Fields: []string{"config.email", "config.oauth"},
+				},
+			},
+		},
+		ObjectLabels: map[string]string{
+			"config.email": "Email Settings",
+			"config.oauth": "OAuth Configuration",
+		},
+		Properties: []JsonProperty{
+			{
+				Path:  "name",
+				Label: "Name",
+				Type:  "string",
+				Validation: &JsonValidation{
+					Required:  true,
+					MinLength: 3,
+				},
+			},
+			{
+				Path:  "config",
+				Label: "Configuration",
+				Type:  "object",
+				Properties: []JsonProperty{
+					{
+						Path:  "config.email",
+						Label: "Email",
+						Type:  "object",
+					},
+					{
+						Path:  "config.oauth",
+						Label: "OAuth",
+						Type:  "object",
+					},
+				},
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateJsonConfigMetadata(jsonConfig)
+
+	// Verify base metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.DefaultExpanded)
+	assert.Equal(t, "form", metadata.EditorType)
+	assert.True(t, metadata.Nested)
+	assert.Equal(t, "tabs", metadata.RenderAs)
+
+	// Verify tabs configuration
+	assert.NotNil(t, metadata.TabsConfig)
+	assert.Equal(t, "top", metadata.TabsConfig.TabPosition)
+	assert.Equal(t, "basic", metadata.TabsConfig.DefaultActiveTab)
+	assert.Len(t, metadata.TabsConfig.Tabs, 2)
+
+	// First tab
+	assert.Equal(t, "basic", metadata.TabsConfig.Tabs[0].Key)
+	assert.Equal(t, "Basic Settings", metadata.TabsConfig.Tabs[0].Title)
+	assert.Equal(t, "settings", metadata.TabsConfig.Tabs[0].Icon)
+	assert.Equal(t, []string{"name", "description", "active"}, metadata.TabsConfig.Tabs[0].Fields)
+
+	// Second tab
+	assert.Equal(t, "advanced", metadata.TabsConfig.Tabs[1].Key)
+	assert.Equal(t, "Advanced", metadata.TabsConfig.Tabs[1].Title)
+	assert.Contains(t, metadata.TabsConfig.Tabs[1].Fields, "config.email")
+
+	// Verify object labels
+	assert.NotNil(t, metadata.ObjectLabels)
+	assert.Equal(t, "Email Settings", metadata.ObjectLabels["config.email"])
+	assert.Equal(t, "OAuth Configuration", metadata.ObjectLabels["config.oauth"])
+
+	// Verify properties
+	assert.Len(t, metadata.Properties, 2)
+	assert.Equal(t, "name", metadata.Properties[0].Path)
+	assert.Equal(t, "config", metadata.Properties[1].Path)
+}
+
+func TestGenerateJsonConfigMetadataWithGridLayout(t *testing.T) {
+	// Create a field with grid layout JSON configuration
+	jsonConfig := &JsonConfig{
+		DefaultExpanded: true,
+		EditorType:      "form",
+		Nested:          true,
+		RenderAs:        "grid",
+		GridConfig: &JsonGridConfig{
+			Columns: 12,
+			Gutter:  16,
+			FieldLayouts: map[string]*JsonFieldLayout{
+				"name": {
+					Column:  1,
+					Row:     1,
+					ColSpan: 6,
+					RowSpan: 1,
+				},
+				"description": {
+					Column:  7,
+					Row:     1,
+					ColSpan: 6,
+					RowSpan: 1,
+				},
+				"config.email": {
+					Column:  1,
+					Row:     2,
+					ColSpan: 12,
+					RowSpan: 2,
+				},
+			},
+		},
+		Properties: []JsonProperty{
+			{
+				Path:  "name",
+				Label: "Name",
+				Type:  "string",
+			},
+			{
+				Path:  "description",
+				Label: "Description",
+				Type:  "string",
+			},
+			{
+				Path:  "config.email",
+				Label: "Email Configuration",
+				Type:  "object",
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateJsonConfigMetadata(jsonConfig)
+
+	// Verify base metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.Nested)
+	assert.Equal(t, "grid", metadata.RenderAs)
+
+	// Verify grid configuration
+	assert.NotNil(t, metadata.GridConfig)
+	assert.Equal(t, 12, metadata.GridConfig.Columns)
+	assert.Equal(t, 16, metadata.GridConfig.Gutter)
+	assert.Len(t, metadata.GridConfig.FieldLayouts, 3)
+
+	// Verify field layouts
+	nameLayout := metadata.GridConfig.FieldLayouts["name"]
+	assert.NotNil(t, nameLayout)
+	assert.Equal(t, 1, nameLayout.Column)
+	assert.Equal(t, 1, nameLayout.Row)
+	assert.Equal(t, 6, nameLayout.ColSpan)
+	assert.Equal(t, 1, nameLayout.RowSpan)
+
+	emailLayout := metadata.GridConfig.FieldLayouts["config.email"]
+	assert.NotNil(t, emailLayout)
+	assert.Equal(t, 1, emailLayout.Column)
+	assert.Equal(t, 2, emailLayout.Row)
+	assert.Equal(t, 12, emailLayout.ColSpan)
+	assert.Equal(t, 2, emailLayout.RowSpan)
 }
