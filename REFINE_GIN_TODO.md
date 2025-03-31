@@ -35,28 +35,28 @@
   - [x] `JsonFieldLayout` do pozycjonowania pól w siatce
 
 - [x] Zaimplementować funkcję `ValidateNestedJson` do walidacji zagnieżdżonych struktur
-- [ ] Rozszerzyć generowanie metadanych dla pól JSON o nowe opcje
+- [x] Rozszerzyć generowanie metadanych dla pól JSON o nowe opcje
 - [ ] Zmodyfikować handlery CRUD, aby obsługiwały walidację i przetwarzanie zagnieżdżonych struktur
 
 ## 3. Wsparcie dla specjalnych typów pól
 
-- [ ] Dodać obsługę pól typu `File`/`Image`:
-  - [ ] Stworzyć strukturę `FileConfig` w `pkg/resource/field.go`
-  - [ ] Dodać pola konfiguracyjne (typy MIME, maks. rozmiar, ścieżka zapisu, URL)
-  - [ ] Dodać wsparcie dla obrazów (miniatur, wymiarów, przetwarzania)
+- [x] Dodać obsługę pól typu `File`/`Image`:
+  - [x] Stworzyć strukturę `FileConfig` w `pkg/resource/field.go`
+  - [x] Dodać pola konfiguracyjne (typy MIME, maks. rozmiar, ścieżka zapisu, URL)
+  - [x] Dodać wsparcie dla obrazów (miniatur, wymiarów, przetwarzania)
 
-- [ ] Dodać obsługę pól typu `RichText`:
-  - [ ] Stworzyć strukturę `RichTextConfig` w `pkg/resource/field.go`
-  - [ ] Dodać opcje konfiguracyjne (pasek narzędzi, limity, zachowanie)
+- [x] Dodać obsługę pól typu `RichText`:
+  - [x] Stworzyć strukturę `RichTextConfig` w `pkg/resource/field.go`
+  - [x] Dodać opcje konfiguracyjne (pasek narzędzi, limity, zachowanie)
 
-- [ ] Dodać rozszerzone wsparcie dla pól typu `Select`:
-  - [ ] Rozszerzyć strukturę `SelectConfig` o zaawansowane opcje (wiele wyborów, zależności)
-  - [ ] Dodać obsługę dynamicznych opcji (URL API)
-  - [ ] Dodać wsparcie dla autouzupełniania
+- [x] Dodać rozszerzone wsparcie dla pól typu `Select`:
+  - [x] Rozszerzyć strukturę `SelectConfig` o zaawansowane opcje (wiele wyborów, zależności)
+  - [x] Dodać obsługę dynamicznych opcji (URL API)
+  - [x] Dodać wsparcie dla autouzupełniania
 
-- [ ] Dodać wsparcie dla pól obliczanych (`ComputedField`):
-  - [ ] Stworzyć strukturę konfiguracyjną z definicją zależności
-  - [ ] Zaimplementować mechanizm obliczania wartości na podstawie innych pól
+- [x] Dodać wsparcie dla pól obliczanych (`ComputedField`):
+  - [x] Stworzyć strukturę konfiguracyjną z definicją zależności
+  - [x] Zaimplementować mechanizm obliczania wartości na podstawie innych pól
 
 ## 4. Dostosowanie do Ant Design
 
