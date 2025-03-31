@@ -1142,7 +1142,7 @@ func TestGenerateAntDesignConfigMetadata(t *testing.T) {
 	}
 
 	// Generate metadata
-	metadata := GenerateAntDesignConfigMetadata(antDesignConfig)
+	metadata := GenerateAntDesignConfigMetadata(antDesignConfig, nil)
 
 	// Verify metadata
 	assert.NotNil(t, metadata)
@@ -1170,7 +1170,7 @@ func TestGenerateAntDesignConfigMetadata(t *testing.T) {
 	assert.Equal(t, []string{"category", "type"}, metadata.Dependencies)
 
 	// Test null case
-	assert.Nil(t, GenerateAntDesignConfigMetadata(nil))
+	assert.Nil(t, GenerateAntDesignConfigMetadata(nil, nil))
 }
 
 func TestMapValidationToAntDesignRules(t *testing.T) {

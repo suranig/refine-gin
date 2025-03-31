@@ -521,6 +521,40 @@ func MapValidationToAntDesignRules(validation *Validation) []AntDesignRuleMetada
 		})
 	}
 
+	// Custom validation rule
+	if validation.Custom != "" {
+		rules = append(rules, AntDesignRuleMetadata{
+			Type:            "custom",
+			Value:           validation.Custom,
+			Message:         validation.Message,
+			ValidateTrigger: "onBlur",
+		})
+	}
+
+	// Conditional validation rule
+	if validation.Conditional != nil {
+		rules = append(rules, AntDesignRuleMetadata{
+			Type: "conditional",
+			Value: map[string]interface{}{
+				"field":    validation.Conditional.Field,
+				"operator": validation.Conditional.Operator,
+				"value":    validation.Conditional.Value,
+			},
+			Message:         validation.Conditional.Message,
+			ValidateTrigger: "onChange",
+		})
+	}
+
+	// Async validation rule
+	if validation.AsyncValidator != "" {
+		rules = append(rules, AntDesignRuleMetadata{
+			Type:            "async",
+			Value:           validation.AsyncValidator,
+			Message:         validation.Message,
+			ValidateTrigger: "onBlur",
+		})
+	}
+
 	return rules
 }
 

@@ -229,13 +229,26 @@ type JsonPropertyMetadata struct {
 
 // ValidationMetadata represents metadata for validation rules
 type ValidationMetadata struct {
-	Required  bool    `json:"required,omitempty"`
-	Min       float64 `json:"min,omitempty"`
-	Max       float64 `json:"max,omitempty"`
-	MinLength int     `json:"minLength,omitempty"`
-	MaxLength int     `json:"maxLength,omitempty"`
-	Pattern   string  `json:"pattern,omitempty"`
-	Message   string  `json:"message,omitempty"`
+	Required       bool                           `json:"required,omitempty"`
+	Min            float64                        `json:"min,omitempty"`
+	Max            float64                        `json:"max,omitempty"`
+	MinLength      int                            `json:"minLength,omitempty"`
+	MaxLength      int                            `json:"maxLength,omitempty"`
+	Pattern        string                         `json:"pattern,omitempty"`
+	Message        string                         `json:"message,omitempty"`
+	Custom         string                         `json:"custom,omitempty"`
+	Conditional    *ConditionalValidationMetadata `json:"conditional,omitempty"`
+	AsyncValidator string                         `json:"asyncValidator,omitempty"`
+	AsyncMessage   string                         `json:"asyncMessage,omitempty"`
+	CharCounter    bool                           `json:"charCounter,omitempty"` // Whether to show character counter in UI
+}
+
+// ConditionalValidationMetadata represents metadata for conditional validation
+type ConditionalValidationMetadata struct {
+	Field    string      `json:"field"`
+	Operator string      `json:"operator"`
+	Value    interface{} `json:"value"`
+	Message  string      `json:"message,omitempty"`
 }
 
 // FormConfigMetadata represents metadata for form configuration
@@ -504,18 +517,17 @@ func GenerateResourceMetadata(res Resource) ResourceMetadata {
 
 // GenerateFieldsMetadata generates metadata for fields
 func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
-	result := make([]FieldMetadata, 0, len(fields))
+	metadata := make([]FieldMetadata, 0, len(fields))
 
-	// Domyślnie wszystkie pola są filtrowalne i sortowalne
 	for _, field := range fields {
-		// Sprawdź na podstawie konfiguracji pola
-		isFilterable := true  // Domyślnie filtrowalne
-		isSortable := true    // Domyślnie sortowalne
-		isSearchable := false // Domyślnie nie przeszukiwalne
-		isRequired := false   // Domyślnie niewymagane
-		isUnique := false     // Domyślnie nieunikalne
+		// Default values for field properties
+		isFilterable := true  // Default filterable
+		isSortable := true    // Default sortable
+		isSearchable := false // Default not searchable
+		isRequired := false   // Default not required
+		isUnique := false     // Default not unique
 
-		// Jeśli pole ma Validation, użyj go dla required
+		// Check if field is required based on validation
 		if field.Validation != nil && field.Validation.Required {
 			isRequired = true
 		}
@@ -523,6 +535,7 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 		fieldMeta := FieldMetadata{
 			Name:        field.Name,
 			Type:        field.Type,
+			Label:       field.Label,
 			Filterable:  isFilterable,
 			Sortable:    isSortable,
 			Searchable:  isSearchable,
@@ -533,44 +546,85 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 			Permissions: field.Permissions,
 		}
 
-		// Dodaj label jeśli istnieje
-		if field.Label != "" {
-			fieldMeta.Label = field.Label
+		// Add validation metadata if present
+		if field.Validation != nil {
+			fieldMeta.Validators = append(fieldMeta.Validators, ValidatorMetadata{
+				Type: "standard",
+				Rules: map[string]interface{}{
+					"required":  field.Validation.Required,
+					"min":       field.Validation.Min,
+					"max":       field.Validation.Max,
+					"minLength": field.Validation.MinLength,
+					"maxLength": field.Validation.MaxLength,
+					"pattern":   field.Validation.Pattern,
+				},
+				Message: field.Validation.Message,
+			})
+
+			// Add custom validation if present
+			if field.Validation.Custom != "" {
+				fieldMeta.Validators = append(fieldMeta.Validators, ValidatorMetadata{
+					Type: "custom",
+					Rules: map[string]interface{}{
+						"expression": field.Validation.Custom,
+					},
+					Message: field.Validation.Message,
+				})
+			}
+
+			// Add conditional validation if present
+			if field.Validation.Conditional != nil {
+				fieldMeta.Validators = append(fieldMeta.Validators, ValidatorMetadata{
+					Type: "conditional",
+					Rules: map[string]interface{}{
+						"field":    field.Validation.Conditional.Field,
+						"operator": field.Validation.Conditional.Operator,
+						"value":    field.Validation.Conditional.Value,
+					},
+					Message: field.Validation.Conditional.Message,
+				})
+			}
+
+			// Add async validation if present
+			if field.Validation.AsyncValidator != "" {
+				fieldMeta.Validators = append(fieldMeta.Validators, ValidatorMetadata{
+					Type: "async",
+					Rules: map[string]interface{}{
+						"url": field.Validation.AsyncValidator,
+					},
+					Message: field.Validation.Message,
+				})
+			}
 		}
 
-		// Add validators metadata
-		if len(field.Validators) > 0 {
-			fieldMeta.Validators = GenerateValidatorsMetadata(field.Validators)
-		}
-
-		// Add JSON metadata if field is a JSON type
+		// Add JSON configuration if present
 		if field.Json != nil {
 			fieldMeta.Json = GenerateJsonConfigMetadata(field.Json)
 		}
 
-		// Add File metadata if field has file configuration
+		// Add file configuration if present
 		if field.File != nil {
 			fieldMeta.File = GenerateFileConfigMetadata(field.File)
 		}
 
-		// Add RichText metadata if field has rich text configuration
+		// Add rich text configuration if present
 		if field.RichText != nil {
 			fieldMeta.RichText = GenerateRichTextConfigMetadata(field.RichText)
 		}
 
-		// Add Select metadata if field has select configuration
+		// Add select configuration if present
 		if field.Select != nil {
 			fieldMeta.Select = GenerateSelectConfigMetadata(field.Select)
 		}
 
-		// Add Computed metadata if field has computed field configuration
+		// Add computed field configuration if present
 		if field.Computed != nil {
 			fieldMeta.Computed = GenerateComputedFieldConfigMetadata(field.Computed)
 		}
 
-		// Add Ant Design metadata if field has Ant Design configuration
+		// Add Ant Design configuration if present
 		if field.AntDesign != nil {
-			fieldMeta.AntDesign = GenerateAntDesignConfigMetadata(field.AntDesign)
+			fieldMeta.AntDesign = GenerateAntDesignConfigMetadata(field.AntDesign, field.Validation)
 		} else {
 			// Automatically generate Ant Design configuration
 			antDesignConfig := generateDefaultAntDesignConfig(&field)
@@ -579,13 +633,13 @@ func GenerateFieldsMetadata(fields []Field) []FieldMetadata {
 			}
 		}
 
-		result = append(result, fieldMeta)
+		metadata = append(metadata, fieldMeta)
 	}
 
-	return result
+	return metadata
 }
 
-// generateDefaultAntDesignConfig creates default Ant Design configuration for a field
+// generateDefaultAntDesignConfig generates default Ant Design configuration for a field
 func generateDefaultAntDesignConfig(field *Field) *AntDesignConfigMetadata {
 	if field == nil {
 		return nil
@@ -993,7 +1047,7 @@ func GenerateComputedFieldConfigMetadata(config *ComputedFieldConfig) *ComputedF
 }
 
 // GenerateAntDesignConfigMetadata generates metadata for Ant Design configuration
-func GenerateAntDesignConfigMetadata(config *AntDesignConfig) *AntDesignConfigMetadata {
+func GenerateAntDesignConfigMetadata(config *AntDesignConfig, validation *Validation) *AntDesignConfigMetadata {
 	if config == nil {
 		return nil
 	}
@@ -1005,9 +1059,16 @@ func GenerateAntDesignConfigMetadata(config *AntDesignConfig) *AntDesignConfigMe
 		Dependencies:  config.Dependencies,
 	}
 
-	// Copy rules
 	if len(config.Rules) > 0 {
 		meta.Rules = config.Rules
+	}
+
+	// Add validation rules based on field validation
+	if validation != nil {
+		antDesignRules := MapValidationToAntDesignRules(validation)
+		if len(antDesignRules) > 0 {
+			meta.Rules = append(meta.Rules, antDesignRules...)
+		}
 	}
 
 	return meta

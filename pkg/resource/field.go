@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // Field represents a resource field
@@ -63,13 +64,24 @@ type JsonConfig struct {
 
 // JsonValidation defines validation rules for JSON properties
 type JsonValidation struct {
-	Required  bool    `json:"required,omitempty"`
-	Min       float64 `json:"min,omitempty"`
-	Max       float64 `json:"max,omitempty"`
-	MinLength int     `json:"minLength,omitempty"`
-	MaxLength int     `json:"maxLength,omitempty"`
-	Pattern   string  `json:"pattern,omitempty"`
-	Message   string  `json:"message,omitempty"`
+	Required       bool                       `json:"required,omitempty"`
+	Min            float64                    `json:"min,omitempty"`
+	Max            float64                    `json:"max,omitempty"`
+	MinLength      int                        `json:"minLength,omitempty"`
+	MaxLength      int                        `json:"maxLength,omitempty"`
+	Pattern        string                     `json:"pattern,omitempty"`
+	Message        string                     `json:"message,omitempty"`
+	Custom         string                     `json:"custom,omitempty"`         // Custom validation rule
+	Conditional    *JsonConditionalValidation `json:"conditional,omitempty"`    // Validation rules that depend on other properties
+	AsyncValidator string                     `json:"asyncValidator,omitempty"` // URL for asynchronous validation
+}
+
+// JsonConditionalValidation defines conditional validation for JSON properties
+type JsonConditionalValidation struct {
+	Path     string      `json:"path"`     // JSON path to the property this validation depends on
+	Operator string      `json:"operator"` // Comparison operator (eq, neq, gt, lt, etc.)
+	Value    interface{} `json:"value"`    // Value to compare against
+	Message  string      `json:"message"`  // Custom message when condition fails
 }
 
 // JsonProperty defines a property in a JSON structure
@@ -101,13 +113,24 @@ type JsonProperty struct {
 
 // Validation defines field validation rules
 type Validation struct {
-	Required  bool
-	Min       float64
-	Max       float64
-	MinLength int
-	MaxLength int
-	Pattern   string
-	Message   string
+	Required       bool
+	Min            float64
+	Max            float64
+	MinLength      int
+	MaxLength      int
+	Pattern        string
+	Message        string
+	Custom         string                 // Custom validation rule (e.g., JavaScript expression)
+	Conditional    *ConditionalValidation // Validation rules that depend on other fields
+	AsyncValidator string                 // URL for asynchronous validation
+}
+
+// ConditionalValidation defines validation rules that depend on other fields
+type ConditionalValidation struct {
+	Field    string      // The field this validation depends on
+	Operator string      // Comparison operator (eq, neq, gt, lt, etc.)
+	Value    interface{} // Value to compare against
+	Message  string      // Custom message when condition fails
 }
 
 // RelationConfig defines field relation configuration
@@ -454,4 +477,183 @@ type AntDesignConfig struct {
 
 	// Dependencies for field dependencies (array of field names)
 	Dependencies []string `json:"dependencies,omitempty"`
+}
+
+// ConditionalValidator validates values based on conditions from other fields
+type ConditionalValidator struct {
+	Field       string                  // The field this validation depends on
+	Operator    string                  // Comparison operator (eq, neq, gt, lt, etc.)
+	Value       interface{}             // Value to compare against
+	Message     string                  // Custom message when condition fails
+	ValidateFn  func(interface{}) error // Validation function to apply conditionally
+	ModelGetter func() interface{}      // Function to get the full model for accessing other fields
+}
+
+func (v ConditionalValidator) Validate(value interface{}) error {
+	// If no model getter is provided, we can't perform conditional validation
+	if v.ModelGetter == nil {
+		return nil
+	}
+
+	// Get the model
+	model := v.ModelGetter()
+	if model == nil {
+		return nil // No model to check conditions against
+	}
+
+	// Get the value of the dependent field
+	fieldValue, err := GetFieldValue(model, v.Field)
+	if err != nil {
+		return nil // Can't get dependent field, skip validation
+	}
+
+	// Check the condition
+	conditionMet, err := evaluateCondition(fmt.Sprintf("%v", fieldValue), v.Operator, v.Value)
+	if err != nil {
+		return nil // Can't evaluate condition, skip validation
+	}
+
+	// If condition is met, apply the validation
+	if conditionMet && v.ValidateFn != nil {
+		if err := v.ValidateFn(value); err != nil {
+			if v.Message != "" {
+				return fmt.Errorf(v.Message)
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// evaluateCondition compares a field value against a condition
+func evaluateCondition(fieldValue, operator string, compareValue interface{}) (bool, error) {
+	// Convert fieldValue to comparable format
+	var fieldValueFloat float64
+	var compareValueFloat float64
+	var err error
+
+	// For numeric comparisons
+	if operator == "gt" || operator == "lt" || operator == "gte" || operator == "lte" {
+		fieldValueFloat, err = convertToFloat(fieldValue)
+		if err != nil {
+			return false, err
+		}
+
+		compareValueFloat, err = convertToFloat(compareValue)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// Perform comparison based on operator
+	switch operator {
+	case "eq":
+		return fmt.Sprintf("%v", fieldValue) == fmt.Sprintf("%v", compareValue), nil
+	case "neq":
+		return fmt.Sprintf("%v", fieldValue) != fmt.Sprintf("%v", compareValue), nil
+	case "gt":
+		return fieldValueFloat > compareValueFloat, nil
+	case "lt":
+		return fieldValueFloat < compareValueFloat, nil
+	case "gte":
+		return fieldValueFloat >= compareValueFloat, nil
+	case "lte":
+		return fieldValueFloat <= compareValueFloat, nil
+	case "contains":
+		return strings.Contains(fmt.Sprintf("%v", fieldValue), fmt.Sprintf("%v", compareValue)), nil
+	case "startsWith":
+		return strings.HasPrefix(fmt.Sprintf("%v", fieldValue), fmt.Sprintf("%v", compareValue)), nil
+	case "endsWith":
+		return strings.HasSuffix(fmt.Sprintf("%v", fieldValue), fmt.Sprintf("%v", compareValue)), nil
+	default:
+		return false, fmt.Errorf("unsupported operator: %s", operator)
+	}
+}
+
+// convertToFloat converts an interface{} to float64 for numeric comparisons
+func convertToFloat(value interface{}) (float64, error) {
+	switch v := value.(type) {
+	case float64:
+		return v, nil
+	case float32:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case int8:
+		return float64(v), nil
+	case int16:
+		return float64(v), nil
+	case int32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case uint:
+		return float64(v), nil
+	case uint8:
+		return float64(v), nil
+	case uint16:
+		return float64(v), nil
+	case uint32:
+		return float64(v), nil
+	case uint64:
+		return float64(v), nil
+	case string:
+		return strconv.ParseFloat(v, 64)
+	default:
+		return 0, fmt.Errorf("cannot convert %T to float64", value)
+	}
+}
+
+// CustomValidator validates using a custom expression
+type CustomValidator struct {
+	Expression string      // Custom validation expression
+	Message    string      // Error message
+	Context    interface{} // Context for validation (e.g., the model)
+}
+
+func (v CustomValidator) Validate(value interface{}) error {
+	// Note: In a real implementation, you would evaluate the expression
+	// For now, we'll just return nil as this requires an expression engine
+	// which is out of scope for this implementation
+
+	// TODO: Implement expression evaluation logic
+	// Example approaches:
+	// 1. Use a JS interpreter like goja
+	// 2. Use a rules engine
+	// 3. Use template evaluation
+
+	// For now, return success
+	return nil
+}
+
+// AsyncValidator represents a validator that performs asynchronous validation
+type AsyncValidator struct {
+	URL     string // URL to send validation request to
+	Message string // Error message on validation failure
+}
+
+func (v AsyncValidator) Validate(value interface{}) error {
+	// Note: In a real implementation, you would make an HTTP request
+	// to the validation endpoint and process the response.
+	// For now, we'll just return nil as async validation happens client-side
+
+	// Example implementation:
+	// client := &http.Client{Timeout: 5 * time.Second}
+	// valueJSON, _ := json.Marshal(value)
+	// resp, err := client.Post(v.URL, "application/json", bytes.NewBuffer(valueJSON))
+	// if err != nil {
+	//     return err
+	// }
+	// defer resp.Body.Close()
+	//
+	// if resp.StatusCode != http.StatusOK {
+	//     if v.Message != "" {
+	//         return fmt.Errorf(v.Message)
+	//     }
+	//     return fmt.Errorf("validation failed with status: %d", resp.StatusCode)
+	// }
+
+	// For now, return success
+	return nil
 }
