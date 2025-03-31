@@ -4,22 +4,22 @@ This document outlines the tasks needed to implement owner-based resources in th
 
 ## 1. Middleware Implementation
 
-- [] Create `OwnerContextKey` constant for storing owner ID in context
-- [] Implement `ExtractOwnerIDFunc` type for owner ID extraction functions
-- [] Create `OwnerContext` middleware to extract and store owner IDs
-- [] Implement extraction strategies:
-  - [] `ExtractOwnerIDFromJWT` - Extract from JWT claims
-  - [] `ExtractOwnerIDFromHeader` - Extract from HTTP headers
-  - [] `ExtractOwnerIDFromQuery` - Extract from query parameters
-  - [] `ExtractOwnerIDFromCookie` - Extract from cookies
-  - [] `CombineExtractors` - Chain multiple extractors
+- [x] Create `OwnerContextKey` constant for storing owner ID in context
+- [x] Implement `ExtractOwnerIDFunc` type for owner ID extraction functions
+- [x] Create `OwnerContext` middleware to extract and store owner IDs
+- [x] Implement extraction strategies:
+  - [x] `ExtractOwnerIDFromJWT` - Extract from JWT claims
+  - [x] `ExtractOwnerIDFromHeader` - Extract from HTTP headers
+  - [x] `ExtractOwnerIDFromQuery` - Extract from query parameters
+  - [x] `ExtractOwnerIDFromCookie` - Extract from cookies
+  - [x] `CombineExtractors` - Chain multiple extractors
 
 ## 2. Resource Definition
 
-- [ ] Define `OwnerResource` interface extending `Resource`
-- [ ] Create `OwnerConfig` struct for ownership configuration
-- [ ] Implement `DefaultOwnerResource` wrapper for existing resources
-- [ ] Add `NewOwnerResource` factory function
+- [x] Define `OwnerResource` interface extending `Resource`
+- [x] Create `OwnerConfig` struct for ownership configuration
+- [x] Implement `DefaultOwnerResource` wrapper for existing resources
+- [x] Add `NewOwnerResource` factory function
 
 ## 3. Repository Implementation
 
@@ -59,8 +59,8 @@ This document outlines the tasks needed to implement owner-based resources in th
 
 ## 5. Tests
 
-- [ ] Write middleware tests
-- [ ] Write owner resource tests
+- [x] Write middleware tests
+- [x] Write owner resource tests
 - [x] Write owner repository tests
 - [ ] Write handler tests
 - [ ] Create example app
