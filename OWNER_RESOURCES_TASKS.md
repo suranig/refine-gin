@@ -44,25 +44,25 @@ This document outlines the tasks needed to implement owner-based resources in th
 
 ## 4. Handler Implementation
 
-- [ ] Create `OwnerHandlerOptions` struct
-- [ ] Implement `RegisterOwnerResource` function
-- [ ] Create handler generators for owner resources:
-  - [ ] `GenerateOwnerListHandler`
-  - [ ] `GenerateOwnerCountHandler`
-  - [ ] `GenerateOwnerCreateHandler`
-  - [ ] `GenerateOwnerGetHandler`
-  - [ ] `GenerateOwnerUpdateHandler`
-  - [ ] `GenerateOwnerDeleteHandler`
-  - [ ] `GenerateOwnerCreateManyHandler`
-  - [ ] `GenerateOwnerUpdateManyHandler`
-  - [ ] `GenerateOwnerDeleteManyHandler`
+- [x] Create `OwnerHandlerOptions` struct
+- [x] Implement `RegisterOwnerResource` function
+- [x] Create handler generators for owner resources:
+  - [x] `GenerateOwnerListHandler`
+  - [x] `GenerateOwnerCountHandler`
+  - [x] `GenerateOwnerCreateHandler`
+  - [x] `GenerateOwnerGetHandler`
+  - [x] `GenerateOwnerUpdateHandler`
+  - [x] `GenerateOwnerDeleteHandler`
+  - [x] `GenerateOwnerCreateManyHandler`
+  - [x] `GenerateOwnerUpdateManyHandler`
+  - [x] `GenerateOwnerDeleteManyHandler`
 
 ## 5. Tests
 
 - [x] Write middleware tests
 - [x] Write owner resource tests
 - [x] Write owner repository tests
-- [ ] Write handler tests
+- [x] Write handler tests
 - [ ] Create example app
 
 ## Implementation Notes
