@@ -1,6 +1,8 @@
 package resource
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -395,4 +397,453 @@ func TestFilterOutReadOnlyFields(t *testing.T) {
 	strData := "test string"
 	strResult := FilterOutReadOnlyFields(strData, mockResource)
 	assert.Equal(t, strData, strResult)
+}
+
+func TestValidateNestedJson(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           interface{}
+		config         *JsonConfig
+		expectedValid  bool
+		expectedErrors []string
+	}{
+		{
+			name: "Valid simple object",
+			data: map[string]interface{}{
+				"name": "Test Name",
+				"age":  30,
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required:  true,
+							MinLength: 3,
+							MaxLength: 50,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+							Min:      18,
+							Max:      100,
+						},
+					},
+				},
+			},
+			expectedValid:  true,
+			expectedErrors: []string{},
+		},
+		{
+			name: "Missing required field",
+			data: map[string]interface{}{
+				"name": "Test Name",
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Required property 'age' not found: field 'age' not found",
+			},
+		},
+		{
+			name: "Invalid string length",
+			data: map[string]interface{}{
+				"name": "A",
+				"age":  30,
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required:  true,
+							MinLength: 3,
+							MaxLength: 50,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'name' length 1 is less than minimum length 3",
+			},
+		},
+		{
+			name: "Invalid number range",
+			data: map[string]interface{}{
+				"name": "Test Name",
+				"age":  15,
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+							Min:      18,
+							Max:      100,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'age' value 15 is less than minimum 18",
+			},
+		},
+		{
+			name: "Nested object validation",
+			data: map[string]interface{}{
+				"name": "Test Name",
+				"address": map[string]interface{}{
+					"street": "123 Main St",
+					"city":   "Test City",
+					"zip":    "AB", // Invalid zip code
+				},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+					{
+						Path: "address",
+						Type: "object",
+						Properties: []JsonProperty{
+							{
+								Path: "street",
+								Type: "string",
+								Validation: &JsonValidation{
+									Required: true,
+								},
+							},
+							{
+								Path: "city",
+								Type: "string",
+								Validation: &JsonValidation{
+									Required: true,
+								},
+							},
+							{
+								Path: "zip",
+								Type: "string",
+								Validation: &JsonValidation{
+									Required:  true,
+									MinLength: 5,
+								},
+							},
+						},
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"address.Property 'zip' length 2 is less than minimum length 5",
+			},
+		},
+		{
+			name: "Array validation",
+			data: map[string]interface{}{
+				"name": "Test Name",
+				"tags": []interface{}{"tag1"},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+					{
+						Path: "tags",
+						Type: "array",
+						Validation: &JsonValidation{
+							Required:  true,
+							MinLength: 2, // Requires at least 2 tags
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'tags' has 1 items which is less than minimum 2",
+			},
+		},
+		{
+			name: "JSON string input",
+			data: `{"name": "Test Name", "age": 30}`,
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+							Min:      18,
+						},
+					},
+				},
+			},
+			expectedValid:  true,
+			expectedErrors: []string{},
+		},
+		{
+			name: "Path with array index",
+			data: map[string]interface{}{
+				"items": []interface{}{
+					map[string]interface{}{
+						"id":   1,
+						"name": "Item 1",
+					},
+					map[string]interface{}{
+						"id":   2,
+						"name": "I", // Invalid name (too short)
+					},
+				},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "items[1].name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required:  true,
+							MinLength: 2,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'items[1].name' length 1 is less than minimum length 2",
+			},
+		},
+		{
+			name: "Multiple validation errors",
+			data: map[string]interface{}{
+				"name": "A",
+				"age":  150,
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "name",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required:  true,
+							MinLength: 3,
+						},
+					},
+					{
+						Path: "age",
+						Type: "integer",
+						Validation: &JsonValidation{
+							Required: true,
+							Max:      100,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'name' length 1 is less than minimum length 3",
+				"Property 'age' value 150 is greater than maximum 100",
+			},
+		},
+		{
+			name:          "Nil inputs",
+			data:          nil,
+			config:        nil,
+			expectedValid: false,
+			expectedErrors: []string{
+				"Invalid input: nil data or config",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			valid, errors := ValidateNestedJson(test.data, test.config)
+
+			if valid != test.expectedValid {
+				t.Errorf("Expected valid=%v, got %v", test.expectedValid, valid)
+			}
+
+			if len(errors) != len(test.expectedErrors) {
+				t.Errorf("Expected %d errors, got %d: %v", len(test.expectedErrors), len(errors), errors)
+				return
+			}
+
+			// Check specific error messages if we care about them
+			if len(test.expectedErrors) > 0 {
+				for i, expectedErr := range test.expectedErrors {
+					if !strings.Contains(errors[i], expectedErr) {
+						t.Errorf("Expected error to contain '%s', got '%s'", expectedErr, errors[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGetValueByPath(t *testing.T) {
+	data := map[string]interface{}{
+		"name": "Test",
+		"address": map[string]interface{}{
+			"street": "Main St",
+			"city":   "Test City",
+		},
+		"tags": []interface{}{"tag1", "tag2", "tag3"},
+		"items": []interface{}{
+			map[string]interface{}{
+				"id":   1,
+				"name": "Item 1",
+			},
+			map[string]interface{}{
+				"id":   2,
+				"name": "Item 2",
+			},
+		},
+	}
+
+	tests := []struct {
+		path           string
+		expectedValue  interface{}
+		expectedError  bool
+		expectedErrMsg string
+	}{
+		{
+			path:          "name",
+			expectedValue: "Test",
+			expectedError: false,
+		},
+		{
+			path:          "address.street",
+			expectedValue: "Main St",
+			expectedError: false,
+		},
+		{
+			path:           "address.zip",
+			expectedValue:  nil,
+			expectedError:  true,
+			expectedErrMsg: "field 'zip' not found",
+		},
+		{
+			path:          "tags",
+			expectedValue: []interface{}{"tag1", "tag2", "tag3"},
+			expectedError: false,
+		},
+		{
+			path:          "items[0].name",
+			expectedValue: "Item 1",
+			expectedError: false,
+		},
+		{
+			path:          "items[1].id",
+			expectedValue: float64(2), // JSON numbers are float64
+			expectedError: false,
+		},
+		{
+			path:           "items[3]",
+			expectedValue:  nil,
+			expectedError:  true,
+			expectedErrMsg: "array index 3 out of bounds",
+		},
+		{
+			path:           "items[x]",
+			expectedValue:  nil,
+			expectedError:  true,
+			expectedErrMsg: "invalid array index",
+		},
+		{
+			path:           "notexist.field",
+			expectedValue:  nil,
+			expectedError:  true,
+			expectedErrMsg: "field 'notexist' not found",
+		},
+		{
+			path:          "",
+			expectedValue: data,
+			expectedError: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			value, err := getValueByPath(data, test.path)
+
+			if test.expectedError {
+				if err == nil {
+					t.Errorf("Expected error for path '%s', got nil", test.path)
+					return
+				}
+				if test.expectedErrMsg != "" && !strings.Contains(err.Error(), test.expectedErrMsg) {
+					t.Errorf("Expected error to contain '%s', got '%s'", test.expectedErrMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for path '%s': %v", test.path, err)
+					return
+				}
+
+				// Check value
+				if !reflect.DeepEqual(value, test.expectedValue) {
+					t.Errorf("Expected value %v, got %v", test.expectedValue, value)
+				}
+			}
+		})
+	}
 }
