@@ -172,6 +172,15 @@ type FormConfig struct {
 	Width       string
 	DependentOn string
 	Condition   string
+
+	// Dependency configuration
+	Dependent *FormDependency `json:"dependent,omitempty"`
+
+	// Width percentage (25, 50, 75, 100)
+	WidthPercent int `json:"widthPercent,omitempty" validate:"omitempty,oneof=25 50 75 100"`
+
+	// Visibility condition using structured condition
+	VisibilityCondition *FormCondition `json:"visibilityCondition,omitempty"`
 }
 
 // Validator represents a field validator
