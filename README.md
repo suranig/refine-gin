@@ -909,3 +909,129 @@ The `Resource` interface defines the contract for all resources in the applicati
 - Added relation validation and configuration options
 - Optimized relation loading with GORM preloading
 - Added documentation for relation features and usage
+
+## Owner Resources
+
+Owner Resources extend the standard Resource functionality to add ownership-based access control to your API endpoints. This allows you to create multi-tenant applications where users can only access resources they own.
+
+### Key Features
+
+- Automatic filtering of lists to only show resources owned by the current user
+- Permission checks to prevent unauthorized access to individual resources
+- Automatic assignment of owner ID when creating new resources
+- Support for bulk operations with ownership checks
+- Comprehensive Swagger documentation for ownership-based endpoints
+
+### Setup Owner Resources
+
+Setting up Owner Resources involves several steps:
+
+```go
+// 1. Define your model with an owner field
+type Note struct {
+    ID        string    `json:"id" gorm:"primaryKey"`
+    Title     string    `json:"title"`
+    Content   string    `json:"content"`
+    OwnerID   string    `json:"ownerId"` // Field to store the owner ID
+    CreatedAt time.Time `json:"createdAt"`
+}
+
+// 2. Create a standard resource
+noteResource := resource.NewResource(resource.ResourceConfig{
+    Name:  "notes",
+    Model: Note{},
+    Operations: []resource.Operation{
+        resource.OperationList,
+        resource.OperationRead,
+        resource.OperationCreate,
+        resource.OperationUpdate,
+        resource.OperationDelete,
+        // Bulk operations are also supported
+        resource.OperationCreateMany,
+        resource.OperationUpdateMany,
+        resource.OperationDeleteMany,
+    },
+})
+
+// 3. Convert to an owner resource
+ownerNoteResource := resource.NewOwnerResource(noteResource, resource.OwnerConfig{
+    OwnerField:       "OwnerID",        // Field name in your model that stores the owner ID
+    EnforceOwnership: true,             // Enable ownership enforcement
+    // DefaultOwnerID: "system",        // Optional default owner ID if none found in context
+})
+
+// 4. Create an owner repository
+noteRepo, err := repository.NewOwnerRepository(db, ownerNoteResource)
+if err != nil {
+    log.Fatalf("Failed to create owner repository: %v", err)
+}
+
+// 5. Set up middleware to extract owner ID from requests
+api := r.Group("/api")
+
+// Create a secured API group with owner context middleware
+securedApi := api.Group("")
+securedApi.Use(middleware.OwnerContext(middleware.ExtractOwnerIDFromJWT("sub")))
+
+// 6. Register the owner resource
+handler.RegisterOwnerResource(securedApi, ownerNoteResource, noteRepo)
+```
+
+### Extracting Owner IDs
+
+The middleware provides several strategies for extracting owner IDs:
+
+```go
+// Extract from JWT claims (e.g., "sub" claim)
+middleware.OwnerContext(middleware.ExtractOwnerIDFromJWT("sub"))
+
+// Extract from HTTP header
+middleware.OwnerContext(middleware.ExtractOwnerIDFromHeader("X-Owner-ID"))
+
+// Extract from query parameter
+middleware.OwnerContext(middleware.ExtractOwnerIDFromQuery("owner"))
+
+// Extract from cookie
+middleware.OwnerContext(middleware.ExtractOwnerIDFromCookie("owner_id"))
+
+// Combine multiple strategies (tries each until one succeeds)
+middleware.OwnerContext(middleware.CombineExtractors(
+    middleware.ExtractOwnerIDFromJWT("sub"),
+    middleware.ExtractOwnerIDFromHeader("X-Owner-ID"),
+))
+```
+
+### Swagger Integration
+
+Owner Resources automatically integrate with Swagger documentation, adding:
+
+- Security requirements for JWT authentication
+- Descriptions indicating ownership requirements for each endpoint
+- 403 Forbidden responses for unauthorized access attempts
+
+```go
+// Register Swagger with owner resources
+swagger.RegisterSwaggerWithOwnerResources(
+    r.Group(""),
+    []resource.Resource{userResource},           // Standard resources
+    []resource.OwnerResource{ownerNoteResource}, // Owner resources
+    swagger.SwaggerInfo{
+        Title:       "API with Owner Resources",
+        Description: "API documentation with ownership-based endpoints",
+        Version:     "1.0.0",
+        BasePath:    "/api",
+    },
+)
+```
+
+### Security Considerations
+
+When implementing owner resources, consider the following:
+
+1. Always use secure transport (HTTPS) to prevent token interception
+2. Set appropriate JWT expiration times and enforce token validation
+3. Consider implementing role-based access control alongside ownership checks
+4. Never expose ownership information in error messages or logs
+5. Test your ownership checks thoroughly to prevent authorization bypass
+
+For a complete example, see the [Owner Resources Example](examples/owner_resources/main.go).
