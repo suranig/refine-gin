@@ -105,6 +105,28 @@ func RegisterSwagger(router *gin.RouterGroup, resources []resource.Resource, inf
 	})
 }
 
+// RegisterSwaggerWithOwnerResources registers Swagger routes including owner resources
+func RegisterSwaggerWithOwnerResources(router *gin.RouterGroup, resources []resource.Resource, ownerResources []resource.OwnerResource, info SwaggerInfo) {
+	// Create OpenAPI spec
+	openAPI := GenerateOpenAPI(resources, info)
+
+	// Process owner resources
+	for _, res := range ownerResources {
+		RegisterOwnerResourceSwagger(openAPI, res)
+	}
+
+	// Register Swagger UI handler
+	router.GET("/swagger", func(c *gin.Context) {
+		c.Header("Content-Type", "text/html")
+		c.String(200, swaggerHTML)
+	})
+
+	// Register OpenAPI spec handler
+	router.GET("/swagger.json", func(c *gin.Context) {
+		c.JSON(200, openAPI)
+	})
+}
+
 // Helper functions
 
 // generateModelSchema creates a schema for a resource model
