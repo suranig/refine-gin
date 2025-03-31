@@ -402,6 +402,11 @@ func (r *ProductRepository) BulkUpdate(ctx context.Context, condition map[string
 	return r.db.Model(&Product{}).Where(condition).Updates(updates).Error
 }
 
+// GetIDFieldName returns the field name used as primary key for the Product model
+func (r *ProductRepository) GetIDFieldName() string {
+	return "Code" // Primary key field for Product model
+}
+
 func main() {
 	// Create a new Gin router
 	r := gin.Default()
