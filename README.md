@@ -778,20 +778,28 @@ Relations are loaded efficiently using GORM's preloading mechanism. You can cont
 
 The system automatically optimizes queries to prevent N+1 problems and unnecessary data loading.
 
-## Recent Updates
+## Recent Changes
 
-### Version 0.4.0
+### 2024-03-XX - Field List Methods Enhancement
+- Added comprehensive field list methods to the Resource interface
+- Implemented consistent mock implementations across test files
+- Improved test coverage for field-related functionality
+- Standardized method behavior for nil value handling
 
-The latest version brings significant improvements to the codebase organization and provides new utility functions:
+### 2024-03-XX - Relations Support
+- Added comprehensive support for resource relations
+- Implemented relation actions (attach, detach, list)
+- Added relation validation and configuration options
+- Optimized relation loading with GORM preloading
+- Added documentation for relation features and usage
 
-- **Centralized Field Lists**: Replaced field-level properties (`Filterable`, `Sortable`, `Searchable`) with centralized lists in the resource configuration for better maintainability.
-- **Global Resource Registry**: Introduced a singleton `GlobalResourceRegistry` for easier resource management and tracking.
-- **Reflection Utilities**: Added a comprehensive set of reflection helpers in the `utils` package for safer and more predictable handling of dynamic data.
-- **Type Mapping**: Added utilities for mapping Go types to their schema representations, improving consistency across the codebase.
-- **Enhanced Relation Validation**: Improved validation of relationships between resources with better error handling and type checking.
-- **Improved Swagger Integration**: Better type mapping for more accurate API documentation.
-
-These changes improve code maintainability, reduce duplication, and provide a more consistent API for both library users and developers.
+### 2024-06-XX - Form Layout Support
+- Added form layout functionality for advanced form design
+- Implemented section-based field grouping with titles and icons
+- Added support for multi-column grid layouts with configurable properties
+- Provided precise field positioning system with column/row coordinates
+- Implemented form metadata endpoint for UI integration
+- Added field dependency tracking for dynamic forms
 
 ## License
 
@@ -860,6 +868,142 @@ HTTP/1.1 304 Not Modified
 
 This caching mechanism is fully documented in the Swagger UI to help API consumers implement efficient client-side caching.
 
+## Form Layouts
+
+Starting with version 0.7.0, Refine-Gin provides comprehensive support for advanced form layouts. This feature allows you to define complex, multi-column form layouts with grouped sections and precise field positioning.
+
+### Key Features
+
+- Multi-column grid layouts with configurable column counts
+- Section-based field grouping with titles and icons
+- Collapsible sections for complex forms
+- Precise field positioning using a coordinate system (column, row)
+- Field spanning across multiple columns
+- Dedicated form metadata endpoint for UI integration
+
+### Defining Form Layouts
+
+Form layouts can be defined at the resource level:
+
+```go
+// Create a form layout for your resource
+formLayout := &resource.FormLayout{
+    Columns: 2,                // Number of columns in the grid
+    Gutter:  16,               // Spacing between columns (in pixels)
+    Sections: []*resource.FormSection{
+        {
+            ID:          "personalInfo",
+            Title:       "Personal Information",
+            Icon:        "user",
+            Collapsible: false,
+        },
+        {
+            ID:          "contactInfo",
+            Title:       "Contact Information",
+            Icon:        "mail",
+            Collapsible: true,
+        },
+    },
+    FieldLayouts: []*resource.FormFieldLayout{
+        {
+            Field:     "FirstName",      // Field name
+            SectionID: "personalInfo",   // Section this field belongs to
+            Column:    0,                // Zero-based column index (first column)
+            Row:       0,                // Zero-based row index (first row)
+        },
+        {
+            Field:     "LastName",
+            SectionID: "personalInfo",
+            Column:    1,
+            Row:       0,
+        },
+        {
+            Field:     "Email",
+            SectionID: "contactInfo",
+            Column:    0,
+            Row:       0,
+            ColSpan:   2,               // Span this field across 2 columns
+        },
+    },
+}
+
+// Assign the layout to your resource
+userResource := resource.NewDefaultResource(&User{})
+userResource.SetFormLayout(formLayout)
+```
+
+### Form Metadata Endpoint
+
+When you add a form layout to your resource, the framework automatically creates a form metadata endpoint:
+
+```
+GET /api/{resource}/form
+```
+
+This endpoint returns comprehensive form metadata, including:
+
+- Field definitions with types, validations, and UI configurations
+- Layout information (columns, gutter, sections)
+- Section configurations (title, icon, collapsible status)
+- Field positioning within the grid
+- Default values (for new forms)
+- Field dependencies
+
+For edit forms, you can also access the form with prefilled data:
+
+```
+GET /api/{resource}/form/{id}
+```
+
+This endpoint returns the same metadata plus default values populated from the database record.
+
+### Field Dependencies
+
+The form metadata includes field dependencies, which can be used to create dynamic forms where fields depend on the values of other fields:
+
+```go
+// Define a field dependency
+{
+    Name: "State",
+    Type: "string",
+    Form: &resource.FormConfig{
+        DependentOn: "Country",      // This field depends on the Country field
+    },
+}
+```
+
+The form metadata endpoint will automatically include this dependency information:
+
+```json
+{
+  "dependencies": {
+    "Country": ["State"]
+  }
+}
+```
+
+### Registration
+
+The form endpoints are automatically registered when a resource has a form layout configured:
+
+```go
+// Register resource endpoints (including form metadata)
+handler.RegisterResourceEndpoints(apiGroup, userResource)
+```
+
+### Example
+
+A complete example of form layout usage can be found in the [examples/form_layout](examples/form_layout/main.go) directory, demonstrating:
+
+- Multi-column layouts
+- Sections with icons and titles
+- Collapsible sections
+- Field positioning and spanning
+- Default values
+- Field dependencies
+
+This feature integrates perfectly with Refine.js and other modern UI frameworks that support dynamic form rendering.
+
 ## Resource Interface
 
 The `Resource` interface defines the contract for all resources in the application. Each resource must implement the following methods:
@@ -880,6 +1024,7 @@ The `Resource` interface defines the contract for all resources in the applicati
 - `GetRequiredFields() []string` - Returns fields that are required
 - `GetTableFields() []string` - Returns fields to display in table view
 - `GetFormFields() []string` - Returns fields to display in form view
+- `GetEditableFields() []string` - Returns fields that can be edited
 
 ### Operation Methods
 - `GetOperations() []Operation` - Returns all supported operations
@@ -889,6 +1034,9 @@ The `Resource` interface defines the contract for all resources in the applicati
 - `GetRelations() []Relation` - Returns all defined relations
 - `HasRelation(name string) bool` - Checks if a relation exists
 - `GetRelation(name string) *Relation` - Returns a specific relation
+
+### Layout Methods
+- `GetFormLayout() *FormLayout` - Returns the form layout configuration
 
 ### Configuration Methods
 - `GetDefaultSort() *Sort` - Returns default sorting configuration
@@ -909,6 +1057,14 @@ The `Resource` interface defines the contract for all resources in the applicati
 - Added relation validation and configuration options
 - Optimized relation loading with GORM preloading
 - Added documentation for relation features and usage
+
+### 2024-06-XX - Form Layout Support
+- Added form layout functionality for advanced form design
+- Implemented section-based field grouping with titles and icons
+- Added support for multi-column grid layouts with configurable properties
+- Provided precise field positioning system with column/row coordinates
+- Implemented form metadata endpoint for UI integration
+- Added field dependency tracking for dynamic forms
 
 ## Owner Resources
 
