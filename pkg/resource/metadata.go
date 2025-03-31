@@ -152,6 +152,21 @@ type JsonConfigMetadata struct {
 
 	// Editor type (json, form, tree)
 	EditorType string `json:"editorType,omitempty"`
+
+	// Nested indicates if the JSON structure is nested (objects within objects)
+	Nested bool `json:"nested,omitempty"`
+
+	// RenderAs defines the UI presentation style ("tabs", "form", "tree", "grid")
+	RenderAs string `json:"renderAs,omitempty"`
+
+	// TabsConfig holds configuration for rendering in tabs format
+	TabsConfig *JsonTabsConfigMetadata `json:"tabsConfig,omitempty"`
+
+	// GridConfig holds configuration for grid layout
+	GridConfig *JsonGridConfigMetadata `json:"gridConfig,omitempty"`
+
+	// ObjectLabels provides display labels for nested objects by their path
+	ObjectLabels map[string]string `json:"objectLabels,omitempty"`
 }
 
 // JsonPropertyMetadata represents metadata for a JSON property
@@ -191,6 +206,60 @@ type FormConfigMetadata struct {
 	Placeholder string `json:"placeholder,omitempty"`
 	Help        string `json:"help,omitempty"`
 	Tooltip     string `json:"tooltip,omitempty"`
+}
+
+// JsonTabsConfigMetadata represents metadata for tabs-based JSON rendering
+type JsonTabsConfigMetadata struct {
+	// Tabs collection for the JSON structure
+	Tabs []JsonTabMetadata `json:"tabs,omitempty"`
+
+	// TabPosition specifies where tabs are placed ("top", "right", "bottom", "left")
+	TabPosition string `json:"tabPosition,omitempty"`
+
+	// DefaultActiveTab specifies the key of the default active tab
+	DefaultActiveTab string `json:"defaultActiveTab,omitempty"`
+}
+
+// JsonTabMetadata represents metadata for a single tab in a tabs-based JSON editor
+type JsonTabMetadata struct {
+	// Key uniquely identifies the tab
+	Key string `json:"key"`
+
+	// Title is the display name of the tab
+	Title string `json:"title,omitempty"`
+
+	// Icon specifies an optional icon for the tab
+	Icon string `json:"icon,omitempty"`
+
+	// Fields lists the JSON property paths included in this tab
+	Fields []string `json:"fields,omitempty"`
+}
+
+// JsonGridConfigMetadata represents metadata for grid layout of JSON fields
+type JsonGridConfigMetadata struct {
+	// Columns defines the number of columns in the grid
+	Columns int `json:"columns,omitempty"`
+
+	// Gutter defines the space between grid items
+	Gutter int `json:"gutter,omitempty"`
+
+	// FieldLayouts maps field paths to their layout configuration
+	FieldLayouts map[string]*JsonFieldLayoutMetadata `json:"fieldLayouts,omitempty"`
+}
+
+// JsonFieldLayoutMetadata represents metadata for grid position and span of a field
+type JsonFieldLayoutMetadata struct {
+	// Column specifies the starting column (1-based)
+	Column int `json:"column,omitempty"`
+
+	// Row specifies the starting row (1-based)
+	Row int `json:"row,omitempty"`
+
+	// ColSpan specifies how many columns the field spans
+	ColSpan int `json:"colSpan,omitempty"`
+
+	// RowSpan specifies how many rows the field spans
+	RowSpan int `json:"rowSpan,omitempty"`
 }
 
 // GenerateResourceMetadata generates resource metadata from a resource
@@ -359,6 +428,55 @@ func GenerateJsonConfigMetadata(config *JsonConfig) *JsonConfigMetadata {
 		DefaultExpanded: config.DefaultExpanded,
 		PathPrefix:      config.PathPrefix,
 		EditorType:      config.EditorType,
+		Nested:          config.Nested,
+		RenderAs:        config.RenderAs,
+		ObjectLabels:    config.ObjectLabels,
+	}
+
+	// Convert tabs configuration if present
+	if config.TabsConfig != nil {
+		tabsConfig := &JsonTabsConfigMetadata{
+			TabPosition:      config.TabsConfig.TabPosition,
+			DefaultActiveTab: config.TabsConfig.DefaultActiveTab,
+		}
+
+		// Convert tabs
+		if len(config.TabsConfig.Tabs) > 0 {
+			tabsConfig.Tabs = make([]JsonTabMetadata, 0, len(config.TabsConfig.Tabs))
+			for _, tab := range config.TabsConfig.Tabs {
+				tabsConfig.Tabs = append(tabsConfig.Tabs, JsonTabMetadata{
+					Key:    tab.Key,
+					Title:  tab.Title,
+					Icon:   tab.Icon,
+					Fields: tab.Fields,
+				})
+			}
+		}
+
+		meta.TabsConfig = tabsConfig
+	}
+
+	// Convert grid configuration if present
+	if config.GridConfig != nil {
+		gridConfig := &JsonGridConfigMetadata{
+			Columns: config.GridConfig.Columns,
+			Gutter:  config.GridConfig.Gutter,
+		}
+
+		// Convert field layouts
+		if len(config.GridConfig.FieldLayouts) > 0 {
+			gridConfig.FieldLayouts = make(map[string]*JsonFieldLayoutMetadata)
+			for path, layout := range config.GridConfig.FieldLayouts {
+				gridConfig.FieldLayouts[path] = &JsonFieldLayoutMetadata{
+					Column:  layout.Column,
+					Row:     layout.Row,
+					ColSpan: layout.ColSpan,
+					RowSpan: layout.RowSpan,
+				}
+			}
+		}
+
+		meta.GridConfig = gridConfig
 	}
 
 	// Generate properties metadata
@@ -381,7 +499,7 @@ func GenerateJsonPropertyMetadata(prop JsonProperty) JsonPropertyMetadata {
 		Type:  prop.Type,
 	}
 
-	// Add validation metadata if present
+	// Add validation if present
 	if prop.Validation != nil {
 		propMeta.Validation = &ValidationMetadata{
 			Required:  prop.Validation.Required,
