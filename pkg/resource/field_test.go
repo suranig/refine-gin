@@ -153,3 +153,28 @@ func TestNumberValidatorValidate(t *testing.T) {
 	err = validator.Validate(struct{}{})
 	assert.Error(t, err, "Should return error for value that cannot be converted to number")
 }
+
+func TestReadOnlyAndHiddenFields(t *testing.T) {
+	// Test ReadOnly tag
+	field := &Field{Name: "test", Type: "string"}
+	ParseFieldTag(field, "readOnly")
+	assert.True(t, field.ReadOnly, "Field should be marked as read-only")
+
+	// Test Hidden tag
+	field = &Field{Name: "test", Type: "string"}
+	ParseFieldTag(field, "hidden")
+	assert.True(t, field.Hidden, "Field should be marked as hidden")
+
+	// Test both tags
+	field = &Field{Name: "test", Type: "string"}
+	ParseFieldTag(field, "readOnly; hidden")
+	assert.True(t, field.ReadOnly, "Field should be marked as read-only")
+	assert.True(t, field.Hidden, "Field should be marked as hidden")
+
+	// Test with other tags
+	field = &Field{Name: "test", Type: "string"}
+	ParseFieldTag(field, "label=Test Field; readOnly; required")
+	assert.Equal(t, "Test Field", field.Label, "Field should have correct label")
+	assert.True(t, field.ReadOnly, "Field should be marked as read-only")
+	assert.True(t, field.Validation.Required, "Field should be marked as required")
+}

@@ -1,96 +1,103 @@
 package resource
 
 import (
+	"strings"
 	"testing"
 )
 
-// RegistryMockResource implements the Resource interface for testing
+// RegistryMockResource is a mock resource for testing the registry
 type RegistryMockResource struct {
-	name string
+	ResourceName string
+	ResourceIcon string
+	Model        interface{}
 }
 
-func (m *RegistryMockResource) GetName() string {
-	return m.name
+func (r *RegistryMockResource) GetName() string {
+	return r.ResourceName
 }
 
-func (m *RegistryMockResource) GetLabel() string {
-	return m.name
+func (r *RegistryMockResource) GetLabel() string {
+	return strings.Title(r.ResourceName)
 }
 
-func (m *RegistryMockResource) GetIcon() string {
-	return "test-icon"
+func (r *RegistryMockResource) GetIcon() string {
+	return r.ResourceIcon
 }
 
-func (m *RegistryMockResource) GetModel() interface{} {
-	return nil
+func (r *RegistryMockResource) GetModel() interface{} {
+	return r.Model
 }
 
-func (m *RegistryMockResource) GetFields() []Field {
-	return nil
+func (r *RegistryMockResource) GetFields() []Field {
+	return []Field{}
 }
 
-func (m *RegistryMockResource) GetOperations() []Operation {
-	return nil
+func (r *RegistryMockResource) GetOperations() []Operation {
+	return []Operation{}
 }
 
-func (m *RegistryMockResource) HasOperation(op Operation) bool {
+func (r *RegistryMockResource) HasOperation(op Operation) bool {
 	return false
 }
 
-func (m *RegistryMockResource) GetDefaultSort() *Sort {
+func (r *RegistryMockResource) GetDefaultSort() *Sort {
 	return nil
 }
 
-func (m *RegistryMockResource) GetFilters() []Filter {
-	return nil
+func (r *RegistryMockResource) GetFilters() []Filter {
+	return []Filter{}
 }
 
-func (m *RegistryMockResource) GetMiddlewares() []interface{} {
-	return nil
+func (r *RegistryMockResource) GetMiddlewares() []interface{} {
+	return []interface{}{}
 }
 
-func (m *RegistryMockResource) GetRelations() []Relation {
-	return nil
+func (r *RegistryMockResource) GetRelations() []Relation {
+	return []Relation{}
 }
 
-func (m *RegistryMockResource) HasRelation(name string) bool {
+func (r *RegistryMockResource) HasRelation(name string) bool {
 	return false
 }
 
-func (m *RegistryMockResource) GetRelation(name string) *Relation {
+func (r *RegistryMockResource) GetRelation(name string) *Relation {
 	return nil
 }
 
-func (m *RegistryMockResource) GetIDFieldName() string {
+func (r *RegistryMockResource) GetIDFieldName() string {
 	return "ID"
 }
 
-func (m *RegistryMockResource) GetField(name string) *Field {
+func (r *RegistryMockResource) GetField(name string) *Field {
 	return nil
 }
 
-func (m *RegistryMockResource) GetSearchable() []string {
-	return nil
+func (r *RegistryMockResource) GetSearchable() []string {
+	return []string{}
 }
 
-func (m *RegistryMockResource) GetFilterableFields() []string {
-	return nil
+func (r *RegistryMockResource) GetFilterableFields() []string {
+	return []string{}
 }
 
-func (m *RegistryMockResource) GetSortableFields() []string {
-	return nil
+func (r *RegistryMockResource) GetSortableFields() []string {
+	return []string{}
 }
 
-func (m *RegistryMockResource) GetRequiredFields() []string {
-	return nil
+func (r *RegistryMockResource) GetTableFields() []string {
+	return []string{}
 }
 
-func (m *RegistryMockResource) GetTableFields() []string {
-	return nil
+func (r *RegistryMockResource) GetFormFields() []string {
+	return []string{}
 }
 
-func (m *RegistryMockResource) GetFormFields() []string {
-	return nil
+func (r *RegistryMockResource) GetRequiredFields() []string {
+	return []string{}
+}
+
+func (r *RegistryMockResource) GetEditableFields() []string {
+	return []string{}
 }
 
 // TestResourceRegistry tests the ResourceRegistry and GlobalResourceRegistry
@@ -99,7 +106,7 @@ func TestResourceRegistry(t *testing.T) {
 	GlobalResourceRegistry = NewResourceRegistry()
 
 	// Test registering a new resource
-	resource := &RegistryMockResource{name: "test-resource"}
+	resource := &RegistryMockResource{ResourceName: "test-resource", ResourceIcon: "test-icon"}
 	GlobalResourceRegistry.Register(resource)
 
 	// Verify the resource was registered
@@ -124,7 +131,7 @@ func TestResourceRegistry(t *testing.T) {
 	// Register test resources
 	resources := []string{"resource1", "resource2", "resource3"}
 	for _, name := range resources {
-		GlobalResourceRegistry.Register(&RegistryMockResource{name: name})
+		GlobalResourceRegistry.Register(&RegistryMockResource{ResourceName: name, ResourceIcon: "test-icon"})
 	}
 
 	// Test GetAll returns all registered resources
@@ -151,7 +158,7 @@ func TestResourceRegistry(t *testing.T) {
 	GlobalResourceRegistry = NewResourceRegistry()
 
 	// Test using the convenience function
-	resource = &RegistryMockResource{name: "test-resource"}
+	resource = &RegistryMockResource{ResourceName: "test-resource", ResourceIcon: "test-icon"}
 	RegisterToRegistry(resource)
 
 	// Verify the resource was registered

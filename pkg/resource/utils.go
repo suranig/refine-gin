@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // Common errors
@@ -89,4 +90,78 @@ func GetFieldValue(obj interface{}, fieldName string) (interface{}, error) {
 
 	// Return the field value
 	return field.Interface(), nil
+}
+
+// FilterOutReadOnlyFields removes read-only fields from the update data
+// This should be used before updating a resource to ensure read-only fields cannot be modified
+func FilterOutReadOnlyFields(data interface{}, res Resource) interface{} {
+	if data == nil {
+		return nil
+	}
+
+	// Handle nil pointers
+	dataValue := reflect.ValueOf(data)
+	if dataValue.Kind() == reflect.Ptr && dataValue.IsNil() {
+		return nil
+	}
+
+	// Get a map of field names that are editable
+	editableFields := make(map[string]bool)
+	for _, fieldName := range res.GetEditableFields() {
+		editableFields[strings.ToLower(fieldName)] = true
+	}
+
+	// If no editable fields are defined, filter by ReadOnly flag directly
+	if len(editableFields) == 0 {
+		fields := res.GetFields()
+		for _, field := range fields {
+			if !field.ReadOnly {
+				editableFields[strings.ToLower(field.Name)] = true
+			}
+		}
+	}
+
+	// For map type, filter out read-only fields directly
+	if mapData, ok := data.(map[string]interface{}); ok {
+		result := make(map[string]interface{})
+		for key, value := range mapData {
+			if editableFields[strings.ToLower(key)] {
+				result[key] = value
+			}
+		}
+		return result
+	}
+
+	// For struct type, create a new struct with only editable fields
+	dataValue = reflect.ValueOf(data)
+	if dataValue.Kind() == reflect.Ptr {
+		dataValue = dataValue.Elem()
+	}
+
+	// Only handle struct types
+	if dataValue.Kind() != reflect.Struct {
+		return data // Return as is if not a struct
+	}
+
+	// Create a map to hold editable fields
+	result := make(map[string]interface{})
+
+	dataType := dataValue.Type()
+	for i := 0; i < dataValue.NumField(); i++ {
+		field := dataType.Field(i)
+		fieldName := field.Name
+
+		// Skip unexported fields
+		if field.PkgPath != "" {
+			continue
+		}
+
+		// Check if field is editable
+		if editableFields[strings.ToLower(fieldName)] {
+			// Add field to result
+			result[fieldName] = dataValue.Field(i).Interface()
+		}
+	}
+
+	return result
 }

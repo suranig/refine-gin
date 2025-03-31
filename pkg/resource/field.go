@@ -18,6 +18,8 @@ type Field struct {
 	Form       *FormConfig
 	Validators []Validator
 	Json       *JsonConfig
+	ReadOnly   bool // Indicates if the field is read-only (not editable)
+	Hidden     bool // Indicates if the field should be hidden in UI
 }
 
 // JsonConfig defines configuration for JSON fields

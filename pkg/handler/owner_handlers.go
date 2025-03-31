@@ -214,6 +214,9 @@ func GenerateOwnerUpdateHandler(res resource.Resource, repo repository.Repositor
 			return
 		}
 
+		// Filter out read-only fields
+		model = resource.FilterOutReadOnlyFields(model, res)
+
 		// Update in repository (ownership verification happens in repository)
 		updated, err := repo.Update(c.Request.Context(), id, model)
 		if err != nil {
@@ -333,8 +336,11 @@ func GenerateOwnerUpdateManyHandler(res resource.Resource, repo repository.Repos
 			return
 		}
 
+		// Filter out read-only fields from the update data
+		filteredData := resource.FilterOutReadOnlyFields(req.Data, res)
+
 		// Update many in repository (ownership verification happens in repository)
-		affected, err := repo.UpdateMany(c.Request.Context(), req.IDs, req.Data)
+		affected, err := repo.UpdateMany(c.Request.Context(), req.IDs, filteredData)
 		if err != nil {
 			// Handle specific errors
 			if err == repository.ErrOwnerMismatch {

@@ -294,3 +294,105 @@ func TestGetFieldValue(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterOutReadOnlyFields(t *testing.T) {
+	// Test structure with some fields
+	type TestModel struct {
+		ID        int    `json:"id"`
+		Name      string `json:"name"`
+		Email     string `json:"email"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	// Create a mock resource
+	mockResource := &DefaultResource{
+		Fields: []Field{
+			{Name: "ID", ReadOnly: true},
+			{Name: "Name", ReadOnly: false},
+			{Name: "Email", ReadOnly: false},
+			{Name: "CreatedAt", ReadOnly: true},
+		},
+		EditableFields: []string{"Name", "Email"},
+	}
+
+	// Test struct filtering
+	testStruct := TestModel{
+		ID:        1,
+		Name:      "John Doe",
+		Email:     "john@example.com",
+		CreatedAt: "2023-07-01",
+	}
+
+	result := FilterOutReadOnlyFields(testStruct, mockResource)
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok, "Result should be a map")
+
+	// Should only contain editable fields
+	assert.Equal(t, 2, len(resultMap))
+	assert.Equal(t, "John Doe", resultMap["Name"])
+	assert.Equal(t, "john@example.com", resultMap["Email"])
+	assert.NotContains(t, resultMap, "ID")
+	assert.NotContains(t, resultMap, "CreatedAt")
+
+	// Test map filtering
+	testMap := map[string]interface{}{
+		"ID":        1,
+		"Name":      "John Doe",
+		"Email":     "john@example.com",
+		"CreatedAt": "2023-07-01",
+	}
+
+	mapResult := FilterOutReadOnlyFields(testMap, mockResource)
+	mapResultMap, ok := mapResult.(map[string]interface{})
+	assert.True(t, ok, "Result should be a map")
+
+	// Should only contain editable fields
+	assert.Equal(t, 2, len(mapResultMap))
+	assert.Equal(t, "John Doe", mapResultMap["Name"])
+	assert.Equal(t, "john@example.com", mapResultMap["Email"])
+	assert.NotContains(t, mapResultMap, "ID")
+	assert.NotContains(t, mapResultMap, "CreatedAt")
+
+	// Test with no editable fields defined (should use ReadOnly flag)
+	resourceWithoutEditableFields := &DefaultResource{
+		Fields: []Field{
+			{Name: "ID", ReadOnly: true},
+			{Name: "Name", ReadOnly: false},
+			{Name: "Email", ReadOnly: false},
+			{Name: "CreatedAt", ReadOnly: true},
+		},
+	}
+
+	result = FilterOutReadOnlyFields(testStruct, resourceWithoutEditableFields)
+	resultMap, ok = result.(map[string]interface{})
+	assert.True(t, ok, "Result should be a map")
+
+	// Should only contain non-readonly fields
+	assert.Equal(t, 2, len(resultMap))
+	assert.Equal(t, "John Doe", resultMap["Name"])
+	assert.Equal(t, "john@example.com", resultMap["Email"])
+	assert.NotContains(t, resultMap, "ID")
+	assert.NotContains(t, resultMap, "CreatedAt")
+
+	// Test case insensitivity
+	resourceWithLowercaseFields := &DefaultResource{
+		EditableFields: []string{"name", "email"},
+	}
+
+	result = FilterOutReadOnlyFields(testStruct, resourceWithLowercaseFields)
+	resultMap, ok = result.(map[string]interface{})
+	assert.True(t, ok, "Result should be a map")
+	assert.Equal(t, 2, len(resultMap))
+	assert.Equal(t, "John Doe", resultMap["Name"])
+	assert.Equal(t, "john@example.com", resultMap["Email"])
+
+	// Test nil input
+	var nilData *TestModel
+	nilResult := FilterOutReadOnlyFields(nilData, mockResource)
+	assert.Nil(t, nilResult)
+
+	// Test non-struct, non-map input
+	strData := "test string"
+	strResult := FilterOutReadOnlyFields(strData, mockResource)
+	assert.Equal(t, strData, strResult)
+}

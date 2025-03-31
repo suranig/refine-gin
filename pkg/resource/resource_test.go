@@ -502,3 +502,50 @@ func TestDefaultResourceHasOperation(t *testing.T) {
 	}
 	assert.False(t, nilResource.HasOperation(OperationList))
 }
+
+func TestGetEditableFields(t *testing.T) {
+	// Create test fields
+	fields := []Field{
+		{Name: "ID", Type: "int", ReadOnly: true},
+		{Name: "Name", Type: "string", ReadOnly: false},
+		{Name: "Email", Type: "string", ReadOnly: false},
+		{Name: "CreatedAt", Type: "time.Time", ReadOnly: true},
+		{Name: "Active", Type: "bool", ReadOnly: false},
+		{Name: "Role", Type: "string", ReadOnly: false, Hidden: true},
+	}
+
+	// Create a resource with explicit configuration
+	resource := NewResource(ResourceConfig{
+		Name:   "test",
+		Fields: fields,
+		Model:  TestUser{}, // Provide a valid model
+	})
+
+	editable := resource.GetEditableFields()
+
+	// All non-readonly fields should be included (4), including hidden ones
+	assert.Equal(t, 4, len(editable))
+	assert.Contains(t, editable, "Name")
+	assert.Contains(t, editable, "Email")
+	assert.Contains(t, editable, "Active")
+	assert.Contains(t, editable, "Role")         // Hidden but not readonly
+	assert.NotContains(t, editable, "ID")        // ID is always excluded
+	assert.NotContains(t, editable, "CreatedAt") // ReadOnly is excluded
+
+	// Test with explicitly provided editable fields
+	explicitResource := NewResource(ResourceConfig{
+		Name:           "test",
+		Fields:         fields,
+		EditableFields: []string{"Name", "Active"},
+		Model:          TestUser{}, // Provide a valid model
+	})
+
+	explicitEditable := explicitResource.GetEditableFields()
+
+	// Should respect the explicitly provided list
+	assert.Equal(t, 2, len(explicitEditable))
+	assert.Contains(t, explicitEditable, "Name")
+	assert.Contains(t, explicitEditable, "Active")
+	assert.NotContains(t, explicitEditable, "Email")
+	assert.NotContains(t, explicitEditable, "Role")
+}

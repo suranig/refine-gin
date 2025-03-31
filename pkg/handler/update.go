@@ -32,6 +32,9 @@ func GenerateUpdateHandler(res resource.Resource, repo repository.Repository, dt
 			return
 		}
 
+		// Filter out read-only fields from the model
+		model = resource.FilterOutReadOnlyFields(model, res)
+
 		// Get the database connection from repository
 		db := repo.Query(c.Request.Context())
 
@@ -92,6 +95,9 @@ func GenerateUpdateHandlerWithParam(res resource.Resource, repo repository.Repos
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		// Filter out read-only fields from the model
+		model = resource.FilterOutReadOnlyFields(model, res)
 
 		// Get the database connection from repository
 		db := repo.Query(c.Request.Context())
