@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -105,10 +106,13 @@ func (r *GenericRepository) Get(ctx context.Context, id interface{}) (interface{
 
 	idFieldName := "id" // Default to "id"
 	if r.Resource != nil {
-		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+		idFieldName = r.Resource.GetIDFieldName()
 	}
 
-	if err := r.DB.WithContext(ctx).Where(idFieldName+" = ?", id).First(result).Error; err != nil {
+	// Get the proper column name using GORM's naming strategy
+	idColumnName := r.DB.NamingStrategy.ColumnName("", idFieldName)
+
+	if err := r.DB.WithContext(ctx).Where(idColumnName+" = ?", id).First(result).Error; err != nil {
 		return nil, err
 	}
 
@@ -125,14 +129,71 @@ func (r *GenericRepository) Create(ctx context.Context, data interface{}) (inter
 
 // Update modifies an existing resource identified by ID
 func (r *GenericRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
-	idFieldName := "id" // Default to "id"
-	if r.Resource != nil {
-		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
-	}
+	// Try to set ID directly on model if it implements IDSetter
+	TrySetID(data, id)
 
-	if err := r.DB.WithContext(ctx).Model(r.Model).Where(idFieldName+" = ?", id).Updates(data).Error; err != nil {
+	// First, get the existing record
+	existingRecord, err := r.Get(ctx, id)
+	if err != nil {
 		return nil, err
 	}
+
+	// Check if data is a map or a struct
+	isMap := false
+	updateData := data
+	if _, ok := data.(map[string]interface{}); ok {
+		isMap = true
+	}
+
+	// If data is a map, we need to convert it to the model's struct type for Save to work properly
+	if isMap {
+		// Create a new instance of the model type to contain our updates
+		modelType := reflect.TypeOf(r.Model)
+		if modelType.Kind() == reflect.Ptr {
+			// If the model is a pointer, create a new pointer to the element type
+			modelValue := reflect.New(modelType.Elem())
+			updateData = modelValue.Interface()
+		} else {
+			// If the model is not a pointer, create a new pointer to the model type
+			modelValue := reflect.New(modelType)
+			updateData = modelValue.Interface()
+		}
+
+		// Convert the existing record to JSON
+		jsonData, err := json.Marshal(existingRecord)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal existing record: %w", err)
+		}
+
+		// Unmarshal the JSON into the new model instance to initialize it with existing values
+		if err := json.Unmarshal(jsonData, updateData); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal existing record: %w", err)
+		}
+
+		// Now apply the updates from the data map to the model
+		updatesMap, _ := data.(map[string]interface{})
+		updatesJSON, err := json.Marshal(updatesMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal updates: %w", err)
+		}
+
+		// This will only update the fields present in the JSON
+		if err := json.Unmarshal(updatesJSON, updateData); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal updates: %w", err)
+		}
+	}
+
+	// Ensure ID field is set correctly in the update data
+	if idSetter, ok := updateData.(IDSetter); ok {
+		idSetter.SetID(id)
+	}
+
+	// Save the modified record - this will correctly handle JSON serialization
+	if err := r.DB.WithContext(ctx).Save(updateData).Error; err != nil {
+		return nil, err
+	}
+
+	// Return the updated record
 	return r.Get(ctx, id)
 }
 
@@ -148,10 +209,13 @@ func (r *GenericRepository) Delete(ctx context.Context, id interface{}) error {
 	// Otherwise, use the ID field name
 	idFieldName := "id" // Default to "id"
 	if r.Resource != nil {
-		idFieldName = strings.ToLower(r.Resource.GetIDFieldName())
+		idFieldName = r.Resource.GetIDFieldName()
 	}
 
-	return tx.Where(idFieldName+" = ?", id).Delete(r.Model).Error
+	// Get the proper column name using GORM's naming strategy
+	idColumnName := r.DB.NamingStrategy.ColumnName("", idFieldName)
+
+	return tx.Where(idColumnName+" = ?", id).Delete(r.Model).Error
 }
 
 // Count returns the total number of resources matching the query options
@@ -195,7 +259,10 @@ func (r *GenericRepository) UpdateMany(ctx context.Context, ids []interface{}, d
 		idFieldName = r.Resource.GetIDFieldName()
 	}
 
-	result := r.DB.WithContext(ctx).Model(r.Model).Where(idFieldName+" IN ?", ids).Updates(data)
+	// Get the proper column name using GORM's naming strategy
+	idColumnName := r.DB.NamingStrategy.ColumnName("", idFieldName)
+
+	result := r.DB.WithContext(ctx).Model(r.Model).Where(idColumnName+" IN ?", ids).Updates(data)
 	return result.RowsAffected, result.Error
 }
 
@@ -206,7 +273,10 @@ func (r *GenericRepository) DeleteMany(ctx context.Context, ids []interface{}) (
 		idFieldName = r.Resource.GetIDFieldName()
 	}
 
-	result := r.DB.WithContext(ctx).Where(idFieldName+" IN ?", ids).Delete(r.Model)
+	// Get the proper column name using GORM's naming strategy
+	idColumnName := r.DB.NamingStrategy.ColumnName("", idFieldName)
+
+	result := r.DB.WithContext(ctx).Where(idColumnName+" IN ?", ids).Delete(r.Model)
 	return result.RowsAffected, result.Error
 }
 
@@ -368,4 +438,17 @@ func (r *GenericRepository) FindAllBy(ctx context.Context, condition map[string]
 	}
 
 	return result, nil
+}
+
+// GetIDFieldName returns the field name used as primary key
+func (r *GenericRepository) GetIDFieldName() string {
+	// If resource is set and has a custom ID field name, use it
+	if r.Resource != nil {
+		idFieldName := r.Resource.GetIDFieldName()
+		if idFieldName != "" {
+			return idFieldName
+		}
+	}
+	// Default to "id"
+	return "id"
 }
