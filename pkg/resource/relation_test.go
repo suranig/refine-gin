@@ -122,6 +122,14 @@ func (m *MockResource) GetEditableFields() []string {
 	return []string{}
 }
 
+func (m *MockResource) GetPermissions() map[string][]string {
+	return nil
+}
+
+func (m *MockResource) HasPermission(operation string, role string) bool {
+	return true
+}
+
 // TestModels for relation tests
 type User struct {
 	ID      string   `json:"id" gorm:"primaryKey"`

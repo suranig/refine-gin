@@ -156,6 +156,14 @@ func (m *MockResourceForTest) GetEditableFields() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MockResourceForTest) GetPermissions() map[string][]string {
+	return nil
+}
+
+func (m *MockResourceForTest) HasPermission(operation string, role string) bool {
+	return true
+}
+
 func TestAttachAndDetachActions(t *testing.T) {
 	// Test the attachment action
 	t.Run("AttachAction", func(t *testing.T) {

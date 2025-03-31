@@ -59,6 +59,12 @@ func (r MockResource) GetFormFields() []string {
 func (r MockResource) GetEditableFields() []string {
 	return []string{"name", "email", "age"}
 }
+func (r MockResource) GetPermissions() map[string][]string {
+	return nil
+}
+func (r MockResource) HasPermission(operation string, role string) bool {
+	return true
+}
 func (r MockResource) HasOperation(op resource.Operation) bool {
 	for _, o := range r.ops {
 		if o == op {

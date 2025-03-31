@@ -100,6 +100,14 @@ func (r *RegistryMockResource) GetEditableFields() []string {
 	return []string{}
 }
 
+func (r *RegistryMockResource) GetPermissions() map[string][]string {
+	return nil
+}
+
+func (r *RegistryMockResource) HasPermission(operation string, role string) bool {
+	return true
+}
+
 // TestResourceRegistry tests the ResourceRegistry and GlobalResourceRegistry
 func TestResourceRegistry(t *testing.T) {
 	// Reset GlobalResourceRegistry for testing

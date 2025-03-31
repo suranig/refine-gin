@@ -165,9 +165,6 @@ func (m *MockOwnerResource) GetFormFields() []string {
 // GetEditableFields returns a list of field names that can be edited
 func (m *MockOwnerResource) GetEditableFields() []string {
 	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
 	return args.Get(0).([]string)
 }
 
@@ -178,6 +175,19 @@ func (m *MockOwnerResource) GetOwnerConfig() resource.OwnerConfig {
 
 func (m *MockOwnerResource) IsOwnershipEnforced() bool {
 	args := m.Called()
+	return args.Bool(0)
+}
+
+func (m *MockOwnerResource) GetPermissions() map[string][]string {
+	args := m.Called()
+	if result := args.Get(0); result != nil {
+		return result.(map[string][]string)
+	}
+	return nil
+}
+
+func (m *MockOwnerResource) HasPermission(operation string, role string) bool {
+	args := m.Called(operation, role)
 	return args.Bool(0)
 }
 
