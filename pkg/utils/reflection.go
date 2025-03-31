@@ -149,3 +149,51 @@ func GetSliceField(obj interface{}, fieldName string) (reflect.Value, error) {
 
 	return field, nil
 }
+
+// CreateNewModelInstance creates a new instance of the given model
+func CreateNewModelInstance(model interface{}) interface{} {
+	if model == nil {
+		return nil
+	}
+
+	modelType := reflect.TypeOf(model)
+
+	// Handle pointer types
+	if modelType.Kind() == reflect.Ptr {
+		// Get the element type (*T -> T)
+		elemType := modelType.Elem()
+		// Create a new instance of that type
+		newInstance := reflect.New(elemType).Interface()
+		return newInstance
+	}
+
+	// Handle non-pointer types
+	// Create a pointer to the model type
+	newInstance := reflect.New(modelType).Interface()
+	return newInstance
+}
+
+// CreateNewSliceOfModel creates a new slice for the given model type
+func CreateNewSliceOfModel(model interface{}) interface{} {
+	if model == nil {
+		return nil
+	}
+
+	modelType := reflect.TypeOf(model)
+
+	// Get the base type (handle pointer types)
+	var elemType reflect.Type
+	if modelType.Kind() == reflect.Ptr {
+		// *T -> T
+		elemType = modelType.Elem()
+	} else {
+		elemType = modelType
+	}
+
+	// Create a slice type of the element type
+	sliceType := reflect.SliceOf(reflect.PtrTo(elemType))
+
+	// Create a new pointer to a slice
+	newSlice := reflect.New(sliceType).Interface()
+	return newSlice
+}
