@@ -6,8 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/handler"
-	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -45,9 +43,6 @@ func main() {
 	if count == 0 {
 		createSeedData(db)
 	}
-
-	// Create repository
-	userRepo := repository.NewGormRepository[User](db)
 
 	// Create FormLayout
 	formLayout := &resource.FormLayout{
@@ -127,28 +122,41 @@ func main() {
 	}
 
 	// Create resource
-	userResource := resource.NewDefaultResource(&User{})
-	userResource.SetName("user")
-	userResource.SetLabel("User")
-	userResource.SetFormLayout(formLayout)
-	userResource.SetOperations([]resource.Operation{
-		resource.OperationList,
-		resource.OperationCreate,
-		resource.OperationRead,
-		resource.OperationUpdate,
-		resource.OperationDelete,
-	})
+	userResource := &resource.DefaultResource{
+		Name:       "user",
+		Label:      "User",
+		FormLayout: formLayout,
+		Operations: []resource.Operation{
+			resource.OperationList,
+			resource.OperationCreate,
+			resource.OperationRead,
+			resource.OperationUpdate,
+			resource.OperationDelete,
+		},
+		Model: &User{},
+	}
 
 	// Register API
 	api := r.Group("/api")
 
 	// Register resource endpoints
-	handler.RegisterResourceEndpoints(api, userResource)
+	resourceRouter := api.Group(fmt.Sprintf("/%s", userResource.GetName()))
+
+	// Register form metadata endpoint
+	resourceRouter.GET("/form", func(c *gin.Context) {
+		// Generate form metadata
+		fields := resource.GenerateFieldsMetadata(userResource.GetFields())
+		layout := resource.GenerateFormLayoutMetadata(userResource.GetFormLayout())
+
+		c.JSON(http.StatusOK, gin.H{
+			"fields": fields,
+			"layout": layout,
+		})
+	})
 
 	// Start server
 	fmt.Println("Server running at http://localhost:8080")
-	fmt.Println("Form metadata available at http://localhost:8080/api/users/form")
-	fmt.Println("Form metadata for editing available at http://localhost:8080/api/users/form/:id")
+	fmt.Println("Form metadata available at http://localhost:8080/api/user/form")
 	http.ListenAndServe(":8080", r)
 }
 
