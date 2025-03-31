@@ -56,6 +56,9 @@ type Resource interface {
 	// Permissions related methods
 	GetPermissions() map[string][]string
 	HasPermission(operation string, role string) bool
+
+	// Returns form layout configuration
+	GetFormLayout() *FormLayout
 }
 
 // ResourceConfig contains configuration for creating a resource
@@ -108,6 +111,9 @@ type DefaultResource struct {
 	RequiredFields   []string
 	UniqueFields     []string
 	EditableFields   []string // Fields that can be edited
+
+	// Form layout configuration
+	FormLayout *FormLayout
 }
 
 func (r *DefaultResource) GetName() string {
@@ -754,4 +760,9 @@ func (r *DefaultResource) HasPermission(operation string, role string) bool {
 	}
 
 	return false
+}
+
+// GetFormLayout returns the form layout configuration
+func (r *DefaultResource) GetFormLayout() *FormLayout {
+	return r.FormLayout
 }
