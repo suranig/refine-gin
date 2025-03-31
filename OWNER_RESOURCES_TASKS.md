@@ -23,24 +23,24 @@ This document outlines the tasks needed to implement owner-based resources in th
 
 ## 3. Repository Implementation
 
-- [ ] Define error constants (`ErrOwnerMismatch`, `ErrOwnerIDNotFound`)
-- [ ] Create `OwnerGenericRepository` extending standard repository
-- [ ] Implement `NewOwnerRepository` factory function
-- [ ] Add private helper methods:
-  - [ ] `extractOwnerID` - Get owner ID from context
-  - [ ] `applyOwnerFilter` - Add owner filter to queries
-  - [ ] `verifyOwnership` - Check if user owns a record
-  - [ ] `setOwnership` - Set owner field on new records
-- [ ] Override CRUD operations with owner checks:
-  - [ ] `List` - Filter by owner
-  - [ ] `Count` - Filter by owner
-  - [ ] `Get` - Verify ownership
-  - [ ] `Create` - Set ownership
-  - [ ] `Update` - Verify ownership
-  - [ ] `Delete` - Verify ownership
-  - [ ] `CreateMany` - Set ownership for all
-  - [ ] `UpdateMany` - Verify ownership for all
-  - [ ] `DeleteMany` - Verify ownership for all
+- [x] Define error constants (`ErrOwnerMismatch`, `ErrOwnerIDNotFound`)
+- [x] Create `OwnerGenericRepository` extending standard repository
+- [x] Implement `NewOwnerRepository` factory function
+- [x] Add private helper methods:
+  - [x] `extractOwnerID` - Get owner ID from context
+  - [x] `applyOwnerFilter` - Add owner filter to queries
+  - [x] `verifyOwnership` - Check if user owns a record
+  - [x] `setOwnership` - Set owner field on new records
+- [x] Override CRUD operations with owner checks:
+  - [x] `List` - Filter by owner
+  - [x] `Count` - Filter by owner
+  - [x] `Get` - Verify ownership
+  - [x] `Create` - Set ownership
+  - [x] `Update` - Verify ownership
+  - [x] `Delete` - Verify ownership
+  - [x] `CreateMany` - Set ownership for all
+  - [x] `UpdateMany` - Verify ownership for all
+  - [x] `DeleteMany` - Verify ownership for all
 
 ## 4. Handler Implementation
 
@@ -61,7 +61,7 @@ This document outlines the tasks needed to implement owner-based resources in th
 
 - [ ] Write middleware tests
 - [ ] Write owner resource tests
-- [ ] Write owner repository tests
+- [x] Write owner repository tests
 - [ ] Write handler tests
 - [ ] Create example app
 
