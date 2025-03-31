@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +11,54 @@ import (
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
+
+// validateNestedJsonFields validates all JSON fields in the model against their JsonConfig if available
+func validateNestedJsonFields(res resource.Resource, model interface{}) error {
+	if model == nil {
+		return nil
+	}
+
+	// Get all resource fields
+	fields := res.GetFields()
+
+	// Find JSON fields with nested configuration
+	for _, field := range fields {
+		if field.Type == "json" && field.Json != nil && field.Json.Nested {
+			// Get the JSON field value from the model
+			modelValue := reflect.ValueOf(model)
+			if modelValue.Kind() == reflect.Ptr {
+				modelValue = modelValue.Elem()
+			}
+
+			// Skip if not a struct
+			if modelValue.Kind() != reflect.Struct {
+				continue
+			}
+
+			// Try to get the field
+			fieldValue := modelValue.FieldByName(field.Name)
+			if !fieldValue.IsValid() {
+				continue // Field not found
+			}
+
+			// Skip nil values
+			if fieldValue.IsNil() {
+				continue
+			}
+
+			// Extract the field value
+			jsonValue := fieldValue.Interface()
+
+			// Validate against the config
+			valid, errors := resource.ValidateNestedJson(jsonValue, field.Json)
+			if !valid {
+				return fmt.Errorf("validation failed for field '%s': %s", field.Name, strings.Join(errors, "; "))
+			}
+		}
+	}
+
+	return nil
+}
 
 // GenerateUpdateHandler generates a handler for UPDATE operations with DTO support
 func GenerateUpdateHandler(res resource.Resource, repo repository.Repository, dtoProvider dto.DTOProvider) gin.HandlerFunc {
@@ -34,6 +84,12 @@ func GenerateUpdateHandler(res resource.Resource, repo repository.Repository, dt
 
 		// Filter out read-only fields from the model
 		model = resource.FilterOutReadOnlyFields(model, res)
+
+		// Validate nested JSON fields if present
+		if err := validateNestedJsonFields(res, model); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "JSON validation failed: " + err.Error()})
+			return
+		}
 
 		// Get the database connection from repository
 		db := repo.Query(c.Request.Context())
@@ -98,6 +154,12 @@ func GenerateUpdateHandlerWithParam(res resource.Resource, repo repository.Repos
 
 		// Filter out read-only fields from the model
 		model = resource.FilterOutReadOnlyFields(model, res)
+
+		// Validate nested JSON fields if present
+		if err := validateNestedJsonFields(res, model); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "JSON validation failed: " + err.Error()})
+			return
+		}
 
 		// Get the database connection from repository
 		db := repo.Query(c.Request.Context())
