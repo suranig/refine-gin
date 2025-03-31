@@ -1,9 +1,12 @@
 package resource
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -164,4 +167,289 @@ func FilterOutReadOnlyFields(data interface{}, res Resource) interface{} {
 	}
 
 	return result
+}
+
+// ValidateNestedJson validates a nested JSON structure against a JsonConfig
+func ValidateNestedJson(data interface{}, config *JsonConfig) (bool, []string) {
+	if data == nil || config == nil {
+		return false, []string{"Invalid input: nil data or config"}
+	}
+
+	errors := make([]string, 0)
+
+	// Convert data to map if needed
+	var dataMap map[string]interface{}
+
+	// Handle different input types
+	switch v := data.(type) {
+	case map[string]interface{}:
+		dataMap = v
+	case string:
+		// Try to parse as JSON string
+		if err := json.Unmarshal([]byte(v), &dataMap); err != nil {
+			return false, []string{"Invalid JSON string: " + err.Error()}
+		}
+	default:
+		// Try to convert using reflection
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			return false, []string{"Cannot convert data to JSON: " + err.Error()}
+		}
+
+		if err := json.Unmarshal(jsonBytes, &dataMap); err != nil {
+			return false, []string{"Cannot convert data to map: " + err.Error()}
+		}
+	}
+
+	// No properties defined, consider valid
+	if len(config.Properties) == 0 {
+		return true, errors
+	}
+
+	// Validate each property
+	for _, prop := range config.Properties {
+		// Skip validation for properties without validation rules
+		if prop.Validation == nil {
+			continue
+		}
+
+		// Get the value using the property path
+		value, err := getValueByPath(dataMap, prop.Path)
+		if err != nil {
+			// Only report error if the property is required
+			if prop.Validation.Required {
+				errors = append(errors, fmt.Sprintf("Required property '%s' not found: %s", prop.Path, err.Error()))
+			}
+			continue
+		}
+
+		// Validate required
+		if prop.Validation.Required && value == nil {
+			errors = append(errors, fmt.Sprintf("Property '%s' is required but has nil value", prop.Path))
+			continue
+		}
+
+		// Skip further validation if value is nil
+		if value == nil {
+			continue
+		}
+
+		// Validate min/max for numbers
+		if prop.Type == "number" || prop.Type == "integer" {
+			// Convert to number
+			var num float64
+			switch v := value.(type) {
+			case float64:
+				num = v
+			case float32:
+				num = float64(v)
+			case int:
+				num = float64(v)
+			case int64:
+				num = float64(v)
+			case string:
+				parsed, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' should be a number but got '%v'", prop.Path, v))
+					continue
+				}
+				num = parsed
+			default:
+				errors = append(errors, fmt.Sprintf("Property '%s' should be a number but got '%T'", prop.Path, value))
+				continue
+			}
+
+			// Validate min
+			if prop.Validation.Min != 0 && num < prop.Validation.Min {
+				errors = append(errors, fmt.Sprintf("Property '%s' value %v is less than minimum %v", prop.Path, num, prop.Validation.Min))
+			}
+
+			// Validate max
+			if prop.Validation.Max != 0 && num > prop.Validation.Max {
+				errors = append(errors, fmt.Sprintf("Property '%s' value %v is greater than maximum %v", prop.Path, num, prop.Validation.Max))
+			}
+		}
+
+		// Validate min/max length for strings
+		if prop.Type == "string" {
+			str, ok := value.(string)
+			if !ok {
+				errors = append(errors, fmt.Sprintf("Property '%s' should be a string but got '%T'", prop.Path, value))
+				continue
+			}
+
+			// Validate minLength
+			if prop.Validation.MinLength > 0 && len(str) < prop.Validation.MinLength {
+				errors = append(errors, fmt.Sprintf("Property '%s' length %d is less than minimum length %d", prop.Path, len(str), prop.Validation.MinLength))
+			}
+
+			// Validate maxLength
+			if prop.Validation.MaxLength > 0 && len(str) > prop.Validation.MaxLength {
+				errors = append(errors, fmt.Sprintf("Property '%s' length %d is greater than maximum length %d", prop.Path, len(str), prop.Validation.MaxLength))
+			}
+
+			// Validate pattern
+			if prop.Validation.Pattern != "" {
+				matched, err := regexp.MatchString(prop.Validation.Pattern, str)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' has invalid pattern: %s", prop.Path, err.Error()))
+				} else if !matched {
+					errors = append(errors, fmt.Sprintf("Property '%s' value '%s' does not match pattern '%s'", prop.Path, str, prop.Validation.Pattern))
+				}
+			}
+		}
+
+		// Validate nested objects
+		if prop.Type == "object" && len(prop.Properties) > 0 {
+			nestedObj, ok := value.(map[string]interface{})
+			if !ok {
+				// Try to convert
+				jsonBytes, err := json.Marshal(value)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' should be an object but got '%T'", prop.Path, value))
+					continue
+				}
+
+				var nestedMap map[string]interface{}
+				if err := json.Unmarshal(jsonBytes, &nestedMap); err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' should be an object but got '%T'", prop.Path, value))
+					continue
+				}
+				nestedObj = nestedMap
+			}
+
+			// Create nested config
+			nestedConfig := &JsonConfig{
+				Properties: prop.Properties,
+			}
+
+			// Validate nested object
+			valid, nestedErrors := ValidateNestedJson(nestedObj, nestedConfig)
+			if !valid {
+				// Prefix nested errors with property path
+				for i, err := range nestedErrors {
+					nestedErrors[i] = fmt.Sprintf("%s.%s", prop.Path, err)
+				}
+				errors = append(errors, nestedErrors...)
+			}
+		}
+
+		// Validate arrays
+		if prop.Type == "array" {
+			arr, ok := value.([]interface{})
+			if !ok {
+				// Try to convert
+				jsonBytes, err := json.Marshal(value)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' should be an array but got '%T'", prop.Path, value))
+					continue
+				}
+
+				var arrVal []interface{}
+				if err := json.Unmarshal(jsonBytes, &arrVal); err != nil {
+					errors = append(errors, fmt.Sprintf("Property '%s' should be an array but got '%T'", prop.Path, value))
+					continue
+				}
+				arr = arrVal
+			}
+
+			// Validate min items
+			if prop.Validation.MinLength > 0 && len(arr) < prop.Validation.MinLength {
+				errors = append(errors, fmt.Sprintf("Property '%s' has %d items which is less than minimum %d", prop.Path, len(arr), prop.Validation.MinLength))
+			}
+
+			// Validate max items
+			if prop.Validation.MaxLength > 0 && len(arr) > prop.Validation.MaxLength {
+				errors = append(errors, fmt.Sprintf("Property '%s' has %d items which is greater than maximum %d", prop.Path, len(arr), prop.Validation.MaxLength))
+			}
+		}
+	}
+
+	return len(errors) == 0, errors
+}
+
+// getValueByPath retrieves a value from a nested map using a dot-separated path
+func getValueByPath(data map[string]interface{}, path string) (interface{}, error) {
+	if data == nil {
+		return nil, fmt.Errorf("nil data")
+	}
+
+	// Handle empty path
+	if path == "" {
+		return data, nil
+	}
+
+	// Split path into parts
+	parts := strings.Split(path, ".")
+
+	// Navigate through the nested structure
+	var current interface{} = data
+
+	for i, part := range parts {
+		// Handle array indexing if part contains [index]
+		if strings.Contains(part, "[") && strings.Contains(part, "]") {
+			// Extract field name and index
+			openBracket := strings.Index(part, "[")
+			closeBracket := strings.Index(part, "]")
+
+			if openBracket > 0 && closeBracket > openBracket {
+				fieldName := part[:openBracket]
+				indexStr := part[openBracket+1 : closeBracket]
+
+				// Get the array
+				currentMap, ok := current.(map[string]interface{})
+				if !ok {
+					return nil, fmt.Errorf("expected object at path '%s'", strings.Join(parts[:i], "."))
+				}
+
+				array, ok := currentMap[fieldName]
+				if !ok {
+					return nil, fmt.Errorf("field '%s' not found", fieldName)
+				}
+
+				// Parse index
+				index, err := strconv.Atoi(indexStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid array index '%s'", indexStr)
+				}
+
+				// Get array item
+				arrayItems, ok := array.([]interface{})
+				if !ok {
+					return nil, fmt.Errorf("field '%s' is not an array", fieldName)
+				}
+
+				if index < 0 || index >= len(arrayItems) {
+					return nil, fmt.Errorf("array index %d out of bounds (0-%d)", index, len(arrayItems)-1)
+				}
+
+				current = arrayItems[index]
+
+				// Convert to float64 for integer values in JSON
+				if num, ok := current.(int); ok {
+					current = float64(num)
+				}
+
+				continue
+			}
+		}
+
+		// Regular field access
+		currentMap, ok := current.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected object at path '%s'", strings.Join(parts[:i], "."))
+		}
+
+		current, ok = currentMap[part]
+		if !ok {
+			return nil, fmt.Errorf("field '%s' not found", part)
+		}
+
+		// Convert to float64 for integer values in JSON
+		if num, ok := current.(int); ok {
+			current = float64(num)
+		}
+	}
+
+	return current, nil
 }
