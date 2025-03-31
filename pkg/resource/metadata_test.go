@@ -833,3 +833,284 @@ func TestGenerateJsonConfigMetadataWithGridLayout(t *testing.T) {
 	assert.Equal(t, 12, emailLayout.ColSpan)
 	assert.Equal(t, 2, emailLayout.RowSpan)
 }
+
+func TestGenerateFileConfigMetadata(t *testing.T) {
+	// Create a file config for testing
+	fileConfig := &FileConfig{
+		AllowedTypes:       []string{"image/jpeg", "image/png", "application/pdf"},
+		MaxSize:            10485760, // 10MB
+		BaseURL:            "/uploads/images",
+		IsImage:            true,
+		MaxWidth:           1920,
+		MaxHeight:          1080,
+		GenerateThumbnails: true,
+		ThumbnailSizes: []ThumbnailSize{
+			{
+				Name:            "small",
+				Width:           150,
+				Height:          150,
+				KeepAspectRatio: true,
+			},
+			{
+				Name:            "medium",
+				Width:           400,
+				Height:          300,
+				KeepAspectRatio: true,
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFileConfigMetadata(fileConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, []string{"image/jpeg", "image/png", "application/pdf"}, metadata.AllowedTypes)
+	assert.Equal(t, int64(10485760), metadata.MaxSize)
+	assert.Equal(t, "/uploads/images", metadata.BaseURL)
+	assert.True(t, metadata.IsImage)
+	assert.Equal(t, 1920, metadata.MaxWidth)
+	assert.Equal(t, 1080, metadata.MaxHeight)
+	assert.True(t, metadata.GenerateThumbnails)
+
+	// Verify thumbnail sizes
+	assert.Len(t, metadata.ThumbnailSizes, 2)
+	assert.Equal(t, "small", metadata.ThumbnailSizes[0].Name)
+	assert.Equal(t, 150, metadata.ThumbnailSizes[0].Width)
+	assert.Equal(t, 150, metadata.ThumbnailSizes[0].Height)
+	assert.True(t, metadata.ThumbnailSizes[0].KeepAspectRatio)
+
+	assert.Equal(t, "medium", metadata.ThumbnailSizes[1].Name)
+	assert.Equal(t, 400, metadata.ThumbnailSizes[1].Width)
+	assert.Equal(t, 300, metadata.ThumbnailSizes[1].Height)
+	assert.True(t, metadata.ThumbnailSizes[1].KeepAspectRatio)
+
+	// Test null case
+	assert.Nil(t, GenerateFileConfigMetadata(nil))
+}
+
+func TestGenerateRichTextConfigMetadata(t *testing.T) {
+	// Create a rich text config for testing
+	richTextConfig := &RichTextConfig{
+		Toolbar: []string{
+			"bold", "italic", "underline", "link", "image", "heading",
+			"bulletList", "orderedList", "blockquote", "codeBlock",
+		},
+		Height:       "300px",
+		Placeholder:  "Enter your content here...",
+		EnableImages: true,
+		MaxLength:    10000,
+		ShowCounter:  true,
+		Format:       "html",
+	}
+
+	// Generate metadata
+	metadata := GenerateRichTextConfigMetadata(richTextConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Contains(t, metadata.Toolbar, "bold")
+	assert.Contains(t, metadata.Toolbar, "image")
+	assert.Contains(t, metadata.Toolbar, "blockquote")
+	assert.Equal(t, "300px", metadata.Height)
+	assert.Equal(t, "Enter your content here...", metadata.Placeholder)
+	assert.True(t, metadata.EnableImages)
+	assert.Equal(t, 10000, metadata.MaxLength)
+	assert.True(t, metadata.ShowCounter)
+	assert.Equal(t, "html", metadata.Format)
+
+	// Test null case
+	assert.Nil(t, GenerateRichTextConfigMetadata(nil))
+}
+
+func TestGenerateSelectConfigMetadata(t *testing.T) {
+	// Create options and dependent options for testing
+	userOptions := []Option{
+		{Value: 1, Label: "Admin"},
+		{Value: 2, Label: "Editor"},
+		{Value: 3, Label: "Viewer"},
+	}
+
+	categoryOptions := []Option{
+		{Value: "tech", Label: "Technology"},
+		{Value: "health", Label: "Health & Wellness"},
+		{Value: "finance", Label: "Finance"},
+	}
+
+	// Create a select config for testing
+	selectConfig := &SelectConfig{
+		Multiple:    true,
+		Searchable:  true,
+		Creatable:   false,
+		OptionsURL:  "/api/options/users",
+		DependsOn:   "category",
+		Placeholder: "Select user roles",
+		Clearable:   true,
+		DisplayMode: "tags",
+		DependentOptions: map[string][]Option{
+			"admin": userOptions,
+			"editor": {
+				{Value: 2, Label: "Editor"},
+				{Value: 3, Label: "Viewer"},
+			},
+			"category": categoryOptions,
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateSelectConfigMetadata(selectConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.True(t, metadata.Multiple)
+	assert.True(t, metadata.Searchable)
+	assert.False(t, metadata.Creatable)
+	assert.Equal(t, "/api/options/users", metadata.OptionsURL)
+	assert.Equal(t, "category", metadata.DependsOn)
+	assert.Equal(t, "Select user roles", metadata.Placeholder)
+	assert.True(t, metadata.Clearable)
+	assert.Equal(t, "tags", metadata.DisplayMode)
+
+	// Verify dependent options
+	assert.Len(t, metadata.DependentOptions, 3)
+	assert.Len(t, metadata.DependentOptions["admin"], 3)
+	assert.Len(t, metadata.DependentOptions["editor"], 2)
+	assert.Len(t, metadata.DependentOptions["category"], 3)
+
+	// Check specific option content
+	adminValue := metadata.DependentOptions["admin"][0].Value
+	assert.Equal(t, 1, adminValue)
+	assert.Equal(t, "Admin", metadata.DependentOptions["admin"][0].Label)
+	assert.Equal(t, "tech", metadata.DependentOptions["category"][0].Value)
+	assert.Equal(t, "Technology", metadata.DependentOptions["category"][0].Label)
+
+	// Test null case
+	assert.Nil(t, GenerateSelectConfigMetadata(nil))
+}
+
+func TestGenerateComputedFieldConfigMetadata(t *testing.T) {
+	// Create a computed field config for testing
+	computedConfig := &ComputedFieldConfig{
+		DependsOn:    []string{"firstName", "lastName"},
+		Expression:   "${firstName} + ' ' + ${lastName}",
+		ClientSide:   true,
+		Format:       "text",
+		Persist:      false,
+		ComputeOrder: 10,
+	}
+
+	// Generate metadata
+	metadata := GenerateComputedFieldConfigMetadata(computedConfig)
+
+	// Verify metadata
+	assert.NotNil(t, metadata)
+	assert.Equal(t, []string{"firstName", "lastName"}, metadata.DependsOn)
+	assert.Equal(t, "${firstName} + ' ' + ${lastName}", metadata.Expression)
+	assert.True(t, metadata.ClientSide)
+	assert.Equal(t, "text", metadata.Format)
+	assert.False(t, metadata.Persist)
+	assert.Equal(t, 10, metadata.ComputeOrder)
+
+	// Test null case
+	assert.Nil(t, GenerateComputedFieldConfigMetadata(nil))
+}
+
+func TestGenerateFieldsMetadataWithSpecialFields(t *testing.T) {
+	// Create sample fields with special field types
+	fields := []Field{
+		{
+			Name:  "avatar",
+			Type:  "file",
+			Label: "User Avatar",
+			File: &FileConfig{
+				IsImage:      true,
+				AllowedTypes: []string{"image/jpeg", "image/png"},
+				MaxSize:      2097152, // 2MB
+			},
+		},
+		{
+			Name:  "biography",
+			Type:  "richtext",
+			Label: "User Biography",
+			RichText: &RichTextConfig{
+				Toolbar:     []string{"bold", "italic", "link"},
+				MaxLength:   5000,
+				ShowCounter: true,
+			},
+		},
+		{
+			Name:  "role",
+			Type:  "select",
+			Label: "User Role",
+			Select: &SelectConfig{
+				Multiple:    false,
+				Searchable:  true,
+				DisplayMode: "dropdown",
+			},
+		},
+		{
+			Name:     "fullName",
+			Type:     "string",
+			Label:    "Full Name",
+			ReadOnly: true,
+			Computed: &ComputedFieldConfig{
+				DependsOn:  []string{"firstName", "lastName"},
+				Expression: "${firstName} + ' ' + ${lastName}",
+				ClientSide: true,
+			},
+		},
+	}
+
+	// Generate metadata
+	metadata := GenerateFieldsMetadata(fields)
+
+	// Verify metadata
+	assert.Len(t, metadata, 4)
+
+	// Check avatar field (file type)
+	avatarMeta := findFieldMetadata(metadata, "avatar")
+	assert.NotNil(t, avatarMeta)
+	assert.Equal(t, "file", avatarMeta.Type)
+	assert.NotNil(t, avatarMeta.File)
+	assert.True(t, avatarMeta.File.IsImage)
+	assert.Equal(t, []string{"image/jpeg", "image/png"}, avatarMeta.File.AllowedTypes)
+	assert.Equal(t, int64(2097152), avatarMeta.File.MaxSize)
+
+	// Check biography field (richtext type)
+	bioMeta := findFieldMetadata(metadata, "biography")
+	assert.NotNil(t, bioMeta)
+	assert.Equal(t, "richtext", bioMeta.Type)
+	assert.NotNil(t, bioMeta.RichText)
+	assert.Contains(t, bioMeta.RichText.Toolbar, "bold")
+	assert.Equal(t, 5000, bioMeta.RichText.MaxLength)
+	assert.True(t, bioMeta.RichText.ShowCounter)
+
+	// Check role field (select type)
+	roleMeta := findFieldMetadata(metadata, "role")
+	assert.NotNil(t, roleMeta)
+	assert.Equal(t, "select", roleMeta.Type)
+	assert.NotNil(t, roleMeta.Select)
+	assert.False(t, roleMeta.Select.Multiple)
+	assert.True(t, roleMeta.Select.Searchable)
+	assert.Equal(t, "dropdown", roleMeta.Select.DisplayMode)
+
+	// Check fullName field (computed type)
+	nameMeta := findFieldMetadata(metadata, "fullName")
+	assert.NotNil(t, nameMeta)
+	assert.Equal(t, "string", nameMeta.Type)
+	assert.True(t, nameMeta.ReadOnly)
+	assert.NotNil(t, nameMeta.Computed)
+	assert.Equal(t, []string{"firstName", "lastName"}, nameMeta.Computed.DependsOn)
+	assert.Equal(t, "${firstName} + ' ' + ${lastName}", nameMeta.Computed.Expression)
+	assert.True(t, nameMeta.Computed.ClientSide)
+}
+
+// Helper function to find field metadata by name
+func findFieldMetadata(fields []FieldMetadata, name string) *FieldMetadata {
+	for _, field := range fields {
+		if field.Name == name {
+			return &field
+		}
+	}
+	return nil
+}
