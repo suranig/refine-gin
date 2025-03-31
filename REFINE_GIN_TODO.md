@@ -79,17 +79,17 @@
 - [x] Zaimplementować middleware do sprawdzania uprawnień na poziomie operacji CRUD
 - [x] Zaimplementować filtrowanie pól w odpowiedziach na podstawie uprawnień
 
-## 6. Walidacja i metadane walidacji
+## 6. Walidacja i metadane walidacji ✅
 
-- [ ] Rozszerzyć strukturę `Validation` o dodatkowe pola:
-  - [ ] `Custom` (string) dla niestandardowych reguł
-  - [ ] `Conditional` dla walidacji warunkowej
-  - [ ] `AsyncValidator` (URL) dla walidacji asynchronicznej
+- [x] Rozszerzyć strukturę `Validation` o dodatkowe pola:
+  - [x] `Custom` (string) dla niestandardowych reguł
+  - [x] `Conditional` dla walidacji warunkowej
+  - [x] `AsyncValidator` (URL) dla walidacji asynchronicznej
 
-- [ ] Dodać szczegółowe metadane walidacyjne do odpowiedzi OPTIONS:
-  - [ ] Reguły walidacji dla każdego pola
-  - [ ] Komunikaty błędów
-  - [ ] Informacje dla walidacji po stronie klienta (np. licznik znaków)
+- [x] Dodać szczegółowe metadane walidacyjne do odpowiedzi OPTIONS:
+  - [x] Reguły walidacji dla każdego pola
+  - [x] Komunikaty błędów
+  - [x] Informacje dla walidacji po stronie klienta (np. licznik znaków)
 
 ## 7. Formularze i układ formularzy
 
