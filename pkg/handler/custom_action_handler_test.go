@@ -113,6 +113,12 @@ func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]in
 	return args.Error(0)
 }
 
+// GetIDFieldName implements the repository.Repository interface
+func (m *MockRepository) GetIDFieldName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 // MockResource is a mock implementation of resource.Resource for testing
 type MockResource struct {
 	mock.Mock
@@ -242,6 +248,14 @@ func (m *MockResource) GetTableFields() []string {
 }
 
 func (m *MockResource) GetFormFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
+func (m *MockResource) GetEditableFields() []string {
 	args := m.Called()
 	if args.Get(0) == nil {
 		return []string{}

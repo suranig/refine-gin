@@ -154,6 +154,14 @@ func (m *OptionsMockResource) GetFormFields() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *OptionsMockResource) GetEditableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}
+
 func TestGenerateOptionsHandler(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
@@ -408,7 +416,7 @@ func TestOptionsHandlerWithJsonFields(t *testing.T) {
 							Path:  "email.host",
 							Label: "SMTP Host",
 							Type:  "string",
-							Validation: &resource.Validation{
+							Validation: &resource.JsonValidation{
 								Required: true,
 							},
 						},

@@ -159,6 +159,12 @@ func (m *MockOwnerResource) GetDefaultOwnerID() interface{} {
 
 func (m *MockOwnerResource) GetFormFields() []string {
 	args := m.Called()
+	return args.Get(0).([]string)
+}
+
+// GetEditableFields returns a list of field names that can be edited
+func (m *MockOwnerResource) GetEditableFields() []string {
+	args := m.Called()
 	if args.Get(0) == nil {
 		return []string{}
 	}
@@ -212,6 +218,7 @@ func TestRegisterOwnerResourceSwagger(t *testing.T) {
 	mockOwnerResource.On("GetIDFieldName").Return("id")
 	mockOwnerResource.On("GetDefaultOwnerID").Return(nil)
 	mockOwnerResource.On("GetFormFields").Return([]string{"title", "content"})
+	mockOwnerResource.On("GetEditableFields").Return([]string{"title", "content"})
 	mockOwnerResource.On("IsOwnershipEnforced").Return(true)
 	mockOwnerResource.On("GetOwnerConfig").Return(resource.OwnerConfig{
 		OwnerField:       "ownerId",

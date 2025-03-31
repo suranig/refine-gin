@@ -384,3 +384,12 @@ func (m *MockResource) GetFormFields() []string {
 	}
 	return args.Get(0).([]string)
 }
+
+// GetEditableFields returns editable field names
+func (m *MockResource) GetEditableFields() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return []string{}
+	}
+	return args.Get(0).([]string)
+}

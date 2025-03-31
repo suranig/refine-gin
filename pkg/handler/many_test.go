@@ -75,6 +75,7 @@ func TestUpdateManyHandler(t *testing.T) {
 	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
 	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
 	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(2), nil)
+	mockResource.On("GetEditableFields").Return([]string{"name"})
 
 	// Setup routes
 	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
@@ -216,6 +217,7 @@ func TestUpdateManyHandler_Error(t *testing.T) {
 	// Mock an error in repository
 	mockDTOProvider.On("GetUpdateDTO").Return(&TestModel{})
 	mockDTOProvider.On("TransformToModel", mock.Anything).Return(nil, errors.New("transform error"))
+	mockResource.On("GetEditableFields").Return([]string{"name"})
 
 	// Setup routes
 	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
@@ -255,6 +257,7 @@ func TestUpdateManyHandler_RepositoryError(t *testing.T) {
 	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
 	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
 	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), errors.New("database error"))
+	mockResource.On("GetEditableFields").Return([]string{"name"})
 
 	// Setup routes
 	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))

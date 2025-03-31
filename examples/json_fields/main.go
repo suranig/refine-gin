@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,22 @@ type Domain struct {
 	Config    Config    `json:"config" gorm:"serializer:json"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+// SetID sets the ID field - implements interface for ID-aware models
+func (d *Domain) SetID(id interface{}) {
+	if idValue, ok := id.(string); ok {
+		// Try to convert string to uint
+		if idInt, err := strconv.ParseUint(idValue, 10, 32); err == nil {
+			d.ID = uint(idInt)
+		}
+	} else if idValue, ok := id.(uint); ok {
+		d.ID = idValue
+	} else if idValue, ok := id.(int); ok {
+		d.ID = uint(idValue)
+	} else if idValue, ok := id.(float64); ok {
+		d.ID = uint(idValue)
+	}
 }
 
 // Config represents a nested JSON structure
@@ -109,7 +126,7 @@ func main() {
 									Path:  "email.host",
 									Label: "SMTP Host",
 									Type:  "string",
-									Validation: &resource.Validation{
+									Validation: &resource.JsonValidation{
 										Required: true,
 									},
 									Form: &resource.FormConfig{
@@ -121,7 +138,7 @@ func main() {
 									Path:  "email.port",
 									Label: "SMTP Port",
 									Type:  "number",
-									Validation: &resource.Validation{
+									Validation: &resource.JsonValidation{
 										Required: true,
 										Min:      1,
 										Max:      65535,
@@ -135,7 +152,7 @@ func main() {
 									Path:  "email.from",
 									Label: "From Email",
 									Type:  "string",
-									Validation: &resource.Validation{
+									Validation: &resource.JsonValidation{
 										Pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
 										Message: "Must be a valid email address",
 									},

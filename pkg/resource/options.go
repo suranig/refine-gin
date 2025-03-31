@@ -99,3 +99,11 @@ func (o Options) WithCacheVaryHeaders(headers []string) Options {
 	o.Cache.VaryHeaders = headers
 	return o
 }
+
+// GetQueryOption returns the value of a query option, or nil if not set
+func (o Options) GetQueryOption(key string) interface{} {
+	if value, exists := o.QueryOptions[key]; exists {
+		return value
+	}
+	return nil
+}

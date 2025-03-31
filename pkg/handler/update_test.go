@@ -29,133 +29,7 @@ type UserUpdateDTO struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-// MockResource is a mock implementation of the Resource interface
-type MockResource struct {
-	mock.Mock
-}
-
-func (m *MockResource) GetName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockResource) GetLabel() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockResource) GetIcon() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockResource) GetModel() interface{} {
-	args := m.Called()
-	return args.Get(0)
-}
-
-func (m *MockResource) GetFields() []resource.Field {
-	args := m.Called()
-	return args.Get(0).([]resource.Field)
-}
-
-func (m *MockResource) GetOperations() []resource.Operation {
-	args := m.Called()
-	return args.Get(0).([]resource.Operation)
-}
-
-func (m *MockResource) HasOperation(op resource.Operation) bool {
-	args := m.Called(op)
-	return args.Bool(0)
-}
-
-func (m *MockResource) GetDefaultSort() *resource.Sort {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*resource.Sort)
-}
-
-func (m *MockResource) GetFilters() []resource.Filter {
-	args := m.Called()
-	return args.Get(0).([]resource.Filter)
-}
-
-func (m *MockResource) GetMiddlewares() []interface{} {
-	args := m.Called()
-	return args.Get(0).([]interface{})
-}
-
-func (m *MockResource) GetRelations() []resource.Relation {
-	args := m.Called()
-	return args.Get(0).([]resource.Relation)
-}
-
-func (m *MockResource) HasRelation(name string) bool {
-	args := m.Called(name)
-	return args.Bool(0)
-}
-
-func (m *MockResource) GetRelation(name string) *resource.Relation {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*resource.Relation)
-}
-
-func (m *MockResource) GetIDFieldName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockResource) GetField(name string) *resource.Field {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
-	}
-	field := args.Get(0).(resource.Field)
-	return &field
-}
-
-func (m *MockResource) GetSearchable() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetFilterableFields() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetSortableFields() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetTableFields() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetFormFields() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetRequiredFields() []string {
-	args := m.Called()
-	return args.Get(0).([]string)
-}
-
-func (m *MockResource) GetEditableFields() []string {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return []string{}
-	}
-	return args.Get(0).([]string)
-}
+// Note: MockResource is defined in handler_test.go
 
 func TestGenerateUpdateHandler(t *testing.T) {
 	// Setup
@@ -171,6 +45,13 @@ func TestGenerateUpdateHandler(t *testing.T) {
 	mockResource.On("GetModel").Return(UpdateUser{}).Maybe()
 	mockResource.On("GetIDFieldName").Return("ID").Maybe()
 	mockResource.On("GetRelations").Return([]resource.Relation{}).Maybe()
+	mockResource.On("GetEditableFields").Return([]string{"name", "email"}).Maybe()
+	mockResource.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "int"},
+		{Name: "name", Type: "string"},
+		{Name: "email", Type: "string"},
+		{Name: "updated_at", Type: "time.Time"},
+	}).Maybe()
 
 	// Test case 1: Successful update
 	t.Run("Successful update", func(t *testing.T) {
