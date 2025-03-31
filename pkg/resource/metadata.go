@@ -485,6 +485,81 @@ type AntDesignRuleMetadata struct {
 	ValidateTrigger string `json:"validateTrigger,omitempty"`
 }
 
+// FormLayoutMetadata represents metadata for a form layout
+type FormLayoutMetadata struct {
+	// Number of columns in the form grid
+	Columns int `json:"columns"`
+
+	// Space between grid cells
+	Gutter int `json:"gutter"`
+
+	// Form sections
+	Sections []*FormSectionMetadata `json:"sections,omitempty"`
+
+	// Field layouts - used for positioning fields in the grid
+	FieldLayouts []*FormFieldLayoutMetadata `json:"fieldLayouts,omitempty"`
+}
+
+// FormSectionMetadata represents metadata for a form section
+type FormSectionMetadata struct {
+	// Section ID - must be unique within a form
+	ID string `json:"id"`
+
+	// Section title
+	Title string `json:"title,omitempty"`
+
+	// Icon for the section
+	Icon string `json:"icon,omitempty"`
+
+	// Whether the section is collapsible
+	Collapsible bool `json:"collapsible,omitempty"`
+
+	// Whether the section is collapsed by default
+	DefaultCollapsed bool `json:"defaultCollapsed,omitempty"`
+
+	// CSS class name for styling
+	ClassName string `json:"className,omitempty"`
+
+	// Visibility condition
+	Condition *FormConditionMetadata `json:"condition,omitempty"`
+}
+
+// FormFieldLayoutMetadata represents metadata for a field's position in form
+type FormFieldLayoutMetadata struct {
+	// Field name/path
+	Field string `json:"field"`
+
+	// Section ID where this field should be placed
+	SectionID string `json:"sectionId,omitempty"`
+
+	// Column number (0-based)
+	Column int `json:"column,omitempty"`
+
+	// Row number (0-based)
+	Row int `json:"row,omitempty"`
+
+	// Column span
+	ColSpan int `json:"colSpan,omitempty"`
+
+	// Row span
+	RowSpan int `json:"rowSpan,omitempty"`
+
+	// CSS class name for styling
+	ClassName string `json:"className,omitempty"`
+}
+
+// FormConditionMetadata represents metadata for a visibility condition
+type FormConditionMetadata struct {
+	// Field to check
+	Field string `json:"field"`
+
+	// Operator to apply
+	Operator string `json:"operator"`
+
+	// Value to compare against
+	Value interface{} `json:"value"`
+}
+
 // GenerateResourceMetadata generates resource metadata from a resource
 func GenerateResourceMetadata(res Resource) ResourceMetadata {
 	metadata := ResourceMetadata{
@@ -1072,4 +1147,60 @@ func GenerateAntDesignConfigMetadata(config *AntDesignConfig, validation *Valida
 	}
 
 	return meta
+}
+
+// GenerateFormLayoutMetadata generates metadata for form layout configuration
+func GenerateFormLayoutMetadata(layout *FormLayout) *FormLayoutMetadata {
+	if layout == nil {
+		return nil
+	}
+
+	metadata := &FormLayoutMetadata{
+		Columns: layout.Columns,
+		Gutter:  layout.Gutter,
+	}
+
+	// Convert sections
+	if len(layout.Sections) > 0 {
+		metadata.Sections = make([]*FormSectionMetadata, len(layout.Sections))
+		for i, section := range layout.Sections {
+			sectionMeta := &FormSectionMetadata{
+				ID:               section.ID,
+				Title:            section.Title,
+				Icon:             section.Icon,
+				Collapsible:      section.Collapsible,
+				DefaultCollapsed: section.DefaultCollapsed,
+				ClassName:        section.ClassName,
+			}
+
+			// Convert condition if present
+			if section.Condition != nil {
+				sectionMeta.Condition = &FormConditionMetadata{
+					Field:    section.Condition.Field,
+					Operator: section.Condition.Operator,
+					Value:    section.Condition.Value,
+				}
+			}
+
+			metadata.Sections[i] = sectionMeta
+		}
+	}
+
+	// Convert field layouts
+	if len(layout.FieldLayouts) > 0 {
+		metadata.FieldLayouts = make([]*FormFieldLayoutMetadata, len(layout.FieldLayouts))
+		for i, fieldLayout := range layout.FieldLayouts {
+			metadata.FieldLayouts[i] = &FormFieldLayoutMetadata{
+				Field:     fieldLayout.Field,
+				SectionID: fieldLayout.SectionID,
+				Column:    fieldLayout.Column,
+				Row:       fieldLayout.Row,
+				ColSpan:   fieldLayout.ColSpan,
+				RowSpan:   fieldLayout.RowSpan,
+				ClassName: fieldLayout.ClassName,
+			}
+		}
+	}
+
+	return metadata
 }
