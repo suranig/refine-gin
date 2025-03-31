@@ -102,10 +102,14 @@ func TestCustomIDIntegration(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	// Update the user
-	user.Name = "Jane Doe"
+	// Update the user (use a map instead of the User struct)
+	updatedData := map[string]interface{}{
+		"name": "Jane Doe",
+		"uid":  uid, // Include UID to ensure it's not lost
+	}
+
 	body, err = json.Marshal(map[string]interface{}{
-		"data": user,
+		"data": updatedData,
 	})
 	require.NoError(t, err)
 
