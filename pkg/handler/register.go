@@ -2,10 +2,10 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/dto"
-	"github.com/suranig/refine-gin/pkg/middleware"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/dto"
+	"github.com/stanxing/refine-gin/pkg/middleware"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 )
 
 // RegisterResource registers resource handlers in the Gin router

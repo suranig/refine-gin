@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stanxing/refine-gin/pkg/dto"
+	"github.com/stanxing/refine-gin/pkg/handler"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/dto"
-	"github.com/suranig/refine-gin/pkg/handler"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

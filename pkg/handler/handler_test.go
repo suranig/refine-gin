@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 

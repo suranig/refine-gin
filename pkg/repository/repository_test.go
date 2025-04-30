@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

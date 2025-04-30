@@ -23,7 +23,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/suranig/refine-gin
+    local-prefixes: github.com/stanxing/refine-gin
   govet:
     check-shadowing: true
   dupl:
@@ -65,4 +65,3 @@ output:
 
 service:
   golangci-lint-version: 1.50.x
-  

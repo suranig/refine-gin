@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
-	"github.com/suranig/refine-gin/pkg/utils"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/utils"
 )
 
 // CustomAction represents a custom action that can be performed on a resource

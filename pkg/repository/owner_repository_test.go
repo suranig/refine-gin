@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stanxing/refine-gin/pkg/middleware"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/suranig/refine-gin/pkg/middleware"
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/resource"
 )
 
 // Filter represents a query filter with operator support

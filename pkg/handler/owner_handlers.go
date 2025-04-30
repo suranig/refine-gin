@@ -5,11 +5,11 @@ import (
 	"reflect"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/dto"
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
-	"github.com/suranig/refine-gin/pkg/utils"
+	"github.com/stanxing/refine-gin/pkg/dto"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/utils"
 )
 
 // GenerateOwnerListHandler creates a handler for listing items with owner filtering

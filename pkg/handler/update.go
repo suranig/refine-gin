@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/dto"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/dto"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 )
 
 // validateNestedJsonFields validates all JSON fields in the model against their JsonConfig if available

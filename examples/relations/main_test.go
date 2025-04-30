@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

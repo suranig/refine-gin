@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/dto"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/dto"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 )
 
 // GenerateCreateHandler generates a handler for CREATE operations with DTO support

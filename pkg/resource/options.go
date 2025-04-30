@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"github.com/suranig/refine-gin/pkg/naming"
+	"github.com/stanxing/refine-gin/pkg/naming"
 )
 
 // CacheOptions holds configuration for resource caching

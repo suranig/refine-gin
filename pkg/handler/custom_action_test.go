@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/suranig/refine-gin/pkg/resource"
 )
 
 // MockResourceForTest is a local mock for testing relation functions

@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stanxing/refine-gin/pkg/handler"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/require"
-	"github.com/suranig/refine-gin/pkg/handler"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

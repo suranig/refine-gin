@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/handler"
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/repository"
-	"github.com/suranig/refine-gin/pkg/resource"
-	"github.com/suranig/refine-gin/pkg/swagger"
+	"github.com/stanxing/refine-gin/pkg/handler"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/repository"
+	"github.com/stanxing/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/swagger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

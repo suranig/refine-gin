@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/suranig/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/query"
 	"gorm.io/gorm"
 )
 

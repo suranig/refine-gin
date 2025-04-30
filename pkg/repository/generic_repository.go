@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/suranig/refine-gin/pkg/query"
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/query"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stanxing/refine-gin/pkg/utils"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/utils"
 )
 
 func TestCache(t *testing.T) {

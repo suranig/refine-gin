@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"gorm.io/gorm"
 )
 

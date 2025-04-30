@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/suranig/refine-gin/pkg/utils"
+	"github.com/stanxing/refine-gin/pkg/utils"
 )
 
 // Resource defines the interface for API resources

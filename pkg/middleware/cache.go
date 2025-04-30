@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/utils"
+	"github.com/stanxing/refine-gin/pkg/utils"
 )
 
 // CacheConfig contains configuration for cache middleware

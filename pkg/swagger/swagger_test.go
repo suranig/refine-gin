@@ -3,8 +3,8 @@ package swagger
 import (
 	"testing"
 
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/resource"
 )
 
 // MockResource implements a minimal resource for testing

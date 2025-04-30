@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/naming"
+	"github.com/stanxing/refine-gin/pkg/naming"
 )
 
 // responseBodyWriter is a wrapper for gin.ResponseWriter

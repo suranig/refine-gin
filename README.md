@@ -1,9 +1,9 @@
 # Refine-Gin
 
-[![Go Tests](https://github.com/suranig/refine-gin/actions/workflows/ci.yml/badge.svg)](https://github.com/suranig/refine-gin/actions/workflows/ci.yml)
+[![Go Tests](https://github.com/stanxing/refine-gin/actions/workflows/ci.yml/badge.svg)](https://github.com/stanxing/refine-gin/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/suranig/refine-gin/graph/badge.svg)](https://codecov.io/gh/suranig/refine-gin)
-[![Go Report Card](https://goreportcard.com/badge/github.com/suranig/refine-gin)](https://goreportcard.com/report/github.com/suranig/refine-gin)
-[![GoDoc](https://godoc.org/github.com/suranig/refine-gin?status.svg)](https://godoc.org/github.com/suranig/refine-gin)
+[![Go Report Card](https://goreportcard.com/badge/github.com/stanxing/refine-gin)](https://goreportcard.com/report/github.com/stanxing/refine-gin)
+[![GoDoc](https://godoc.org/github.com/stanxing/refine-gin?status.svg)](https://godoc.org/github.com/stanxing/refine-gin)
 
 Refine-Gin is a library that integrates the Gin framework with Refine.js, enabling rapid development of RESTful APIs compatible with Refine.js conventions.
 
@@ -36,7 +36,7 @@ This library integrates the following technologies:
 ## Installation
 
 ```bash
-go get github.com/suranig/refine-gin
+go get github.com/stanxing/refine-gin
 ```
 
 ## Quick Start
@@ -46,8 +46,8 @@ package main
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/suranig/refine-gin/pkg/handler"
-    "github.com/suranig/refine-gin/pkg/resource"
+    "github.com/stanxing/refine-gin/pkg/handler"
+    "github.com/stanxing/refine-gin/pkg/resource"
     "gorm.io/gorm"
 )
 
@@ -68,24 +68,24 @@ type UserRepository struct {
 
 func main() {
     r := gin.Default()
-    
+
     // Resource definition
     userResource := resource.NewResource(resource.ResourceConfig{
         Name: "users",
         Model: User{},
         Operations: []resource.Operation{
-            resource.OperationList, 
-            resource.OperationCreate, 
-            resource.OperationRead, 
-            resource.OperationUpdate, 
+            resource.OperationList,
+            resource.OperationCreate,
+            resource.OperationRead,
+            resource.OperationUpdate,
             resource.OperationDelete,
         },
     })
-    
+
     // Register resource
     api := r.Group("/api")
     handler.RegisterResource(api, userResource, userRepository)
-    
+
     r.Run(":8080")
 }
 ```
@@ -111,10 +111,10 @@ userResource := resource.NewResource(resource.ResourceConfig{
     SearchableFields: []string{"name", "email"},
     SortableFields: []string{"id", "name", "created_at"},
     Operations: []resource.Operation{
-        resource.OperationList, 
-        resource.OperationCreate, 
-        resource.OperationRead, 
-        resource.OperationUpdate, 
+        resource.OperationList,
+        resource.OperationCreate,
+        resource.OperationRead,
+        resource.OperationUpdate,
         resource.OperationDelete,
     },
     DefaultSort: &resource.Sort{
@@ -151,6 +151,7 @@ type User struct {
 ```
 
 Supported relationship types:
+
 - `one-to-one`
 - `one-to-many`
 - `many-to-one`
@@ -250,6 +251,7 @@ domainResource := resource.NewResource(resource.ResourceConfig{
 #### Automatic JSON Field Detection
 
 Refine-Gin automatically detects JSON fields in your models by analyzing struct fields with:
+
 - Fields of type `json.RawMessage`
 - Map fields with string keys
 - Struct fields with JSON tags
@@ -328,6 +330,7 @@ handler.RegisterResourceForRefineWithRelations(api, userResource, userRepository
 This will automatically generate the following endpoints for each relation:
 
 - **Attach**: `POST /api/users/:id/actions/attach-{relation}` - Connect related resources
+
   ```json
   {
     "ids": ["1", "2", "3"]
@@ -335,6 +338,7 @@ This will automatically generate the following endpoints for each relation:
   ```
 
 - **Detach**: `POST /api/users/:id/actions/detach-{relation}` - Disconnect related resources
+
   ```json
   {
     "ids": ["1", "2", "3"]
@@ -406,6 +410,7 @@ swagger.RegisterSwagger(r.Group(""), []resource.Resource{userResource, postResou
 ```
 
 This will create two endpoints:
+
 - `/swagger` - Swagger UI interface for interactive API documentation
 - `/swagger.json` - OpenAPI specification in JSON format
 
@@ -469,11 +474,13 @@ The following filter operators are supported:
 Refine-Gin supports the following Refine.dev filter formats:
 
 1. Format 1: `filter[field][operator]=value`
+
 ```
 GET /api/users?filter[age][gt]=30&filter[name][contains]=John
 ```
 
 2. Format 2: `filters[field]=value&operators[field]=operator`
+
 ```
 GET /api/users?filters[age]=30&operators[age]=gt&filters[name]=John&operators[name]=contains
 ```
@@ -611,6 +618,7 @@ GET /api/users/count?status=active
 ```
 
 Response:
+
 ```json
 {
   "count": 42
@@ -624,10 +632,10 @@ userResource := resource.NewResource(resource.ResourceConfig{
     Name: "users",
     Model: User{},
     Operations: []resource.Operation{
-        resource.OperationList, 
-        resource.OperationCreate, 
-        resource.OperationRead, 
-        resource.OperationUpdate, 
+        resource.OperationList,
+        resource.OperationCreate,
+        resource.OperationRead,
+        resource.OperationUpdate,
         resource.OperationDelete,
         resource.OperationCount, // Enable count endpoint
     },
@@ -652,18 +660,21 @@ When a client makes a request, Refine-Gin will:
 4. Return 304 Not Modified when appropriate, reducing bandwidth.
 
 Example response headers with ETag:
+
 ```
 ETag: "a1b2c3d4e5f6"
 Cache-Control: private, max-age=86400
 ```
 
 Subsequent client requests can include the ETag to check for modifications:
+
 ```
 GET /api/users/123
 If-None-Match: "a1b2c3d4e5f6"
 ```
 
 If the resource hasn't changed, the server will respond with:
+
 ```
 HTTP/1.1 304 Not Modified
 ```
@@ -677,6 +688,7 @@ This caching mechanism is fully documented in the Swagger UI to help API consume
 The library provides comprehensive support for resource relations:
 
 ### Supported Relation Types
+
 - `one-to-one` - For single related resource (e.g., User -> Profile)
 - `one-to-many` - For collections of related resources (e.g., User -> Posts)
 - `many-to-one` - For reverse one-to-many relations (e.g., Post -> Author)
@@ -687,6 +699,7 @@ The library provides comprehensive support for resource relations:
 Relations can be defined in two ways:
 
 1. Using struct tags:
+
 ```go
 type User struct {
     ID      string   `json:"id" gorm:"primaryKey"`
@@ -696,6 +709,7 @@ type User struct {
 ```
 
 2. Using resource configuration:
+
 ```go
 userResource := resource.NewResource(resource.ResourceConfig{
     Name: "users",
@@ -724,28 +738,32 @@ userResource := resource.NewResource(resource.ResourceConfig{
 ### Relation Features
 
 1. **Automatic Loading**:
+
    - Use `?include=posts,profile` to load specific relations
    - Configure `IncludeByDefault` for automatic loading
    - Efficient preloading through GORM
 
 2. **Relation Actions**:
+
    ```go
    // Register resource with relation actions
    handler.RegisterResourceForRefineWithRelations(
-       router, 
-       userResource, 
-       userRepo, 
+       router,
+       userResource,
+       userRepo,
        "id",
        []string{"posts", "profile"},
    )
    ```
-   
+
    This generates endpoints for:
+
    - `POST /users/:id/actions/attach-posts` - Connect posts to user
    - `POST /users/:id/actions/detach-posts` - Disconnect posts from user
    - `GET /users/:id/actions/list-posts` - List related posts
 
 3. **Validation**:
+
    - Required relations validation
    - Min/max items for to-many relations
    - Foreign key validation
@@ -781,12 +799,14 @@ The system automatically optimizes queries to prevent N+1 problems and unnecessa
 ## Recent Changes
 
 ### 2024-03-XX - Field List Methods Enhancement
+
 - Added comprehensive field list methods to the Resource interface
 - Implemented consistent mock implementations across test files
 - Improved test coverage for field-related functionality
 - Standardized method behavior for nil value handling
 
 ### 2024-03-XX - Relations Support
+
 - Added comprehensive support for resource relations
 - Implemented relation actions (attach, detach, list)
 - Added relation validation and configuration options
@@ -794,6 +814,7 @@ The system automatically optimizes queries to prevent N+1 problems and unnecessa
 - Added documentation for relation features and usage
 
 ### 2024-06-XX - Form Layout Support
+
 - Added form layout functionality for advanced form design
 - Implemented section-based field grouping with titles and icons
 - Added support for multi-column grid layouts with configurable properties
@@ -856,12 +877,14 @@ The OPTIONS endpoint supports ETag-based caching, allowing clients to efficientl
 3. If the metadata hasn't changed, the server responds with a 304 Not Modified status code, saving bandwidth.
 
 Example headers for conditional request:
+
 ```
 OPTIONS /api/users
 If-None-Match: "3548279132"
 ```
 
 Response when metadata hasn't changed:
+
 ```
 HTTP/1.1 304 Not Modified
 ```
@@ -1009,6 +1032,7 @@ This feature integrates perfectly with Refine.js and other modern UI frameworks 
 The `Resource` interface defines the contract for all resources in the application. Each resource must implement the following methods:
 
 ### Core Methods
+
 - `GetName() string` - Returns the resource name
 - `GetLabel() string` - Returns the display label for the resource
 - `GetIcon() string` - Returns the icon name for the resource
@@ -1016,6 +1040,7 @@ The `Resource` interface defines the contract for all resources in the applicati
 - `GetIDFieldName() string` - Returns the name of the ID field
 
 ### Field Methods
+
 - `GetFields() []Field` - Returns all fields defined for the resource
 - `GetField(name string) *Field` - Returns a specific field by name
 - `GetSearchable() []string` - Returns fields that can be searched
@@ -1027,18 +1052,22 @@ The `Resource` interface defines the contract for all resources in the applicati
 - `GetEditableFields() []string` - Returns fields that can be edited
 
 ### Operation Methods
+
 - `GetOperations() []Operation` - Returns all supported operations
 - `HasOperation(op Operation) bool` - Checks if an operation is supported
 
 ### Relation Methods
+
 - `GetRelations() []Relation` - Returns all defined relations
 - `HasRelation(name string) bool` - Checks if a relation exists
 - `GetRelation(name string) *Relation` - Returns a specific relation
 
 ### Layout Methods
+
 - `GetFormLayout() *FormLayout` - Returns the form layout configuration
 
 ### Configuration Methods
+
 - `GetDefaultSort() *Sort` - Returns default sorting configuration
 - `GetFilters() []Filter` - Returns predefined filters
 - `GetMiddlewares() []interface{}` - Returns middleware configurations
@@ -1046,12 +1075,14 @@ The `Resource` interface defines the contract for all resources in the applicati
 ## Recent Changes
 
 ### 2024-03-XX - Field List Methods Enhancement
+
 - Added comprehensive field list methods to the Resource interface
 - Implemented consistent mock implementations across test files
 - Improved test coverage for field-related functionality
 - Standardized method behavior for nil value handling
 
 ### 2024-03-XX - Relations Support
+
 - Added comprehensive support for resource relations
 - Implemented relation actions (attach, detach, list)
 - Added relation validation and configuration options
@@ -1059,6 +1090,7 @@ The `Resource` interface defines the contract for all resources in the applicati
 - Added documentation for relation features and usage
 
 ### 2024-06-XX - Form Layout Support
+
 - Added form layout functionality for advanced form design
 - Implemented section-based field grouping with titles and icons
 - Added support for multi-column grid layouts with configurable properties

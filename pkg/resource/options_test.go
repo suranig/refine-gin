@@ -3,8 +3,8 @@ package resource
 import (
 	"testing"
 
+	"github.com/stanxing/refine-gin/pkg/naming"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/naming"
 )
 
 func TestDefaultCacheOptions(t *testing.T) {

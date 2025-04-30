@@ -1,4 +1,4 @@
-module github.com/suranig/refine-gin
+module github.com/stanxing/refine-gin
 
 go 1.23
 

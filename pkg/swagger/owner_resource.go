@@ -3,7 +3,7 @@ package swagger
 import (
 	"fmt"
 
-	"github.com/suranig/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/resource"
 )
 
 // RegisterOwnerResourceSwagger registers Swagger documentation for owner resources

@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stanxing/refine-gin/pkg/naming"
 	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/naming"
 )
 
 func TestNamingConventionMiddleware(t *testing.T) {

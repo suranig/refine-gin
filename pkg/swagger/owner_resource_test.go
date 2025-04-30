@@ -3,9 +3,9 @@ package swagger
 import (
 	"testing"
 
+	"github.com/stanxing/refine-gin/pkg/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/suranig/refine-gin/pkg/resource"
 )
 
 // MockOwnerResource mocks the OwnerResource interface

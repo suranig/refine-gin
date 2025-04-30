@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/suranig/refine-gin/pkg/resource"
-	"github.com/suranig/refine-gin/pkg/utils"
+	"github.com/stanxing/refine-gin/pkg/resource"
+	"github.com/stanxing/refine-gin/pkg/utils"
 )
 
 // GenerateOptionsHandler creates a handler for the OPTIONS method
