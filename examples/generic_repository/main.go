@@ -44,19 +44,15 @@ func main() {
 	gin.SetMode(gin.DebugMode)
 	r := gin.Default()
 
-	// Konfiguracja bazy danych
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Nie można otworzyć bazy danych: %v", err)
 	}
 
-	// Migracja modeli
 	db.AutoMigrate(&Product{}, &Category{})
 
-	// Utworzenie testowych danych
 	createTestData(db)
 
-	// Utworzenie zasobów
 	productResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "products",
 		Model: Product{},
@@ -83,25 +79,18 @@ func main() {
 		},
 	})
 
-	// Utworzenie fabryki repozytoriów
 	repoFactory := repository.NewGenericRepositoryFactory(db)
 
-	// Utworzenie repozytoriów
 	productRepo := repoFactory.CreateRepository(productResource)
 	categoryRepo := repoFactory.CreateRepository(categoryResource)
 
-	// Rejestracja zasobów w API
 	api := r.Group("/api")
 	handler.RegisterResource(api, productResource, productRepo)
 	handler.RegisterResource(api, categoryResource, categoryRepo)
 
-	// Dodatkowe endpointy demonstracyjne
-	// Przykład użycia niestandardowych metod repozytorium
 	r.GET("/api/products-with-category", func(c *gin.Context) {
-		// Rzutowanie na GenericRepository aby uzyskać dostęp do dodatkowych metod
 		genericRepo := productRepo.(*repository.GenericRepository)
 
-		// Użycie metody ListWithRelations do pobrania produktów z ich kategoriami
 		options := query.QueryOptions{
 			Resource: productResource,
 			Page:     1,
@@ -123,7 +112,6 @@ func main() {
 		})
 	})
 
-	// Przykład użycia metody FindAllBy
 	r.GET("/api/products/by-category/:categoryId", func(c *gin.Context) {
 		categoryId := c.Param("categoryId")
 
@@ -142,7 +130,6 @@ func main() {
 		})
 	})
 
-	// Przykład użycia transakcji
 	r.POST("/api/transfer-products", func(c *gin.Context) {
 		var request struct {
 			FromCategoryID string `json:"from_category_id"`
@@ -159,7 +146,6 @@ func main() {
 		err := genericRepo.WithTransaction(func(txRepo repository.Repository) error {
 			txGenericRepo := txRepo.(*repository.GenericRepository)
 
-			// Znajdź produkty w kategorii źródłowej
 			productsToMove, err := txGenericRepo.FindAllBy(c, map[string]interface{}{
 				"category_id": request.FromCategoryID,
 			})
@@ -167,13 +153,11 @@ func main() {
 				return err
 			}
 
-			// Zmień kategorię produktów
 			productsSlice, ok := productsToMove.([]Product)
 			if !ok {
 				return fmt.Errorf("nie można przekonwertować rezultatu na slice produktów")
 			}
 
-			// Aktualizuj każdy produkt
 			for _, product := range productsSlice {
 				err := txGenericRepo.BulkUpdate(c, map[string]interface{}{
 					"id": product.ID,
@@ -197,14 +181,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	})
 
-	// Uruchomienie serwera
 	fmt.Println("Serwer uruchomiony na http://localhost:8080")
 	r.Run(":8080")
 }
 
-// createTestData tworzy przykładowe dane testowe
 func createTestData(db *gorm.DB) {
-	// Utworzenie kategorii
 	electronics := Category{
 		ID:          uuid.New().String(),
 		Name:        "Elektronika",
@@ -224,7 +205,6 @@ func createTestData(db *gorm.DB) {
 	db.Create(&electronics)
 	db.Create(&clothing)
 
-	// Utworzenie produktów
 	products := []Product{
 		{
 			ID:          uuid.New().String(),

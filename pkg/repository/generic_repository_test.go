@@ -217,7 +217,6 @@ func TestGenericRepository_Transaction(t *testing.T) {
 	db := setupTestDB(t)
 	_, product := createTestData(t, db)
 
-	// Utworzenie zasobu i repozytorium
 	productResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "products",
 		Model: TestProduct{},
@@ -226,36 +225,29 @@ func TestGenericRepository_Transaction(t *testing.T) {
 	repo := NewGenericRepository(db, productResource)
 	ctx := context.Background()
 
-	// Test udanej transakcji
 	err := repo.WithTransaction(func(txRepo Repository) error {
-		// Aktualizacja produktu w transakcji
 		product.Price = 1099.99
 		_, err := txRepo.Update(ctx, product.ID, &product)
 		return err
 	})
 	assert.NoError(t, err)
 
-	// Weryfikacja aktualizacji
 	updatedProduct, err := repo.Get(ctx, product.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, 1099.99, updatedProduct.(*TestProduct).Price)
 
-	// Test niepowodzącej się transakcji
 	origPrice := updatedProduct.(*TestProduct).Price
 	err = repo.WithTransaction(func(txRepo Repository) error {
-		// Aktualizacja produktu w transakcji
 		product.Price = 899.99
 		_, err := txRepo.Update(ctx, product.ID, &product)
 		if err != nil {
 			return err
 		}
 
-		// Zwracamy błąd, który spowoduje rollback
 		return gorm.ErrRecordNotFound
 	})
 	assert.Error(t, err)
 
-	// Weryfikacja, że aktualizacja została wycofana
 	rollbackProduct, err := repo.Get(ctx, product.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, origPrice, rollbackProduct.(*TestProduct).Price)
@@ -265,7 +257,6 @@ func TestGenericRepository_BulkOperations(t *testing.T) {
 	db := setupTestDB(t)
 	category, _ := createTestData(t, db)
 
-	// Utworzenie zasobu i repozytorium
 	productResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "products",
 		Model: TestProduct{},
@@ -274,7 +265,6 @@ func TestGenericRepository_BulkOperations(t *testing.T) {
 	repo := NewGenericRepository(db, productResource)
 	ctx := context.Background()
 
-	// Test BulkCreate
 	newProducts := []TestProduct{
 		{Name: "Headphones", Price: 99.99, InStock: true, CategoryID: category.ID},
 		{Name: "Speaker", Price: 199.99, InStock: true, CategoryID: category.ID},
@@ -283,9 +273,8 @@ func TestGenericRepository_BulkOperations(t *testing.T) {
 	err := repo.BulkCreate(ctx, &newProducts)
 	assert.NoError(t, err)
 
-	// Weryfikacja utworzonych produktów
 	for _, p := range newProducts {
-		assert.NotEqual(t, uint(0), p.ID) // ID powinno być przypisane
+		assert.NotEqual(t, uint(0), p.ID)
 	}
 
 	// Test QueryOptions
@@ -302,7 +291,6 @@ func TestGenericRepository_BulkOperations(t *testing.T) {
 	err = repo.BulkUpdate(ctx, map[string]interface{}{"in_stock": false}, map[string]interface{}{"price": 49.99})
 	assert.NoError(t, err)
 
-	// Weryfikacja aktualizacji
 	discountedProducts, err := repo.FindAllBy(ctx, map[string]interface{}{"price": 49.99})
 	assert.NoError(t, err)
 	assert.Len(t, *(discountedProducts.(*[]TestProduct)), 1) // Tylko jeden produkt był z in_stock=false
@@ -312,7 +300,6 @@ func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
 	db := setupTestDB(t)
 	category, _ := createTestData(t, db)
 
-	// Utworzenie zasobu i repozytorium
 	productResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "products",
 		Model: TestProduct{},
@@ -332,13 +319,11 @@ func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, createdProducts)
 
-	// Weryfikacja utworzonych produktów
 	products := createdProducts.(*[]TestProduct)
 	for _, p := range *products {
 		assert.NotEqual(t, uint(0), p.ID) // ID powinno być przypisane
 	}
 
-	// Pobierz ID produktów do aktualizacji
 	var productIDs []interface{}
 	for _, p := range *products {
 		if p.InStock {
@@ -346,14 +331,12 @@ func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
 		}
 	}
 
-	// Test UpdateMany
-	assert.Len(t, productIDs, 2) // Powinny być dwa produkty z InStock=true
+	assert.Len(t, productIDs, 2)
 
 	updateCount, err := repo.UpdateMany(ctx, productIDs, map[string]interface{}{"price": 149.99})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), updateCount)
 
-	// Weryfikacja aktualizacji
 	for _, id := range productIDs {
 		product, err := repo.Get(ctx, id)
 		assert.NoError(t, err)
@@ -365,7 +348,6 @@ func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), deleteCount)
 
-	// Weryfikacja usunięcia
 	options := query.QueryOptions{
 		Resource: productResource,
 		Page:     1,
