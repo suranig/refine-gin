@@ -90,46 +90,46 @@ func applyAdvancedFilters(tx *gorm.DB, filters []Filter, res resource.Resource) 
 			// Apply based on operator
 			switch strings.ToLower(filter.Operator) {
 			case "eq":
-				tx = tx.Where(fmt.Sprintf("%s = ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` = ?", filter.Field), filter.Value)
 			case "ne":
-				tx = tx.Where(fmt.Sprintf("%s <> ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` <> ?", filter.Field), filter.Value)
 			case "lt":
-				tx = tx.Where(fmt.Sprintf("%s < ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` < ?", filter.Field), filter.Value)
 			case "gt":
-				tx = tx.Where(fmt.Sprintf("%s > ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` > ?", filter.Field), filter.Value)
 			case "lte":
-				tx = tx.Where(fmt.Sprintf("%s <= ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` <= ?", filter.Field), filter.Value)
 			case "gte":
-				tx = tx.Where(fmt.Sprintf("%s >= ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` >= ?", filter.Field), filter.Value)
 			case "contains":
-				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
+				tx = tx.Where(fmt.Sprintf("`%s` LIKE ?", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
 			case "containsi":
-				tx = tx.Where(fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
+				tx = tx.Where(fmt.Sprintf("LOWER(`%s`) LIKE LOWER(?)", filter.Field), fmt.Sprintf("%%%v%%", filter.Value))
 			case "startswith":
-				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%v%%", filter.Value))
+				tx = tx.Where(fmt.Sprintf("`%s` LIKE ?", filter.Field), fmt.Sprintf("%v%%", filter.Value))
 			case "endswith":
-				tx = tx.Where(fmt.Sprintf("%s LIKE ?", filter.Field), fmt.Sprintf("%%%v", filter.Value))
+				tx = tx.Where(fmt.Sprintf("`%s` LIKE ?", filter.Field), fmt.Sprintf("%%%v", filter.Value))
 			case "null":
 				value := filter.Value
 				boolValue, ok := value.(bool)
 				if ok && boolValue {
-					tx = tx.Where(fmt.Sprintf("%s IS NULL", filter.Field))
+					tx = tx.Where(fmt.Sprintf("`%s` IS NULL", filter.Field))
 				} else {
-					tx = tx.Where(fmt.Sprintf("%s IS NOT NULL", filter.Field))
+					tx = tx.Where(fmt.Sprintf("`%s` IS NOT NULL", filter.Field))
 				}
 			case "in":
 				// Handle array values
 				if reflect.TypeOf(filter.Value).Kind() == reflect.String {
 					// If string, split by comma
 					values := strings.Split(filter.Value.(string), ",")
-					tx = tx.Where(fmt.Sprintf("%s IN ?", filter.Field), values)
+					tx = tx.Where(fmt.Sprintf("`%s` IN ?", filter.Field), values)
 				} else {
 					// Already an array/slice
-					tx = tx.Where(fmt.Sprintf("%s IN ?", filter.Field), filter.Value)
+					tx = tx.Where(fmt.Sprintf("`%s` IN ?", filter.Field), filter.Value)
 				}
 			default:
 				// Default to equality
-				tx = tx.Where(fmt.Sprintf("%s = ?", filter.Field), filter.Value)
+				tx = tx.Where(fmt.Sprintf("`%s` = ?", filter.Field), filter.Value)
 			}
 		}
 	}
