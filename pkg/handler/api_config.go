@@ -50,9 +50,6 @@ func GenerateAPIConfigHandler() gin.HandlerFunc {
 			},
 		}
 
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 300, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		// Return response
 		c.JSON(http.StatusOK, response)
 	}

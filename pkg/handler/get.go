@@ -75,15 +75,6 @@ func generateGetHandlerWithDTO(idParamName string, res resource.Resource, repo r
 			data = dtoData
 		}
 
-		// Set cache headers
-		// Try to get last modified time from the data
-		var lastModified *time.Time
-		if hasUpdatedAt, timestamp := getLastModifiedTimestamp(data); hasUpdatedAt {
-			lastModified = &timestamp
-		}
-
-		utils.SetCacheHeaders(c.Writer, 120, etag, lastModified, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		// Return result
 		c.JSON(http.StatusOK, gin.H{
 			"data": data,

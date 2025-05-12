@@ -54,9 +54,6 @@ func GenerateFormMetadataHandler(res resource.Resource) gin.HandlerFunc {
 		// Extract field dependencies
 		metadata.Dependencies = extractFieldDependencies(res.GetFields())
 
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 300, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		// Return response
 		c.JSON(http.StatusOK, metadata)
 	}

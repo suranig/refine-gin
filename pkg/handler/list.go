@@ -66,9 +66,6 @@ func generateListHandlerWithDTO(res resource.Resource, repo repository.Repositor
 			data = dtoItems
 		}
 
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 60, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		// Return results in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{
 			"data":  data,

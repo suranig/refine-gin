@@ -51,9 +51,6 @@ func GenerateOwnerListHandler(res resource.Resource, repo repository.Repository,
 			data = dtoItems
 		}
 
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 60, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		// Return results in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{
 			"data":  data,
@@ -88,9 +85,6 @@ func GenerateOwnerCountHandler(res resource.Resource, repo repository.Repository
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 60, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
 
 		// Return count in Refine.dev compatible format
 		c.JSON(http.StatusOK, gin.H{
@@ -180,9 +174,6 @@ func GenerateOwnerGetHandler(res resource.Resource, repo repository.Repository, 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 60, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
 
 		// Return the resource
 		c.JSON(http.StatusOK, gin.H{

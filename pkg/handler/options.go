@@ -94,9 +94,6 @@ func GenerateOptionsHandler(res resource.Resource) gin.HandlerFunc {
 			},
 		}
 
-		// Set cache headers
-		utils.SetCacheHeaders(c.Writer, 300, etag, nil, []string{"Accept", "Accept-Encoding", "Authorization"})
-
 		c.JSON(http.StatusOK, responseMetadata)
 	}
 }
