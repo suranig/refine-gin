@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/middleware"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
 
