@@ -4,10 +4,10 @@
 Increase the total test coverage from the current 87.0% to at least 94%.
 
 ## Current Coverage Status
-- Total: 88.2% ⬆️ (was 87.0%)
+- Total: 88.5% ⬆️ (was 87.0%)
 - auth: 89.4%
 - dto: 98.7% ✅
-- handler: 84.2% ⬆️ (was 81.8%)
+- handler: 85.2% ⬆️ (was 81.8%)
 - middleware: 89.9%
 - naming: 97.1% ✅
 - query: 94.7% ✅
@@ -73,9 +73,13 @@ We need to focus on packages with the lowest coverage first:
 - [x] Added comprehensive tests for AttachAction, DetachAction, ListRelationAction (100% coverage)
 - [x] Added comprehensive tests for getRelatedObject function (100% coverage)
 - [x] Fixed convertToMap function bug with json:"-" tags
-- [x] Improved overall handler package coverage from 81.8% to 84.2%
-- [x] Improved total project coverage from 87.0% to 88.2%
-- [ ] Continue with owner_handlers.go improvements
+- [x] Added comprehensive tests for owner handlers error scenarios
+- [x] Added tests for GenerateOwnerCreateHandler (JSON binding errors, DTO transformation errors)
+- [x] Added tests for GenerateOwnerUpdateHandler (missing ID, invalid JSON, DTO transformation errors)
+- [x] Added tests for GenerateOwnerGetHandler (DTO transformation errors)
+- [x] Improved overall handler package coverage from 81.8% to 85.2%
+- [x] Improved total project coverage from 87.0% to 88.5%
+- [ ] Continue with owner_handlers.go improvements (CreateMany, UpdateMany, DeleteMany handlers)
 - [ ] Work on update.go custom handler coverage
 - [ ] Add tests for many.go and delete.go handlers
 
@@ -102,8 +106,9 @@ We need to focus on packages with the lowest coverage first:
 - [x] Added comprehensive tests for AttachAction, DetachAction, ListRelationAction
 - [x] Added comprehensive tests for getRelatedObject function
 - [x] Fixed convertToMap function bug with json:"-" tags
-- [x] Improved handler package coverage to 84.2% and total coverage to 88.2%
-- [ ] Handler package coverage improvements (owner_handlers, update.go, many.go, delete.go)
+- [x] Added comprehensive tests for owner handlers error scenarios
+- [x] Improved handler package coverage to 85.2% and total coverage to 88.5%
+- [ ] Handler package coverage improvements (owner_handlers CreateMany/UpdateMany/DeleteMany, update.go, many.go, delete.go)
 - [ ] Repository package coverage improvements
 - [ ] Utils package coverage improvements
 - [ ] Auth package coverage improvements

@@ -180,6 +180,61 @@ func TestOwnerCreateHandler(t *testing.T) {
 
 		assert.Equal(t, "database error", response["error"])
 	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		// Setup
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		// Setup request with invalid JSON
+		reqBody := `{"name":"Invalid JSON"`
+		req := httptest.NewRequest(http.MethodPost, "/tests", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		// Call handler
+		handler := GenerateOwnerCreateHandler(res, mockRepo, mockDTO)
+		handler(c)
+
+		// Assertions
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Contains(t, response["error"], "unexpected EOF")
+	})
+
+	t.Run("DTO transformation error", func(t *testing.T) {
+		// Setup
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		// Setup request with JSON body
+		reqBody := `{"name":"New Test"}`
+		req := httptest.NewRequest(http.MethodPost, "/tests", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		// Mock repository response
+		createdItem := OwnerTestModel{ID: 1, Name: "New Test", OwnerID: "test-owner"}
+		mockRepo.On("Create", mock.Anything, mock.Anything).Return(createdItem, nil)
+
+		// Mock DTO transformation error
+		mockDTO.On("TransformFromModel", createdItem).Return(nil, errors.New("transformation error"))
+
+		// Call handler
+		handler := GenerateOwnerCreateHandler(res, mockRepo, mockDTO)
+		handler(c)
+
+		// Assertions
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "transformation error", response["error"])
+	})
 }
 
 func TestOwnerGetHandler(t *testing.T) {
@@ -244,6 +299,26 @@ func TestOwnerGetHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+
+	t.Run("DTO transformation error", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		req := httptest.NewRequest(http.MethodGet, "/tests/1", nil)
+		c.Request = req
+
+		item := OwnerTestModel{ID: 1, Name: "Test", OwnerID: "test-owner"}
+		mockRepo.On("Get", mock.Anything, "1").Return(item, nil)
+		mockDTO.On("TransformFromModel", item).Return(nil, errors.New("transformation error"))
+
+		GenerateOwnerGetHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "transformation error", resp["error"])
+	})
 }
 
 func TestOwnerUpdateHandler(t *testing.T) {
@@ -306,7 +381,7 @@ func TestOwnerUpdateHandler(t *testing.T) {
 	t.Run("Missing ID", func(t *testing.T) {
 		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
 
-		reqBody := `{"name":"Updated"}`
+		reqBody := `{"name":"Test"}`
 		req := httptest.NewRequest(http.MethodPut, "/tests", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		c.Request = req
@@ -315,6 +390,39 @@ func TestOwnerUpdateHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		reqBody := `{"name":"Invalid JSON"`
+		req := httptest.NewRequest(http.MethodPut, "/tests/1", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("DTO transformation error", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		reqBody := `{"name":"Updated"}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/1", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		updated := OwnerTestModel{ID: 1, Name: "Updated", OwnerID: "test-owner"}
+		mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(updated, nil)
+		mockDTO.On("TransformFromModel", updated).Return(nil, errors.New("transformation error"))
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
 }
 
 func TestOwnerDeleteHandler(t *testing.T) {
