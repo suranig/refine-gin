@@ -166,8 +166,16 @@ func (p *CustomDTOProvider) TransformToModel(dto interface{}) (interface{}, erro
 	}
 	model := reflect.New(modelType).Interface()
 
-	// Map fields from DTO to model
-	// Here you can use a library like mapstructure or manually map fields
+	// Map fields from DTO to model using reflection
+	dtoVal := reflect.ValueOf(dto).Elem()
+	modelVal := reflect.ValueOf(model).Elem()
+
+	for i := 0; i < dtoVal.NumField(); i++ {
+		fieldName := dtoVal.Type().Field(i).Name
+		if modelField := modelVal.FieldByName(fieldName); modelField.IsValid() && modelField.CanSet() {
+			modelField.Set(dtoVal.Field(i))
+		}
+	}
 
 	return model, nil
 }
@@ -180,8 +188,16 @@ func (p *CustomDTOProvider) TransformFromModel(model interface{}) (interface{}, 
 	}
 	dto := reflect.New(dtoType).Interface()
 
-	// Map fields from model to DTO
-	// Here you can use a library like mapstructure or manually map fields
+	// Map fields from model to DTO using reflection
+	modelVal := reflect.ValueOf(model).Elem()
+	dtoVal := reflect.ValueOf(dto).Elem()
+
+	for i := 0; i < dtoVal.NumField(); i++ {
+		fieldName := dtoVal.Type().Field(i).Name
+		if modelField := modelVal.FieldByName(fieldName); modelField.IsValid() {
+			dtoVal.Field(i).Set(modelField)
+		}
+	}
 
 	return dto, nil
 }

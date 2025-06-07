@@ -127,3 +127,31 @@ func TestDefaultDTOProviderWithoutCustomDTOs(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, modelData, dto)
 }
+
+func TestCustomDTOProviderRoundTrip(t *testing.T) {
+	provider := &CustomDTOProvider{
+		Model:       &TestModel{},
+		CreateDTO:   &TestCreateDTO{},
+		UpdateDTO:   &TestUpdateDTO{},
+		ResponseDTO: &TestResponseDTO{},
+	}
+
+	createData := &TestCreateDTO{
+		Name:  "Alice",
+		Email: "alice@example.com",
+		Age:   20,
+	}
+
+	model, err := provider.TransformToModel(createData)
+	assert.NoError(t, err)
+	assert.IsType(t, &TestModel{}, model)
+
+	dto, err := provider.TransformFromModel(model)
+	assert.NoError(t, err)
+	assert.IsType(t, &TestResponseDTO{}, dto)
+
+	resp := dto.(*TestResponseDTO)
+	assert.Equal(t, "Alice", resp.Name)
+	assert.Equal(t, "alice@example.com", resp.Email)
+	assert.Equal(t, 20, resp.Age)
+}
