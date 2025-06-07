@@ -93,6 +93,12 @@ type TestJSONModel struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+// Model used for testing unique index constraints
+type UniqueModel struct {
+	ID   uint   `gorm:"primarykey" json:"id"`
+	Code string `gorm:"uniqueIndex" json:"code"`
+}
+
 func setupJSONTestDB(t *testing.T) *gorm.DB {
 	dbName := fmt.Sprintf("file:jsondb%d?mode=memory&cache=shared", time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
@@ -117,6 +123,18 @@ func createJSONTestData(t *testing.T, db *gorm.DB) TestJSONModel {
 		t.Fatalf("failed to create json model: %v", err)
 	}
 	return m
+}
+
+func setupUniqueTestDB(t *testing.T) *gorm.DB {
+	dbName := fmt.Sprintf("file:uniquedb%d?mode=memory&cache=shared", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to connect database: %v", err)
+	}
+	if err := db.AutoMigrate(&UniqueModel{}); err != nil {
+		t.Fatalf("failed to migrate database: %v", err)
+	}
+	return db
 }
 
 func TestGenericRepository_Basic(t *testing.T) {
@@ -604,4 +622,33 @@ func TestGenericRepository_Update(t *testing.T) {
 		_, err := repo.Update(ctx, initial.ID, updates)
 		assert.Error(t, err)
 	})
+}
+
+func TestGenericRepository_Create_UniqueConstraint(t *testing.T) {
+	db := setupUniqueTestDB(t)
+
+	uniqueResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "unique_models",
+		Model: UniqueModel{},
+	})
+	repo := NewGenericRepository(db, uniqueResource)
+	ctx := context.Background()
+
+	first := UniqueModel{Code: "A1"}
+	_, err := repo.Create(ctx, &first)
+	require.NoError(t, err)
+
+	var count int64
+	err = db.Model(&UniqueModel{}).Count(&count).Error
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+
+	dup := UniqueModel{Code: "A1"}
+	_, err = repo.Create(ctx, &dup)
+	assert.Error(t, err)
+
+	var finalCount int64
+	err = db.Model(&UniqueModel{}).Count(&finalCount).Error
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), finalCount)
 }
