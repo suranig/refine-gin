@@ -681,3 +681,62 @@ func TestGenerateOptionsHandlerWithETag(t *testing.T) {
 	// Verify all expectations were met
 	mockResource.AssertExpectations(t)
 }
+
+func TestOptionsFilteringAndCaching(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	// add middleware setting roles in the context
+	router.Use(func(c *gin.Context) {
+		c.Set("userRoles", []string{"editor"})
+	})
+
+	res := new(OptionsMockResource)
+	res.On("GetName").Return("articles")
+	res.On("GetLabel").Return("Articles")
+	res.On("GetIcon").Return("file")
+	res.On("GetOperations").Return([]resource.Operation{resource.OperationList})
+	res.On("GetIDFieldName").Return("id")
+	res.On("GetDefaultSort").Return(nil)
+	res.On("GetFilters").Return([]resource.Filter{})
+	res.On("GetSearchable").Return([]string{"public"})
+	res.On("GetFilterableFields").Return([]string{"public"})
+	res.On("GetSortableFields").Return([]string{"public"})
+	res.On("GetTableFields").Return([]string{"id", "public"})
+	res.On("GetFormFields").Return([]string{"public"})
+	res.On("GetRequiredFields").Return([]string{"public"})
+	res.On("GetPermissions").Return(nil)
+	res.On("GetFields").Return([]resource.Field{
+		{Name: "id", Type: "int", Permissions: map[string][]string{"read": {"admin", "editor"}}},
+		{Name: "private", Type: "string", Permissions: map[string][]string{"read": {"admin"}}},
+		{Name: "public", Type: "string"},
+	})
+	res.On("GetRelations").Return([]resource.Relation{})
+
+	router.OPTIONS("/articles", GenerateOptionsHandler(res))
+
+	// initial request
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("OPTIONS", "/articles", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "\"public\"")
+	assert.NotContains(t, body, "\"private\"")
+	etag := w.Header().Get("ETag")
+	assert.NotEmpty(t, etag)
+
+	// cached request with matching ETag
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("OPTIONS", "/articles", nil)
+	req2.Header.Set("If-None-Match", etag)
+	router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusNotModified, w2.Code)
+
+	// request with different ETag
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("OPTIONS", "/articles", nil)
+	req3.Header.Set("If-None-Match", "\"other\"")
+	router.ServeHTTP(w3, req3)
+	assert.Equal(t, http.StatusOK, w3.Code)
+	res.AssertExpectations(t)
+}
