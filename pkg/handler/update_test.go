@@ -385,3 +385,89 @@ func TestValidateNestedJsonFields(t *testing.T) {
 	// Verify expectations
 	mockResource.AssertExpectations(t)
 }
+func TestValidateNestedJsonFields_NestedRules(t *testing.T) {
+	// Nested model with deeper JSON validation rules
+	type Settings struct {
+		Preferences struct {
+			Notifications struct {
+				Email string `json:"email"`
+			} `json:"notifications"`
+		} `json:"preferences"`
+	}
+
+	type TestModel struct {
+		ID       int      `json:"id"`
+		Settings Settings `json:"settings"`
+	}
+
+	mockResource := new(MockResource)
+	fields := []resource.Field{
+		{
+			Name: "Settings",
+			Type: "json",
+			Json: &resource.JsonConfig{
+				Nested: true,
+				Properties: []resource.JsonProperty{
+					{
+						Path:       "preferences",
+						Type:       "object",
+						Validation: &resource.JsonValidation{Required: true},
+						Properties: []resource.JsonProperty{
+							{
+								Path: "notifications.email",
+								Type: "string",
+								Validation: &resource.JsonValidation{
+									Required: true,
+									Pattern:  `^.+@.+\\..+$`,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockResource.On("GetFields").Return(fields)
+	mockResource.On("GetEditableFields").Return([]string{}).Maybe()
+
+	// Valid model should pass
+	validModel := TestModel{
+		ID: 1,
+		Settings: Settings{
+			Preferences: struct {
+				Notifications struct {
+					Email string `json:"email"`
+				} `json:"notifications"`
+			}{
+				Notifications: struct {
+					Email string `json:"email"`
+				}{Email: "user@example.com"},
+			},
+		},
+	}
+
+	err := validateNestedJsonFields(mockResource, &validModel)
+	assert.NoError(t, err)
+
+	// Invalid model should fail due to pattern mismatch
+	invalidModel := TestModel{
+		Settings: Settings{
+			Preferences: struct {
+				Notifications struct {
+					Email string `json:"email"`
+				} `json:"notifications"`
+			}{
+				Notifications: struct {
+					Email string `json:"email"`
+				}{Email: "invalid"},
+			},
+		},
+	}
+
+	err = validateNestedJsonFields(mockResource, &invalidModel)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match pattern")
+
+	mockResource.AssertExpectations(t)
+}
