@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -226,6 +227,29 @@ func TestNamingConventionMiddleware_NonJSONRequest(t *testing.T) {
 	// Check that the response is as expected (middleware should not affect it)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "Hello, John", w.Body.String())
+}
+
+func TestNamingConventionMiddleware_MalformedJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(NamingConventionMiddleware(naming.SnakeCase))
+
+	// Handler just echoes back the raw body it receives
+	r.POST("/malformed", func(c *gin.Context) {
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		c.String(http.StatusOK, string(bodyBytes))
+	})
+
+	malformed := `{"name": "John", "age": 30,}`
+	req := httptest.NewRequest(http.MethodPost, "/malformed", bytes.NewBufferString(malformed))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, malformed, w.Body.String())
 }
 
 // Helper function to assert that two maps are equivalent, accounting for JSON type conversions
