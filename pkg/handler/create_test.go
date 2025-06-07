@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	monkey "github.com/bouk/monkey"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"gorm.io/gorm"
 )
 
 // User model for testing creates
@@ -199,6 +201,56 @@ func TestGenerateCreateHandler(t *testing.T) {
 		assert.Equal(t, "database error", response["error"])
 
 		// Verify repository mock
+		mockRepo.AssertExpectations(t)
+		mockDTO.AssertExpectations(t)
+	})
+
+	// Test case 4: Relation validation error
+	t.Run("Relation validation error", func(t *testing.T) {
+		// Setup local mocks
+		mockRepo := new(MockRepository)
+		mockRes := new(MockResource)
+		mockDTO := new(MockDTOManager)
+
+		// Configure resource expectations
+		mockRes.On("GetName").Return("users").Maybe()
+		mockRes.On("GetModel").Return(CreateUser{}).Maybe()
+		mockRes.On("GetIDFieldName").Return("ID").Maybe()
+		mockRes.On("GetRelations").Return([]resource.Relation{{Name: "owner", Type: resource.RelationTypeManyToOne, Resource: "owners", Field: "OwnerID"}}).Maybe()
+
+		// Patch ValidateRelations to return an error
+		patch := monkey.Patch(resource.ValidateRelations, func(db *gorm.DB, obj interface{}) error {
+			return errors.New("Relation validation failed")
+		})
+		defer patch.Unpatch()
+
+		// Setup DTO expectations
+		createDTO := &UserCreateDTO{Name: "Bob", Email: "bob@example.com"}
+		jsonData, _ := json.Marshal(createDTO)
+		modelData := map[string]interface{}{"name": "Bob", "email": "bob@example.com"}
+		mockDTO.On("GetCreateDTO").Return(&UserCreateDTO{}).Once()
+		mockDTO.On("TransformToModel", mock.AnythingOfType("*handler.UserCreateDTO")).Return(modelData, nil).Once()
+
+		// Repository Query returns non-nil DB
+		mockRepo.On("Query", mock.Anything).Return(&gorm.DB{}).Once()
+
+		// Setup the handler
+		r := gin.New()
+		r.POST("/users", GenerateCreateHandler(mockRes, mockRepo, mockDTO))
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/users", bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		// Expect bad request with validation error
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response["error"], "Relation validation failed")
+
 		mockRepo.AssertExpectations(t)
 		mockDTO.AssertExpectations(t)
 	})
