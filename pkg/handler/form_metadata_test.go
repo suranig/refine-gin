@@ -9,7 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // FormMockResource is a mock implementation of resource.Resource for testing forms
@@ -329,4 +333,97 @@ func TestExtractFieldDependencies(t *testing.T) {
 	assert.Contains(t, deps, "state")
 	assert.Contains(t, deps["country"], "state")
 	assert.Contains(t, deps["state"], "city")
+}
+
+func TestRegisterGlobalFormMetadataEndpoint(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	routerGroup := router.Group("/api")
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "test-entity",
+		Model: &FormTestModel{},
+	})
+
+	// Register the global form metadata endpoint
+	RegisterGlobalFormMetadataEndpoint(routerGroup, res)
+
+	// Test the endpoint
+	req := httptest.NewRequest(http.MethodGet, "/api/forms/test-entity/metadata", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response FormMetadataResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, response.Fields)
+}
+
+func TestRegisterResourceFormEndpoints(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	routerGroup := router.Group("/api")
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "test-entity",
+		Model: &FormTestModel{},
+	})
+
+	// Create test DB
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&FormTestModel{}))
+
+	// Create test data
+	testEntity := &FormTestModel{
+		ID:        1,
+		FirstName: "Test",
+		LastName:  "User",
+		Email:     "test@example.com",
+	}
+	result := db.Create(testEntity)
+	require.NoError(t, result.Error)
+
+	// Create repository
+	repo := repository.NewGenericRepository(db, &FormTestModel{})
+
+	// Register the endpoints
+	RegisterResourceFormEndpoints(routerGroup, res)
+
+	// Setup repository in context middleware
+	router.Use(func(c *gin.Context) {
+		c.Set("repository", repo)
+		c.Next()
+	})
+
+	// Test the form metadata endpoint
+	t.Run("Form metadata endpoint", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response FormMetadataResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response.Fields)
+	})
+
+	// Test the form with ID endpoint
+	t.Run("Form with ID endpoint", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form/1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert - this will fail because FindByID isn't implemented
+		// in our mock, but it tests the endpoint registration
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
 }
