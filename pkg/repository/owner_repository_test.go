@@ -22,6 +22,66 @@ func uniqueDBName() string {
 	return fmt.Sprintf("file::memory:test-%d-%d?cache=shared", time.Now().UnixNano(), time.Now().UnixNano()%100)
 }
 
+func TestOwnerRepository_UpdateSuccess(t *testing.T) {
+	db, _, ownerRes := setupOwnerTest(t)
+	repoIface, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Insert initial records
+	createOwnerTestData(t, db)
+
+	// Grab one record owned by owner-a
+	var item OwnerTestEntity
+	require.NoError(t, db.First(&item, "owner_id = ?", "owner-a").Error)
+
+	t.Run("Struct input updates record when owner matches", func(t *testing.T) {
+		ctx := ownerContext("owner-a")
+		updated := &OwnerTestEntity{Name: "Updated Struct"}
+
+		res, err := repoIface.Update(ctx, item.ID, updated)
+		require.NoError(t, err)
+
+		updatedItem := res.(*OwnerTestEntity)
+		assert.Equal(t, "Updated Struct", updatedItem.Name)
+		assert.Equal(t, "owner-a", updatedItem.OwnerID)
+
+		var dbItem OwnerTestEntity
+		require.NoError(t, db.First(&dbItem, item.ID).Error)
+		assert.Equal(t, "Updated Struct", dbItem.Name)
+		assert.Equal(t, "owner-a", dbItem.OwnerID)
+	})
+
+	t.Run("Map input leaves owner unchanged when blank", func(t *testing.T) {
+		ctx := ownerContext("owner-a")
+		updates := map[string]interface{}{
+			"name":     "Updated Map",
+			"owner_id": "",
+		}
+
+		res, err := repoIface.Update(ctx, item.ID, updates)
+		require.NoError(t, err)
+
+		upd := res.(*OwnerTestEntity)
+		assert.Equal(t, "Updated Map", upd.Name)
+		assert.Equal(t, "owner-a", upd.OwnerID)
+
+		var dbItem OwnerTestEntity
+		require.NoError(t, db.First(&dbItem, item.ID).Error)
+		assert.Equal(t, "Updated Map", dbItem.Name)
+		assert.Equal(t, "owner-a", dbItem.OwnerID)
+	})
+
+	t.Run("Update fails for mismatched owner", func(t *testing.T) {
+		_, err := repoIface.Update(ownerContext("owner-b"), item.ID, &OwnerTestEntity{Name: "Fail"})
+		assert.Equal(t, ErrOwnerMismatch, err)
+	})
+
+	t.Run("Updating non-existent ID returns error", func(t *testing.T) {
+		_, err := repoIface.Update(ownerContext("owner-a"), uint(99999), map[string]interface{}{"name": "none"})
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+}
+
 // Test model with owner field
 type OwnerTestEntity struct {
 	ID      uint   `gorm:"primaryKey"`
