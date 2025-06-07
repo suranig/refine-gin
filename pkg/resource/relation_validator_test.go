@@ -1,7 +1,15 @@
 package resource
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 // RelationTestModel is a test model with relations
@@ -221,4 +229,91 @@ func TestRelationValidatorValidate(t *testing.T) {
 	if err == nil {
 		t.Errorf("RelationValidator.Validate() did not return an error for multi-relation with too few items")
 	}
+}
+
+func TestValidateToOneRelationDBError(t *testing.T) {
+	type Category struct{ ID uint }
+	relation := Relation{
+		Name:           "category",
+		Type:           RelationTypeManyToOne,
+		Resource:       "categories",
+		ReferenceField: "ID",
+	}
+	related := &DefaultResource{Name: "categories", Model: Category{}}
+
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	dialector := postgres.New(postgres.Config{
+		DSN:                  "sqlmock_db",
+		DriverName:           "postgres",
+		Conn:                 sqlDB,
+		PreferSimpleProtocol: true,
+	})
+	db, err := gorm.Open(dialector, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm db: %v", err)
+	}
+
+	validator := RelationValidator{Relation: relation, DB: db, RelatedResource: related}
+
+	mock.ExpectQuery("SELECT count\\(\\*\\)").WillReturnError(fmt.Errorf("count error"))
+
+	err = validator.validateToOneRelation(reflect.ValueOf(uint(1)))
+	if err == nil || !strings.Contains(err.Error(), "count error") {
+		t.Errorf("expected count error, got %v", err)
+	}
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestValidateToManyRelationRules(t *testing.T) {
+	type Tag struct{ ID uint }
+	relation := Relation{
+		Name:           "tags",
+		Type:           RelationTypeOneToMany,
+		Resource:       "tags",
+		ReferenceField: "ID",
+	}
+	related := &DefaultResource{Name: "tags", Model: Tag{}}
+
+	// MinItems violation
+	validator := RelationValidator{Relation: relation, MinItems: 3}
+	err := validator.validateToManyRelation(reflect.ValueOf([]uint{1, 2}))
+	if err == nil {
+		t.Errorf("expected min items error")
+	}
+
+	// MaxItems violation
+	validator = RelationValidator{Relation: relation, MaxItems: 2}
+	err = validator.validateToManyRelation(reflect.ValueOf([]uint{1, 2, 3}))
+	if err == nil {
+		t.Errorf("expected max items error")
+	}
+
+	// Missing reference using DB
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	dialector := postgres.New(postgres.Config{
+		DSN:                  "sqlmock_db",
+		DriverName:           "postgres",
+		Conn:                 sqlDB,
+		PreferSimpleProtocol: true,
+	})
+	db, err := gorm.Open(dialector, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm db: %v", err)
+	}
+	dbValidator := RelationValidator{Relation: relation, DB: db, RelatedResource: related}
+
+	mock.ExpectQuery("SELECT count\\(\\*\\)").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT count\\(\\*\\)").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	err = dbValidator.validateToManyRelation(reflect.ValueOf([]uint{1, 3}))
+	if err == nil {
+		t.Errorf("expected missing reference error")
+	}
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
