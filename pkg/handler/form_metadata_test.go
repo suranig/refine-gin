@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/suranig/refine-gin/pkg/dto"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
@@ -167,6 +168,14 @@ type FormTestModel struct {
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
 }
+
+// noFindByIDRepo simulates a repository without a FindByID method
+type noFindByIDRepo struct{}
+
+// badSigRepo simulates a repository with incorrect FindByID signature
+type badSigRepo struct{}
+
+func (badSigRepo) FindByID(id string) interface{} { return nil }
 
 // TestGenerateFormMetadataHandler tests the form metadata handler
 func TestGenerateFormMetadataHandler(t *testing.T) {
@@ -427,6 +436,50 @@ func TestRegisterResourceFormEndpoints(t *testing.T) {
 		// Assert - this will fail because FindByID isn't implemented
 		// in our mock, but it tests the endpoint registration
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	// Additional error scenarios
+
+	// Case when repository does not implement FindByID
+	t.Run("Repository missing FindByID", func(t *testing.T) {
+		testRouter := gin.New()
+		testRouter.Use(func(c *gin.Context) {
+			c.Set("repository", &noFindByIDRepo{})
+			c.Next()
+		})
+		testGroup := testRouter.Group("/api")
+		RegisterResourceFormEndpoints(testGroup, res)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form/1", nil)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var errResp dto.ErrorResponse
+		err := json.Unmarshal(w.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Equal(t, "Repository does not implement FindByID method", errResp.Message)
+	})
+
+	// Case when repository FindByID returns unexpected number of values
+	t.Run("Repository bad FindByID signature", func(t *testing.T) {
+		testRouter := gin.New()
+		testRouter.Use(func(c *gin.Context) {
+			c.Set("repository", badSigRepo{})
+			c.Next()
+		})
+		testGroup := testRouter.Group("/api")
+		RegisterResourceFormEndpoints(testGroup, res)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form/1", nil)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var errResp dto.ErrorResponse
+		err := json.Unmarshal(w.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Equal(t, "Unexpected repository method signature", errResp.Message)
 	})
 }
 
