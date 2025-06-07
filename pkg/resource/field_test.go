@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +178,107 @@ func TestReadOnlyAndHiddenFields(t *testing.T) {
 	assert.Equal(t, "Test Field", field.Label, "Field should have correct label")
 	assert.True(t, field.ReadOnly, "Field should be marked as read-only")
 	assert.True(t, field.Validation.Required, "Field should be marked as required")
+}
+
+// Test helper model for conditional validation
+type conditionalModel struct {
+	Age    int
+	Status string
+}
+
+func TestConvertToFloat(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   interface{}
+		want    float64
+		wantErr bool
+	}{
+		{"int", 10, 10, false},
+		{"float32", float32(3.5), 3.5, false},
+		{"string number", "2.5", 2.5, false},
+		{"invalid string", "abc", 0, true},
+		{"unsupported type", struct{}{}, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertToFloat(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestEvaluateCondition(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   interface{}
+		op      string
+		compare interface{}
+		want    bool
+		wantErr bool
+	}{
+		{"eq string", "foo", "eq", "foo", true, false},
+		{"neq string", "foo", "neq", "bar", true, false},
+		{"gt numeric", 10, "gt", 5, true, false},
+		{"lt numeric string", "3", "lt", 5, true, false},
+		{"contains", "hello world", "contains", "world", true, false},
+		{"invalid operator", "a", "unknown", "b", false, true},
+		{"bad number", "abc", "gt", 1, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := evaluateCondition(fmt.Sprintf("%v", tt.field), tt.op, tt.compare)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestConditionalValidatorValidate(t *testing.T) {
+	model := &conditionalModel{Age: 20, Status: "active"}
+
+	ageValidator := ConditionalValidator{
+		Field:    "Age",
+		Operator: "gt",
+		Value:    18,
+		ValidateFn: func(v interface{}) error {
+			return fmt.Errorf("age validated")
+		},
+		ModelGetter: func() interface{} { return model },
+	}
+
+	err := ageValidator.Validate(nil)
+	assert.Error(t, err)
+
+	model.Age = 15
+	err = ageValidator.Validate(nil)
+	assert.NoError(t, err)
+
+	statusValidator := ConditionalValidator{
+		Field:    "Status",
+		Operator: "eq",
+		Value:    "active",
+		ValidateFn: func(v interface{}) error {
+			return fmt.Errorf("status validated")
+		},
+		ModelGetter: func() interface{} { return model },
+	}
+
+	model.Status = "active"
+	err = statusValidator.Validate(nil)
+	assert.Error(t, err)
+
+	model.Status = "inactive"
+	err = statusValidator.Validate(nil)
+	assert.NoError(t, err)
 }
