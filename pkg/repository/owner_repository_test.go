@@ -858,3 +858,376 @@ func TestOwnerRepository_BulkMethodsWithDirect(t *testing.T) {
 		}
 	})
 }
+
+// TestOwnerRepository_FindOneBy tests the FindOneBy method
+func TestOwnerRepository_FindOneBy(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+
+	// Create owner resource with default config
+	ownerConfig := resource.DefaultOwnerConfig()
+	// Ensure we're using the correct DB column name
+	ownerConfig.OwnerField = "OwnerID" // Field name in struct
+	ownerRes := resource.NewOwnerResource(res, ownerConfig)
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Create test data
+	testItems := []OwnerTestEntity{
+		{Name: "FindOneBy Item 1", OwnerID: "findone-owner"},
+		{Name: "FindOneBy Item 2", OwnerID: "findone-owner"},
+		{Name: "FindOneBy Other Owner", OwnerID: "other-owner"},
+	}
+	result := db.Create(&testItems)
+	require.NoError(t, result.Error)
+
+	// Test FindOneBy with owner context
+	t.Run("FindOneBy with owner context", func(t *testing.T) {
+		ctx := ownerContext("findone-owner")
+
+		// Find by name using direct GORM query to verify setup
+		var directResult OwnerTestEntity
+		err := db.Where("name = ? AND owner_id = ?", "FindOneBy Item 1", "findone-owner").First(&directResult).Error
+		require.NoError(t, err, "Direct query should succeed")
+
+		// Find by name using FindOneBy
+		// Use DB column name "owner_id", not struct field name "OwnerID"
+		condition := map[string]interface{}{
+			"name": "FindOneBy Item 1",
+		}
+
+		entity, err := repo.FindOneBy(ctx, condition)
+		require.NoError(t, err)
+
+		// Verify result
+		item := entity.(*OwnerTestEntity)
+		assert.Equal(t, "FindOneBy Item 1", item.Name)
+		assert.Equal(t, "findone-owner", item.OwnerID)
+	})
+
+	// Test FindOneBy with condition that doesn't match owner
+	t.Run("FindOneBy with non-matching owner", func(t *testing.T) {
+		ctx := ownerContext("findone-owner")
+
+		// Try to find item from other owner
+		condition := map[string]interface{}{
+			"name": "FindOneBy Other Owner",
+		}
+
+		_, err := repo.FindOneBy(ctx, condition)
+		// Should return error since this item belongs to a different owner
+		assert.Error(t, err)
+	})
+}
+
+// TestOwnerRepository_FindAllBy tests the FindAllBy method
+func TestOwnerRepository_FindAllBy(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+
+	// Create owner resource with default config
+	ownerConfig := resource.DefaultOwnerConfig()
+	// Ensure we're using the correct DB column name
+	ownerConfig.OwnerField = "OwnerID" // Field name in struct
+	ownerRes := resource.NewOwnerResource(res, ownerConfig)
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Create test data
+	testItems := []OwnerTestEntity{
+		{Name: "FindAllBy Item 1", OwnerID: "findall-owner"},
+		{Name: "FindAllBy Item 2", OwnerID: "findall-owner"},
+		{Name: "FindAllBy Item 3", OwnerID: "findall-owner"},
+		{Name: "FindAllBy Other Owner", OwnerID: "other-owner"},
+	}
+	result := db.Create(&testItems)
+	require.NoError(t, result.Error)
+
+	// Test FindAllBy with owner context
+	t.Run("FindAllBy with simple condition", func(t *testing.T) {
+		ctx := ownerContext("findall-owner")
+
+		// Verify setup with direct query
+		var directResults []OwnerTestEntity
+		err := db.Where("owner_id = ?", "findall-owner").Find(&directResults).Error
+		require.NoError(t, err, "Direct query should succeed")
+		assert.Equal(t, 3, len(directResults), "Direct query should find 3 items")
+
+		// Use simple condition with exact match
+		condition := map[string]interface{}{
+			"name": "FindAllBy Item 1",
+		}
+
+		results, err := repo.FindAllBy(ctx, condition)
+		require.NoError(t, err)
+
+		// Verify results
+		items := results.(*[]OwnerTestEntity)
+		assert.Equal(t, 1, len(*items))
+		assert.Equal(t, "FindAllBy Item 1", (*items)[0].Name)
+		assert.Equal(t, "findall-owner", (*items)[0].OwnerID)
+	})
+
+	// Test FindAllBy with empty condition to get all owner's items
+	t.Run("FindAllBy with empty condition", func(t *testing.T) {
+		ctx := ownerContext("findall-owner")
+
+		// Use empty condition
+		condition := map[string]interface{}{}
+
+		results, err := repo.FindAllBy(ctx, condition)
+		require.NoError(t, err)
+
+		// Verify results
+		items := results.(*[]OwnerTestEntity)
+		assert.Equal(t, 3, len(*items))
+
+		// All items should belong to the owner
+		for _, item := range *items {
+			assert.Equal(t, "findall-owner", item.OwnerID)
+		}
+	})
+
+	// Test FindAllBy with disabled ownership
+	t.Run("FindAllBy with disabled ownership", func(t *testing.T) {
+		// Create non-enforcing repo
+		nonEnforcingRes := resource.NewOwnerResource(res, resource.OwnerConfig{
+			OwnerField:       "OwnerID",
+			EnforceOwnership: false,
+		})
+		nonEnforcingRepo, err := NewOwnerRepository(db, nonEnforcingRes)
+		require.NoError(t, err)
+
+		ctx := ownerContext("findall-owner")
+
+		// Find all items
+		condition := map[string]interface{}{}
+
+		results, err := nonEnforcingRepo.FindAllBy(ctx, condition)
+		require.NoError(t, err)
+
+		// Should return all items regardless of owner
+		items := results.(*[]OwnerTestEntity)
+		assert.GreaterOrEqual(t, len(*items), 4)
+	})
+}
+
+// TestOwnerRepository_QueryMethod tests the Query method
+func TestOwnerRepository_QueryMethod(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+
+	// Create owner resource with default config
+	ownerConfig := resource.DefaultOwnerConfig()
+	// Ensure we're using the correct DB column name
+	ownerConfig.OwnerField = "OwnerID" // Field name in struct
+	ownerRes := resource.NewOwnerResource(res, ownerConfig)
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Create test data
+	testItems := []OwnerTestEntity{
+		{Name: "Query Item 1", OwnerID: "query-owner"},
+		{Name: "Query Item 2", OwnerID: "query-owner"},
+		{Name: "Query Other Owner", OwnerID: "other-owner"},
+	}
+	result := db.Create(&testItems)
+	require.NoError(t, result.Error)
+
+	// Test Query method with owner context
+	t.Run("Query with owner context", func(t *testing.T) {
+		ctx := ownerContext("query-owner")
+
+		// Verify our test data using direct queries
+		var directResults []OwnerTestEntity
+		err := db.Where("name LIKE ? AND owner_id = ?", "Query Item%", "query-owner").Find(&directResults).Error
+		require.NoError(t, err, "Direct query should succeed")
+		assert.Equal(t, 2, len(directResults), "Direct query should find 2 items")
+
+		// Get query DB instance
+		queryDB := repo.Query(ctx)
+		require.NotNil(t, queryDB)
+
+		// Execute query
+		var items []OwnerTestEntity
+		err = queryDB.Where("name LIKE ?", "Query Item%").Find(&items).Error
+		require.NoError(t, err)
+
+		// Verify results are filtered by owner
+		assert.Equal(t, 2, len(items))
+		for _, item := range items {
+			assert.Equal(t, "query-owner", item.OwnerID)
+		}
+
+		// Verify that the query has already applied the owner filter
+		// by checking that we only get items for the current owner
+		var allItems []OwnerTestEntity
+		err = queryDB.Find(&allItems).Error
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(allItems), "Should only find items for current owner")
+		for _, item := range allItems {
+			assert.Equal(t, "query-owner", item.OwnerID, "All items should be for current owner")
+		}
+	})
+}
+
+// TestOwnerRepository_WithRelationsMethods tests the GetWithRelations and ListWithRelations methods
+func TestOwnerRepository_WithRelationsMethods(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+
+	// Create owner resource with default config
+	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Create test data
+	testItems := []OwnerTestEntity{
+		{Name: "Relations Item 1", OwnerID: "relations-owner"},
+		{Name: "Relations Item 2", OwnerID: "relations-owner"},
+		{Name: "Relations Other Owner", OwnerID: "other-owner"},
+	}
+	result := db.Create(&testItems)
+	require.NoError(t, result.Error)
+
+	// Get the first item ID for later use
+	var firstItem OwnerTestEntity
+	err = db.Where("owner_id = ?", "relations-owner").First(&firstItem).Error
+	require.NoError(t, err)
+
+	// Test GetWithRelations
+	t.Run("GetWithRelations with owner context", func(t *testing.T) {
+		ctx := ownerContext("relations-owner")
+
+		// Get item with relations (even though there are no real relations)
+		item, err := repo.GetWithRelations(ctx, firstItem.ID, []string{})
+		require.NoError(t, err)
+
+		// Verify item
+		retrievedItem := item.(*OwnerTestEntity)
+		assert.Equal(t, firstItem.ID, retrievedItem.ID)
+		assert.Equal(t, "relations-owner", retrievedItem.OwnerID)
+	})
+
+	// Test GetWithRelations for non-owned item
+	t.Run("GetWithRelations for non-owned item", func(t *testing.T) {
+		ctx := ownerContext("relations-owner")
+
+		// Try to get an item owned by someone else
+		var otherItem OwnerTestEntity
+		err = db.Where("owner_id = ?", "other-owner").First(&otherItem).Error
+		require.NoError(t, err)
+
+		// Should fail
+		_, err := repo.GetWithRelations(ctx, otherItem.ID, []string{})
+		assert.Error(t, err)
+	})
+
+	// Test ListWithRelations
+	t.Run("ListWithRelations with owner context", func(t *testing.T) {
+		ctx := ownerContext("relations-owner")
+
+		// List items with relations
+		options := query.QueryOptions{
+			Page:              1,
+			PerPage:           10,
+			DisablePagination: false,
+		}
+
+		results, count, err := repo.ListWithRelations(ctx, options, []string{})
+		require.NoError(t, err)
+
+		// Verify results
+		items := results.(*[]OwnerTestEntity)
+		assert.Equal(t, int64(2), count)
+		assert.Equal(t, 2, len(*items))
+
+		// All items should belong to the owner
+		for _, item := range *items {
+			assert.Equal(t, "relations-owner", item.OwnerID)
+		}
+	})
+}
+
+// TestOwnerRepository_GetIDFieldName tests the GetIDFieldName method
+func TestOwnerRepository_GetIDFieldName(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:        "owner-test-entity",
+		Model:       &OwnerTestEntity{},
+		IDFieldName: "ID", // Default ID field
+	})
+
+	// Create owner resource with default config
+	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Test GetIDFieldName
+	t.Run("GetIDFieldName returns correct field name", func(t *testing.T) {
+		fieldName := repo.GetIDFieldName()
+		assert.Equal(t, "ID", fieldName)
+	})
+
+	// Test with custom ID field
+	t.Run("GetIDFieldName with custom field", func(t *testing.T) {
+		customRes := resource.NewResource(resource.ResourceConfig{
+			Name:        "custom-id-entity",
+			Model:       &OwnerTestEntity{},
+			IDFieldName: "CustomID",
+		})
+
+		customOwnerRes := resource.NewOwnerResource(customRes, resource.DefaultOwnerConfig())
+		customRepo, err := NewOwnerRepository(db, customOwnerRes)
+		require.NoError(t, err)
+
+		fieldName := customRepo.GetIDFieldName()
+		assert.Equal(t, "CustomID", fieldName)
+	})
+}
