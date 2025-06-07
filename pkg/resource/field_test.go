@@ -194,9 +194,16 @@ func TestConvertToFloat(t *testing.T) {
 		wantErr bool
 	}{
 		{"int", 10, 10, false},
+		{"int8", int8(5), 5, false},
+		{"int16", int16(6), 6, false},
+		{"uint", uint(7), 7, false},
+		{"uint32", uint32(8), 8, false},
+		{"uint64", uint64(9), 9, false},
 		{"float32", float32(3.5), 3.5, false},
+		{"float64", float64(1.23), 1.23, false},
 		{"string number", "2.5", 2.5, false},
 		{"invalid string", "abc", 0, true},
+		{"unsupported bool", true, 0, true},
 		{"unsupported type", struct{}{}, 0, true},
 	}
 
