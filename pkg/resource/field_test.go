@@ -301,3 +301,15 @@ func TestAsyncValidatorValidate(t *testing.T) {
 	err := validator.Validate("sample")
 	assert.NoError(t, err)
 }
+
+func TestCustomValidatorReturnsNil(t *testing.T) {
+	v := CustomValidator{Expression: "dummy", Message: ""}
+	err := v.Validate(struct{}{})
+	assert.NoError(t, err)
+}
+
+func TestAsyncValidatorReturnsNil(t *testing.T) {
+	v := AsyncValidator{URL: "http://localhost", Message: ""}
+	err := v.Validate(struct{}{})
+	assert.NoError(t, err)
+}
