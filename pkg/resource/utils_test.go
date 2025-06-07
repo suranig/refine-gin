@@ -721,6 +721,45 @@ func TestValidateNestedJson(t *testing.T) {
 			},
 		},
 		{
+			name: "JSON string missing required field",
+			data: `{"name": "Test Name"}`,
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path:       "name",
+						Type:       "string",
+						Validation: &JsonValidation{Required: true},
+					},
+					{
+						Path:       "age",
+						Type:       "integer",
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Required property 'age' not found",
+			},
+		},
+		{
+			name: "Malformed JSON string",
+			data: `{"name": "Test"`,
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path:       "name",
+						Type:       "string",
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Invalid JSON string",
+			},
+		},
+		{
 			name: "Nested object missing required field",
 			data: map[string]interface{}{
 				"name": "Test Name",
