@@ -83,6 +83,16 @@ func TestGetOwnerID(t *testing.T) {
 		assert.Equal(t, "owner-456", ownerID)
 	})
 
+	// Test gin context without owner ID
+	t.Run("Gin context without owner ID", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+		_, err := GetOwnerID(c)
+
+		assert.Error(t, err)
+		assert.Equal(t, ErrOwnerIDNotFound, err)
+	})
+
 	// Test with standard context
 	t.Run("With standard context", func(t *testing.T) {
 		// Setup context
@@ -94,6 +104,16 @@ func TestGetOwnerID(t *testing.T) {
 		// Assert
 		assert.NoError(t, err)
 		assert.Equal(t, "owner-789", ownerID)
+	})
+
+	// Test using regular context containing owner ID
+	t.Run("Standard context with owner ID", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), OwnerContextKey, "std-owner-001")
+
+		ownerID, err := GetOwnerID(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "std-owner-001", ownerID)
 	})
 
 	// Test with missing owner ID
