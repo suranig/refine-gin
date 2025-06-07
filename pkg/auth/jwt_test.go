@@ -66,7 +66,6 @@ func TestJWTMiddleware(t *testing.T) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Set("Authorization", "Bearer "+tokenString)
 
-	// Zamiast przypisywać do c.Next, użyjmy zmiennej w kontekście
 	c.Set("nextCalled", false)
 	originalHandler := middleware
 	middleware = func(c *gin.Context) {
