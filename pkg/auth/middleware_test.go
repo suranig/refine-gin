@@ -34,6 +34,12 @@ type TestRecord struct {
 	Name   string
 }
 
+// Record without a UserID field for testing IsOwner
+type NoUserIDRecord struct {
+	ID   string
+	Name string
+}
+
 func TestDefaultAuthorizationProvider(t *testing.T) {
 	// Setup
 	provider := NewDefaultAuthorizationProvider()
@@ -155,6 +161,114 @@ func TestJWTAuthorizationProvider(t *testing.T) {
 
 	record = &TestRecord{ID: "2", UserID: "2", Name: "Test"}
 	assert.False(t, provider.CanAccessRecord(c, mockResource, resource.OperationDelete, record))
+}
+
+func TestJWTAuthorizationProvider_RolesClaimMissingOrInvalid(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	newProvider := func(rule JWTAuthorizationRule) (*JWTAuthorizationProvider, *MockResource) {
+		provider := NewJWTAuthorizationProvider()
+		mockRes := new(MockResource)
+		mockRes.On("GetName").Return("tests")
+		mockRes.On("GetIDFieldName").Return("ID")
+		mockRes.On("GetField", mock.Anything).Return(nil)
+		mockRes.On("GetSearchable").Return([]string{})
+		provider.AddRule("tests", resource.OperationList, rule)
+		return provider, mockRes
+	}
+
+	t.Run("HasRole missing roles", func(t *testing.T) {
+		provider, mockRes := newProvider(HasRole("admin"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasRole invalid roles type", func(t *testing.T) {
+		provider, mockRes := newProvider(HasRole("admin"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": "admin"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasRole valid", func(t *testing.T) {
+		provider, mockRes := newProvider(HasRole("admin"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": []interface{}{"admin"}})
+		assert.True(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAnyRole missing roles", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAnyRole("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAnyRole invalid roles type", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAnyRole("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": "admin"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAnyRole valid", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAnyRole("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": []interface{}{"editor"}})
+		assert.True(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAllRoles missing roles", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAllRoles("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAllRoles invalid roles type", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAllRoles("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": "admin"})
+		assert.False(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+
+	t.Run("HasAllRoles valid", func(t *testing.T) {
+		provider, mockRes := newProvider(HasAllRoles("admin", "editor"))
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", jwt.MapClaims{"sub": "1", "roles": []interface{}{"admin", "editor"}})
+		assert.True(t, provider.CanAccess(c, mockRes, resource.OperationList))
+	})
+}
+
+func TestJWTAuthorizationProvider_IsOwnerInvalidRecord(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := NewJWTAuthorizationProvider()
+	mockResource := new(MockResource)
+	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
+
+	provider.AddRule("tests", resource.OperationDelete, IsOwner("sub", "UserID"))
+
+	// Record not struct
+	c, _ := gin.CreateTestContext(nil)
+	c.Set("claims", jwt.MapClaims{"sub": "1"})
+	recordMap := map[string]interface{}{"ID": "1", "UserID": "1"}
+	assert.False(t, provider.CanAccessRecord(c, mockResource, resource.OperationDelete, recordMap))
+
+	// Record missing owner field
+	c, _ = gin.CreateTestContext(nil)
+	c.Set("claims", jwt.MapClaims{"sub": "1"})
+	recordMissing := &NoUserIDRecord{ID: "1", Name: "Test"}
+	assert.False(t, provider.CanAccessRecord(c, mockResource, resource.OperationDelete, recordMissing))
+
+	// Valid record
+	c, _ = gin.CreateTestContext(nil)
+	c.Set("claims", jwt.MapClaims{"sub": "1"})
+	valid := &TestRecord{ID: "1", UserID: "1", Name: "Test"}
+	assert.True(t, provider.CanAccessRecord(c, mockResource, resource.OperationDelete, valid))
 }
 
 func TestAuthorizationMiddleware(t *testing.T) {
