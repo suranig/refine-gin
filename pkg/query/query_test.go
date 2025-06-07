@@ -318,6 +318,20 @@ func TestExtractPaginate(t *testing.T) {
 	assert.NotNil(t, paginateOption)
 	assert.Equal(t, 1, paginateOption.Page)
 	assert.Equal(t, 10, paginateOption.PerPage)
+
+	// Test with Refine.js nested pagination object
+	c, _ = createTestContext("pagination[current]=3&pagination[pageSize]=25")
+	paginateOption = ExtractPaginate(c)
+	assert.NotNil(t, paginateOption)
+	assert.Equal(t, 3, paginateOption.Page)
+	assert.Equal(t, 25, paginateOption.PerPage)
+
+	// Test per_page exceeding MaxPageSize is capped
+	c, _ = createTestContext("pagination[pageSize]=200")
+	paginateOption = ExtractPaginate(c)
+	assert.NotNil(t, paginateOption)
+	assert.Equal(t, 1, paginateOption.Page)
+	assert.Equal(t, MaxPageSize, paginateOption.PerPage)
 }
 
 func TestExtractFilters(t *testing.T) {
