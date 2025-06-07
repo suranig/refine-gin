@@ -612,3 +612,45 @@ func TestDefaultResourcePermissions(t *testing.T) {
 	assert.False(t, res.HasPermission(string(OperationCreate), "guest"))
 	assert.False(t, res.HasPermission(string(OperationDelete), "editor"))
 }
+
+func TestGenerateFieldsFromModelWithTags(t *testing.T) {
+	type Nested struct {
+		Sub string `json:"sub"`
+	}
+
+	type Model struct {
+		Name    string `json:"name" refine:"label=Full Name;placeholder=Enter name;tooltip=Name tooltip;width=120;readOnly;min=3;max=50;pattern=^[a-zA-Z]+$;required"`
+		Details Nested `json:"details"`
+	}
+
+	fields := GenerateFieldsFromModel(Model{})
+
+	fieldMap := make(map[string]Field)
+	for _, f := range fields {
+		fieldMap[f.Name] = f
+	}
+
+	nameField, ok := fieldMap["name"]
+	assert.True(t, ok, "name field should exist")
+	assert.Equal(t, "Full Name", nameField.Label)
+	if assert.NotNil(t, nameField.Form) {
+		assert.Equal(t, "Enter name", nameField.Form.Placeholder)
+		assert.Equal(t, "Name tooltip", nameField.Form.Tooltip)
+	}
+	if assert.NotNil(t, nameField.List) {
+		assert.Equal(t, 120, nameField.List.Width)
+	}
+	assert.True(t, nameField.ReadOnly)
+	if assert.NotNil(t, nameField.Validation) {
+		assert.Equal(t, 3, nameField.Validation.MinLength)
+		assert.Equal(t, 50, nameField.Validation.MaxLength)
+		assert.Equal(t, "^[a-zA-Z]+$", nameField.Validation.Pattern)
+		assert.True(t, nameField.Validation.Required)
+	}
+
+	detailsField, ok := fieldMap["details"]
+	assert.True(t, ok, "details field should exist")
+	if assert.NotNil(t, detailsField.Json) {
+		assert.NotEmpty(t, detailsField.Json.Properties)
+	}
+}
