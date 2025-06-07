@@ -108,11 +108,11 @@ func TestOwnerRepository_UpdateJSONMap(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&OwnerJSONEntity{}))
 
-	res := resource.NewResource(resource.ResourceConfig{
+	jsonRes := resource.NewResource(resource.ResourceConfig{
 		Name:  "json-owner",
 		Model: &OwnerJSONEntity{},
 	})
-	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+	ownerRes := resource.NewOwnerResource(jsonRes, resource.DefaultOwnerConfig())
 	repoIface, err := NewOwnerRepository(db, ownerRes)
 	require.NoError(t, err)
 
@@ -134,10 +134,10 @@ func TestOwnerRepository_UpdateJSONMap(t *testing.T) {
 			},
 		}
 
-		res, err := repoIface.Update(ctx, initial.ID, updates)
+		result, err := repoIface.Update(ctx, initial.ID, updates)
 		require.NoError(t, err)
 
-		upd := res.(*OwnerJSONEntity)
+		upd := result.(*OwnerJSONEntity)
 		assert.Equal(t, initial.ID, upd.ID)
 		assert.Equal(t, "updated", upd.Name)
 		assert.False(t, upd.Config.Enabled)
