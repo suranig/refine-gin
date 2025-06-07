@@ -11,6 +11,11 @@ func TestGetTypeMapping(t *testing.T) {
 		{"int64", TypeMapping{Category: TypeInteger, Format: "int64", IsPrimitive: true}},
 		{"[]int", TypeMapping{Category: TypeArray, Format: "int", IsPrimitive: false}},
 		{"Custom", TypeMapping{Category: TypeObject, Format: "Custom", IsPrimitive: false}},
+		{"uint", TypeMapping{Category: TypeInteger, Format: "uint32", IsPrimitive: true}},
+		{"uint32", TypeMapping{Category: TypeInteger, Format: "uint32", IsPrimitive: true}},
+		{"bool", TypeMapping{Category: TypeBoolean, IsPrimitive: true}},
+		{"[]byte", TypeMapping{Category: TypeArray, Format: "byte", IsPrimitive: false}},
+		{"*int", TypeMapping{Category: TypeObject, Format: "*int", IsPrimitive: false}},
 	}
 
 	for _, tt := range tests {
