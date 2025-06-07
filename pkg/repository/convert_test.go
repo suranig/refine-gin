@@ -17,6 +17,12 @@ func TestConvertToFieldType(t *testing.T) {
 		{"string-to-float", "3.14", reflect.TypeOf(float64(0)), float64(3.14)},
 		{"string-to-bool", "true", reflect.TypeOf(true), true},
 		{"same-type", 5, reflect.TypeOf(5), 5},
+		// conversions from non-string values
+		{"int-to-string", 42, reflect.TypeOf(""), "42"},
+		{"uint-to-int", uint(7), reflect.TypeOf(int(0)), int(7)},
+		{"float-to-string", 3.14, reflect.TypeOf(""), "3.14"},
+		{"bool-to-string", true, reflect.TypeOf(""), "true"},
+		{"int-to-float", 8, reflect.TypeOf(float64(0)), float64(8)},
 	}
 
 	for _, tt := range tests {
