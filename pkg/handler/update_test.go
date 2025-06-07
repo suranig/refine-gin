@@ -431,43 +431,45 @@ func TestValidateNestedJsonFields_NestedRules(t *testing.T) {
 	mockResource.On("GetFields").Return(fields)
 	mockResource.On("GetEditableFields").Return([]string{}).Maybe()
 
-	// Valid model should pass
-	validModel := TestModel{
-		ID: 1,
-		Settings: Settings{
-			Preferences: struct {
-				Notifications struct {
-					Email string `json:"email"`
-				} `json:"notifications"`
-			}{
-				Notifications: struct {
-					Email string `json:"email"`
-				}{Email: "user@example.com"},
+	t.Run("valid data", func(t *testing.T) {
+		validModel := TestModel{
+			ID: 1,
+			Settings: Settings{
+				Preferences: struct {
+					Notifications struct {
+						Email string `json:"email"`
+					} `json:"notifications"`
+				}{
+					Notifications: struct {
+						Email string `json:"email"`
+					}{Email: "user@example.com"},
+				},
 			},
-		},
-	}
+		}
 
-	err := validateNestedJsonFields(mockResource, &validModel)
-	assert.NoError(t, err)
+		err := validateNestedJsonFields(mockResource, &validModel)
+		assert.NoError(t, err)
+	})
 
-	// Invalid model should fail due to pattern mismatch
-	invalidModel := TestModel{
-		Settings: Settings{
-			Preferences: struct {
-				Notifications struct {
-					Email string `json:"email"`
-				} `json:"notifications"`
-			}{
-				Notifications: struct {
-					Email string `json:"email"`
-				}{Email: "invalid"},
+	t.Run("invalid data", func(t *testing.T) {
+		invalidModel := TestModel{
+			Settings: Settings{
+				Preferences: struct {
+					Notifications struct {
+						Email string `json:"email"`
+					} `json:"notifications"`
+				}{
+					Notifications: struct {
+						Email string `json:"email"`
+					}{Email: "invalid"},
+				},
 			},
-		},
-	}
+		}
 
-	err = validateNestedJsonFields(mockResource, &invalidModel)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "does not match pattern")
+		err := validateNestedJsonFields(mockResource, &invalidModel)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "does not match pattern")
+	})
 
 	mockResource.AssertExpectations(t)
 }
