@@ -414,11 +414,17 @@ func TestValidateNestedJsonFields_NestedRules(t *testing.T) {
 						Validation: &resource.JsonValidation{Required: true},
 						Properties: []resource.JsonProperty{
 							{
-								Path: "notifications.email",
-								Type: "string",
-								Validation: &resource.JsonValidation{
-									Required: true,
-									Pattern:  `^.+@.+\\..+$`,
+								Path: "notifications",
+								Type: "object",
+								Properties: []resource.JsonProperty{
+									{
+										Path: "email",
+										Type: "string",
+										Validation: &resource.JsonValidation{
+											Required: true,
+											Pattern:  `^.+@.+\\..+$`,
+										},
+									},
 								},
 							},
 						},
