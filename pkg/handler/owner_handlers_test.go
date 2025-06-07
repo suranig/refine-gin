@@ -87,6 +87,22 @@ func TestOwnerListHandler(t *testing.T) {
 		assert.NotNil(t, response["data"])
 		assert.Equal(t, float64(1), response["meta"].(map[string]interface{})["page"])
 		assert.Equal(t, float64(10), response["meta"].(map[string]interface{})["pageSize"])
+
+		// Capture the ETag from the response
+		etag := w.Header().Get("ETag")
+		assert.NotEmpty(t, etag)
+
+		// Second request with If-None-Match should return 304
+		w2 := httptest.NewRecorder()
+		c2, _ := gin.CreateTestContext(w2)
+		c2.Set(middleware.OwnerContextKey, "test-owner")
+		req2 := httptest.NewRequest(http.MethodGet, "/tests?page=1&pageSize=10", nil)
+		req2.Header.Set("If-None-Match", etag)
+		c2.Request = req2
+		handler(c2)
+
+		assert.Equal(t, http.StatusNotModified, w2.Code)
+		assert.Empty(t, w2.Body.Bytes())
 	})
 
 	t.Run("Repository error", func(t *testing.T) {
