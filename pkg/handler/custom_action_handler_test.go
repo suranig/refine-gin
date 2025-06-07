@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/handler"
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/repository"
@@ -405,6 +407,70 @@ func TestAttachAndDetachActions(t *testing.T) {
 		assert.Equal(t, http.MethodGet, listAction.Method)
 		assert.True(t, listAction.RequiresID)
 		assert.NotNil(t, listAction.Handler)
+	})
+}
+
+func TestGenerateCustomActionHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	res := new(MockResource)
+	repo := new(MockRepository)
+
+	res.On("GetName").Return("tests")
+	res.On("GetIDFieldName").Return("ID")
+
+	t.Run("POST sets no cache and returns data", func(t *testing.T) {
+		r := gin.New()
+
+		action := handler.CustomAction{
+			Name:       "do",
+			Method:     http.MethodPost,
+			RequiresID: false,
+			Handler: func(c *gin.Context, r resource.Resource, repo repository.Repository) (interface{}, error) {
+				return map[string]string{"ok": "yes"}, nil
+			},
+		}
+
+		r.POST("/tests/actions/do", handler.GenerateCustomActionHandler(res, repo, action))
+
+		req := httptest.NewRequest(http.MethodPost, "/tests/actions/do", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "no-store, no-cache, must-revalidate", w.Header().Get("Cache-Control"))
+
+		var resp handler.CustomActionResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		expected := map[string]interface{}{"ok": "yes"}
+		assert.Equal(t, expected, resp.Data)
+	})
+
+	t.Run("error returns 500 JSON", func(t *testing.T) {
+		r := gin.New()
+
+		action := handler.CustomAction{
+			Name:       "fail",
+			Method:     http.MethodPost,
+			RequiresID: false,
+			Handler: func(c *gin.Context, r resource.Resource, repo repository.Repository) (interface{}, error) {
+				return nil, fmt.Errorf("boom")
+			},
+		}
+
+		r.POST("/tests/actions/fail", handler.GenerateCustomActionHandler(res, repo, action))
+
+		req := httptest.NewRequest(http.MethodPost, "/tests/actions/fail", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		var resp map[string]string
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "boom", resp["error"])
 	})
 }
 
