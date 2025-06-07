@@ -285,3 +285,53 @@ func TestOwnerRepository_DisabledEnforcement(t *testing.T) {
 	assert.Equal(t, int64(5), total, "Should return all 5 items when ownership is disabled")
 	assert.Equal(t, 5, len(*resultItems), "Should return all 5 items when ownership is disabled")
 }
+
+// verifyOwnership should return an error when the context owner does not match
+// the record owner. It should also error when no owner value is present in the
+// context.
+func TestVerifyOwnershipRejectsMismatch(t *testing.T) {
+	repo, db := setupOwnerRepo(t, true, nil)
+	items := []OwnerTestEntity{{Name: "One", OwnerID: "a"}, {Name: "Two", OwnerID: "b"}}
+	require.NoError(t, db.Create(&items).Error)
+
+	// Mismatched owner should return ErrOwnerMismatch
+	err := repo.verifyOwnership(ownerContext("a"), items[1].ID)
+	assert.Equal(t, ErrOwnerMismatch, err)
+
+	// Missing owner in context should return ErrOwnerIDNotFound
+	err = repo.verifyOwnership(context.Background(), items[0].ID)
+	assert.Equal(t, ErrOwnerIDNotFound, err)
+}
+
+// setOwnership should automatically populate the owner field using the value
+// from context. When no owner value is available an error is returned.
+func TestSetOwnershipAssignsOwnerID(t *testing.T) {
+	repo, _ := setupOwnerRepo(t, true, nil)
+
+	// Owner ID is set when present in context
+	item := &OwnerTestEntity{Name: "auto"}
+	require.NoError(t, repo.setOwnership(ownerContext("owner-x"), item))
+	assert.Equal(t, "owner-x", item.OwnerID)
+
+	// No owner value yields an error
+	itemNoCtx := &OwnerTestEntity{Name: "none"}
+	err := repo.setOwnership(context.Background(), itemNoCtx)
+	assert.Equal(t, ErrOwnerIDNotFound, err)
+}
+
+// applyOwnerFilter should inject a where clause filtering by owner when a value
+// exists in the context. If no owner value is provided, an error is returned.
+func TestApplyOwnerFilterFiltersByOwner(t *testing.T) {
+	repo, db := setupOwnerRepo(t, true, nil)
+	ctx := ownerContext("abc")
+
+	tx, err := repo.applyOwnerFilter(ctx, db.Session(&gorm.Session{DryRun: true}))
+	require.NoError(t, err)
+	tx.Find(&[]OwnerTestEntity{})
+	assert.Contains(t, tx.Statement.SQL.String(), "owner_id")
+	assert.Equal(t, "abc", tx.Statement.Vars[len(tx.Statement.Vars)-1])
+
+	// Missing owner should produce ErrOwnerIDNotFound
+	_, err = repo.applyOwnerFilter(context.Background(), db)
+	assert.Equal(t, ErrOwnerIDNotFound, err)
+}
