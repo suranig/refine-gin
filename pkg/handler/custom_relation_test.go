@@ -96,3 +96,73 @@ func TestAttachAndDetachRelations(t *testing.T) {
 		assert.ElementsMatch(t, []uint{2}, parent.Tags)
 	})
 }
+
+func TestGetRelatedCollection(t *testing.T) {
+	rel := resource.Relation{Name: "items", Field: "Items", Type: resource.RelationTypeOneToMany}
+
+	t.Run("StructSlice", func(t *testing.T) {
+		parent := &RelationParent{Items: []*RelationChild{{ID: 1}, {ID: 2}}}
+		result, err := getRelatedCollection(parent, &rel, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, parent.Items, result)
+	})
+
+	t.Run("MapSlice", func(t *testing.T) {
+		m := map[string]interface{}{"Items": []int{1, 2}}
+		result, err := getRelatedCollection(m, &rel, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, m["Items"], result)
+	})
+
+	t.Run("FieldNotFound", func(t *testing.T) {
+		parent := &RelationParent{}
+		badRel := resource.Relation{Name: "missing", Field: "Missing", Type: resource.RelationTypeOneToMany}
+		_, err := getRelatedCollection(parent, &badRel, nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("NotSlice", func(t *testing.T) {
+		parent := &RelationParent{Profile: &RelationChild{ID: 1}}
+		badRel := resource.Relation{Name: "profile", Field: "Profile", Type: resource.RelationTypeOneToMany}
+		_, err := getRelatedCollection(parent, &badRel, nil)
+		assert.Error(t, err)
+	})
+}
+
+func TestGetRelatedObjectBelongsTo(t *testing.T) {
+	rel := resource.Relation{Name: "Owner", Field: "Owner", Type: resource.RelationTypeManyToOne}
+
+	t.Run("Struct", func(t *testing.T) {
+		parent := &RelationParent{OwnerID: 10}
+		repo := new(MockRepository)
+		repo.On("Get", mock.Anything, "10").Return(&RelationChild{ID: 10}, nil).Once()
+
+		result, err := getRelatedObject(parent, &rel, repo)
+		assert.NoError(t, err)
+		if assert.NotNil(t, result) {
+			assert.Equal(t, uint(10), result.(*RelationChild).ID)
+		}
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("Map", func(t *testing.T) {
+		m := map[string]interface{}{"OwnerID": uint(20)}
+		repo := new(MockRepository)
+		repo.On("Get", mock.Anything, "20").Return(&RelationChild{ID: 20}, nil).Once()
+
+		result, err := getRelatedObject(m, &rel, repo)
+		assert.NoError(t, err)
+		if assert.NotNil(t, result) {
+			assert.Equal(t, uint(20), result.(*RelationChild).ID)
+		}
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("ForeignKeyMissing", func(t *testing.T) {
+		m := map[string]interface{}{}
+		_, err := getRelatedObject(m, &rel, nil)
+		assert.Error(t, err)
+	})
+}
