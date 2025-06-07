@@ -1,15 +1,26 @@
 package middleware
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"testing"
+        "fmt"
+        "net/http"
+        "net/http/httptest"
+        "testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
-	"github.com/suranig/refine-gin/pkg/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/stretchr/testify/assert"
+        "github.com/suranig/refine-gin/pkg/utils"
 )
+
+func TestDefaultCacheConfig(t *testing.T) {
+        expected := CacheConfig{
+                MaxAge:       60,
+                DisableCache: false,
+                Methods:      []string{"GET", "HEAD"},
+                VaryHeaders:  []string{"Accept", "Accept-Encoding", "Authorization"},
+        }
+
+        assert.Equal(t, expected, DefaultCacheConfig())
+}
 
 func TestCache(t *testing.T) {
 	// Set Gin to test mode
