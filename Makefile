@@ -6,7 +6,7 @@ GOTEST = $(GO) test
 GOLINT = golangci-lint
 COVERAGE_FILE = coverage.out
 COVERAGE_HTML = coverage.html
-GO_PACKAGES = ./pkg/... ./examples/...
+GO_PACKAGES = ./pkg/...
 
 all: lint test build
 
