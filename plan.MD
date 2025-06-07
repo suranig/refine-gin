@@ -4,6 +4,7 @@
 Increase the total test coverage from the current 87.0% to at least 94%.
 
 ## Current Coverage Status
+- Total: 87.6% ⬆️ (was 87.0%)
 - auth: 89.4%
 - dto: 98.7% ✅
 - handler: 81.8% ⚠️
@@ -11,7 +12,7 @@ Increase the total test coverage from the current 87.0% to at least 94%.
 - naming: 97.1% ✅
 - query: 94.7% ✅
 - repository: 82.1% ⚠️
-- resource: 88.4% ⚠️
+- resource: 90.4% ✅
 - swagger: 97.0% ✅
 - utils: 88.7% ⚠️
 
@@ -28,23 +29,23 @@ We need to focus on packages with the lowest coverage first:
 - [ ] Improve coverage for owner_repository.go (especially Update at 63.8% and Create at 66.7%)
 - [ ] Improve coverage for generic_repository.go (especially Update at 74.2%)
 
-### 3. Resource Package (88.4%)
-- [ ] Add tests for utils.go functions with 0% coverage (IsSlice, SetFieldValue)
-- [ ] Improve coverage for GetFieldValue (72.7%)
-- [ ] Improve coverage for convertToNumber (80.0%)
-- [ ] Add tests for relation_validator.go
-
-### 4. Utils Package (88.7%)
+### 3. Utils Package (88.7%)
 - [ ] Improve coverage for reflection.go (especially SetID at 65.4%)
 - [ ] Improve coverage for type_mapping.go (GetTypeMapping at 76.9%)
 
-### 5. Auth Package (89.4%)
+### 4. Auth Package (89.4%)
 - [ ] Improve coverage for middleware.go (CanAccessRecord at 76.9%)
 - [ ] Improve coverage for jwt.go (JWTMiddleware at 80.8%)
 
-### 6. Middleware Package (89.9%)
+### 5. Middleware Package (89.9%)
 - [ ] Improve coverage for NamingConventionMiddleware (75.9%)
 - [ ] Improve coverage for owner.go (GetOwnerID at 76.2%)
+
+### 6. Resource Package (90.4%) ✅
+- [x] Add tests for utils.go functions with 0% coverage (IsSlice, SetFieldValue)
+- [x] Improve coverage for GetFieldValue (72.7% -> 100%)
+- [x] Improve coverage for convertToNumber (80.0% -> 100%)
+- [x] Add tests for relation_validator.go (0% -> 76.6%)
 
 ## Progress Tracking
 
@@ -55,10 +56,16 @@ We need to focus on packages with the lowest coverage first:
 - [x] Added test for validateProperty
 - [x] Added test for convertToNumber
 - [x] Added test for detectTextComponent
-- [x] Improved overall resource package coverage to 88.4%
+- [x] Added tests for IsSlice (0% -> 100%)
+- [x] Added tests for SetFieldValue (0% -> 89.5%)
+- [x] Improved tests for GetFieldValue (72.7% -> 100%)
+- [x] Improved tests for convertToNumber (80.0% -> 100%)
+- [x] Added basic tests for relation_validator.go functions
+- [x] Improved overall resource package coverage from 88.4% to 90.4%
+- [x] Improved total project coverage from 87.0% to 87.6%
 
 ### Next Steps
-- [ ] Complete Resource Package improvements
+- [x] Complete Resource Package improvements
 - [ ] Move to Handler Package improvements
 - [ ] Move to Repository Package improvements
 - [ ] Move to Utils Package improvements
@@ -69,7 +76,10 @@ We need to focus on packages with the lowest coverage first:
 ## Commit Checklist
 - [x] Initial project analysis and test coverage assessment
 - [x] Added tests for resource/utils.go helper functions
-- [ ] Complete resource package coverage improvements
+- [x] Added tests for resource/utils.go previously untested functions
+- [x] Improved tests for convertToNumber function to 100% coverage
+- [x] Added basic tests for relation_validator.go
+- [x] Completed resource package coverage improvements (90.4%)
 - [ ] Handler package coverage improvements
 - [ ] Repository package coverage improvements
 - [ ] Utils package coverage improvements
