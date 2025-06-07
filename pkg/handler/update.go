@@ -257,69 +257,50 @@ func GenerateCustomUpdateHandler(res resource.Resource, repo repository.Reposito
 	return func(c *gin.Context) {
 		// Get ID from URL parameters using custom parameter name
 		id := c.Param(idParamName)
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Processing update for ID: %v, param name: %s\n", id, idParamName)
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Resource: %s, ID field: %s\n", res.GetName(), res.GetIDFieldName())
 
 		// Parse request body
 		var requestBody map[string]interface{}
 		if err := c.ShouldBindJSON(&requestBody); err != nil {
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Error parsing JSON: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Request body: %+v\n", requestBody)
 
 		// Check if request follows Refine structure with a "data" field
 		var dataToUpdate interface{}
 		if data, ok := requestBody["data"]; ok {
 			dataToUpdate = data
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Found data field: %+v\n", dataToUpdate)
 		} else {
 			dataToUpdate = requestBody
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Using entire request body as data\n")
 		}
 
 		// Create a new instance of the model
 		model := reflect.New(reflect.TypeOf(res.GetModel()).Elem()).Interface()
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Created model instance: %T\n", model)
 
 		// Try to convert the data to a struct if it's a map
 		if dataMap, ok := dataToUpdate.(map[string]interface{}); ok {
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Data is a map with keys: %v\n", getMapKeys(dataMap))
 
 			// Explicitly set ID field with correct name
 			idField := res.GetIDFieldName()
 			dataMap[idField] = id
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Added ID field %s with value %v to data map\n", idField, id)
 
 			// Convert to JSON and back to the model type
 			jsonData, err := json.Marshal(dataMap)
 			if err != nil {
-				fmt.Printf("[DEBUG-CUSTOM-UPDATE] Error marshaling data: %v\n", err)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to marshal data: " + err.Error()})
 				return
 			}
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] JSON data: %s\n", string(jsonData))
 
 			if err := json.Unmarshal(jsonData, model); err != nil {
-				fmt.Printf("[DEBUG-CUSTOM-UPDATE] Error unmarshaling data to model: %v\n", err)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to unmarshal data to model: " + err.Error()})
 				return
 			}
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Populated model: %+v\n", model)
 
 			// Set the ID field directly using IDSetter if available
-			if set := repository.TrySetID(model, id); set {
-				fmt.Printf("[DEBUG-CUSTOM-UPDATE] Successfully set ID using IDSetter\n")
-			} else {
-				fmt.Printf("[DEBUG-CUSTOM-UPDATE] Failed to set ID using IDSetter\n")
-			}
+			repository.TrySetID(model, id)
 
 			// Update with the structured model
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Calling repo.Update with ID: %v and model: %+v\n", id, model)
 			updated, err := repo.Update(c.Request.Context(), id, model)
 			if err != nil {
-				fmt.Printf("[DEBUG-CUSTOM-UPDATE] Update error: %v\n", err)
 				// Check if it's a "not found" error
 				if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no rows") {
 					c.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
@@ -331,16 +312,13 @@ func GenerateCustomUpdateHandler(res resource.Resource, repo repository.Reposito
 			}
 
 			// Return the updated resource
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Update successful, returning updated resource\n")
 			c.JSON(http.StatusOK, gin.H{"data": updated})
 			return
 		}
 
 		// If we couldn't convert to a struct, try updating with raw data
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Data is not a map, trying raw update\n")
 		updated, err := repo.Update(c.Request.Context(), id, dataToUpdate)
 		if err != nil {
-			fmt.Printf("[DEBUG-CUSTOM-UPDATE] Raw update error: %v\n", err)
 			// Check if it's a "not found" error
 			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no rows") {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
@@ -352,7 +330,6 @@ func GenerateCustomUpdateHandler(res resource.Resource, repo repository.Reposito
 		}
 
 		// Return the updated resource
-		fmt.Printf("[DEBUG-CUSTOM-UPDATE] Raw update successful\n")
 		c.JSON(http.StatusOK, gin.H{"data": updated})
 	}
 }
