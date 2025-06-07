@@ -531,3 +531,168 @@ func TestCustomActionHandlerErrors(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "resource not found")
 	})
 }
+
+// --- Additional test helpers and structs for detach tests ---
+
+// Detach models used in detach action tests
+type TestComment struct{ ID int }
+type TestProfile struct{ ID int }
+type TestUser struct {
+	ID       int
+	Comments []TestComment
+	Profile  *TestProfile
+}
+
+// RecordingRepository is a simple repository that records Update calls
+type RecordingRepository struct {
+	data         map[string]*TestUser
+	UpdatedData  interface{}
+	UpdateCalled bool
+}
+
+func NewRecordingRepository(user *TestUser) *RecordingRepository {
+	return &RecordingRepository{data: map[string]*TestUser{fmt.Sprintf("%v", user.ID): user}}
+}
+
+func (r *RecordingRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (r *RecordingRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
+	if u, ok := r.data[fmt.Sprintf("%v", id)]; ok {
+		return u, nil
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+func (r *RecordingRepository) List(ctx context.Context, options query.QueryOptions) (interface{}, int64, error) {
+	return nil, 0, nil
+}
+
+func (r *RecordingRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
+	r.UpdateCalled = true
+	r.UpdatedData = data
+	if u, ok := data.(*TestUser); ok {
+		r.data[fmt.Sprintf("%v", id)] = u
+	}
+	return data, nil
+}
+
+func (r *RecordingRepository) Delete(ctx context.Context, id interface{}) error { return nil }
+func (r *RecordingRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
+	return 0, nil
+}
+func (r *RecordingRepository) Count(ctx context.Context, options query.QueryOptions) (int64, error) {
+	return 0, nil
+}
+func (r *RecordingRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
+	return nil, nil
+}
+func (r *RecordingRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+	return 0, nil
+}
+func (r *RecordingRepository) WithTransaction(fn func(repository.Repository) error) error {
+	return fn(r)
+}
+func (r *RecordingRepository) WithRelations(relations ...string) repository.Repository { return r }
+func (r *RecordingRepository) FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	return nil, nil
+}
+func (r *RecordingRepository) FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	return nil, nil
+}
+func (r *RecordingRepository) GetWithRelations(ctx context.Context, id interface{}, relations []string) (interface{}, error) {
+	return r.Get(ctx, id)
+}
+func (r *RecordingRepository) ListWithRelations(ctx context.Context, options query.QueryOptions, relations []string) (interface{}, int64, error) {
+	return nil, 0, nil
+}
+func (r *RecordingRepository) Query(ctx context.Context) *gorm.DB                     { return nil }
+func (r *RecordingRepository) BulkCreate(ctx context.Context, data interface{}) error { return nil }
+func (r *RecordingRepository) BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error {
+	return nil
+}
+func (r *RecordingRepository) GetIDFieldName() string { return "ID" }
+
+func TestDetachActionHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Prepare sample data
+	user := &TestUser{
+		ID:       1,
+		Comments: []TestComment{{ID: 1}, {ID: 2}, {ID: 3}},
+		Profile:  &TestProfile{ID: 10},
+	}
+
+	repo := NewRecordingRepository(user)
+
+	res := new(MockResource)
+	relations := []resource.Relation{
+		{Name: "comments", Type: handler.HasMany, Field: "Comments"},
+		{Name: "profile", Type: handler.HasOne, Field: "Profile"},
+	}
+	res.On("GetRelations").Return(relations)
+	res.On("HasRelation", "comments").Return(true)
+	res.On("HasRelation", "profile").Return(true)
+	res.On("GetRelation", "comments").Return(relations[0])
+	res.On("GetRelation", "profile").Return(relations[1])
+
+	r := gin.New()
+	r.POST("/users/:id/actions/detach-comments", handler.GenerateCustomActionHandler(res, repo, handler.DetachAction("comments")))
+	r.POST("/users/:id/actions/detach-profile", handler.GenerateCustomActionHandler(res, repo, handler.DetachAction("profile")))
+
+	t.Run("successful detach", func(t *testing.T) {
+		body := strings.NewReader(`{"ids": [2]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, repo.UpdateCalled)
+		assert.Len(t, repo.data["1"].Comments, 2)
+		for _, c := range repo.data["1"].Comments {
+			assert.NotEqual(t, 2, c.ID)
+		}
+	})
+
+	t.Run("detach hasone", func(t *testing.T) {
+		repo.UpdateCalled = false
+		body := strings.NewReader(`{"ids": [10]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-profile", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, repo.UpdateCalled)
+		assert.Nil(t, repo.data["1"].Profile)
+	})
+
+	t.Run("missing ids", func(t *testing.T) {
+		repo.UpdateCalled = false
+		body := strings.NewReader(`{"ids": []}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.False(t, repo.UpdateCalled)
+	})
+
+	t.Run("relation not found", func(t *testing.T) {
+		action := handler.DetachAction("ghost")
+		r.POST("/users/:id/actions/detach-ghost", handler.GenerateCustomActionHandler(res, repo, action))
+
+		body := strings.NewReader(`{"ids": [1]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-ghost", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "relation ghost not found")
+		assert.False(t, repo.UpdateCalled)
+	})
+}
