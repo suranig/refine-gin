@@ -546,12 +546,18 @@ type TestUser struct {
 // RecordingRepository is a simple repository that records Update calls
 type RecordingRepository struct {
 	data         map[string]*TestUser
+	comments     map[string]*TestComment
+	profiles     map[string]*TestProfile
 	UpdatedData  interface{}
 	UpdateCalled bool
 }
 
 func NewRecordingRepository(user *TestUser) *RecordingRepository {
-	return &RecordingRepository{data: map[string]*TestUser{fmt.Sprintf("%v", user.ID): user}}
+	return &RecordingRepository{
+		data:     map[string]*TestUser{fmt.Sprintf("%v", user.ID): user},
+		comments: make(map[string]*TestComment),
+		profiles: make(map[string]*TestProfile),
+	}
 }
 
 func (r *RecordingRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
@@ -559,8 +565,15 @@ func (r *RecordingRepository) Create(ctx context.Context, data interface{}) (int
 }
 
 func (r *RecordingRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
-	if u, ok := r.data[fmt.Sprintf("%v", id)]; ok {
+	key := fmt.Sprintf("%v", id)
+	if u, ok := r.data[key]; ok {
 		return u, nil
+	}
+	if c, ok := r.comments[key]; ok {
+		return c, nil
+	}
+	if p, ok := r.profiles[key]; ok {
+		return p, nil
 	}
 	return nil, fmt.Errorf("not found")
 }
@@ -694,5 +707,35 @@ func TestDetachActionHandler(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "relation ghost not found")
 		assert.False(t, repo.UpdateCalled)
+	})
+
+	t.Run("attach hasmany", func(t *testing.T) {
+		user2 := &TestUser{ID: 2}
+		repo2 := NewRecordingRepository(user2)
+		repo2.comments["5"] = &TestComment{ID: 5}
+		repo2.comments["6"] = &TestComment{ID: 6}
+
+		res2 := new(MockResource)
+		res2.On("GetRelations").Return(relations)
+		res2.On("HasRelation", "comments").Return(true)
+		res2.On("GetRelation", "comments").Return(relations[0])
+
+		r2 := gin.New()
+		r2.POST("/users/:id/actions/attach-comments", handler.GenerateCustomActionHandler(res2, repo2, handler.AttachAction("comments")))
+
+		body := strings.NewReader(`{"ids": [5,6]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/2/actions/attach-comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		r2.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, repo2.UpdateCalled)
+		if updated, ok := repo2.UpdatedData.(*TestUser); ok {
+			assert.Len(t, updated.Comments, 2)
+			assert.Equal(t, 2, len(repo2.data["2"].Comments))
+		} else {
+			t.Fatalf("updated data type mismatch: %T", repo2.UpdatedData)
+		}
 	})
 }
