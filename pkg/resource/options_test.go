@@ -203,3 +203,14 @@ func TestOptionsChaining(t *testing.T) {
 	assert.False(t, result.Cache.Enabled)
 	assert.Equal(t, 50, result.QueryOptions["defaultLimit"])
 }
+
+func TestGetQueryOption(t *testing.T) {
+	opts := Options{
+		QueryOptions: map[string]interface{}{
+			"limit": 10,
+		},
+	}
+
+	assert.Equal(t, 10, opts.GetQueryOption("limit"))
+	assert.Nil(t, opts.GetQueryOption("missing"))
+}
