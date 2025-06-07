@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -165,4 +166,111 @@ func TestUpdateHandler_InvalidJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Contains(t, resp["error"].(string), "invalid character")
+}
+
+// Additional subtests for GenerateCustomUpdateHandler
+func TestGenerateCustomUpdateHandler_Subtests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Subtest: repository returns "record not found"
+	t.Run("Record not found", func(t *testing.T) {
+		mockResource := new(MockResource)
+		mockRepo := new(MockRepository)
+
+		mockResource.On("GetModel").Return(&CustomUser{}).Maybe()
+		mockResource.On("GetIDFieldName").Return("UID").Maybe()
+
+		matcher := mock.MatchedBy(func(arg interface{}) bool {
+			usr, ok := arg.(*CustomUser)
+			return ok && usr.UID == "abc123" && usr.Name == "Bob"
+		})
+
+		mockRepo.On("Update", mock.Anything, "abc123", matcher).
+			Return(nil, errors.New("record not found")).Once()
+
+		r := gin.New()
+		r.PUT("/users/:uid", GenerateCustomUpdateHandler(mockResource, mockRepo, "uid"))
+
+		payload := `{"name":"Bob"}`
+		req, _ := http.NewRequest(http.MethodPut, "/users/abc123", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+		mockResource.AssertExpectations(t)
+	})
+
+	// Subtest: repository returns generic error
+	t.Run("Repository error", func(t *testing.T) {
+		mockResource := new(MockResource)
+		mockRepo := new(MockRepository)
+
+		mockResource.On("GetModel").Return(&CustomUser{}).Maybe()
+		mockResource.On("GetIDFieldName").Return("UID").Maybe()
+
+		matcher := mock.MatchedBy(func(arg interface{}) bool {
+			usr, ok := arg.(*CustomUser)
+			return ok && usr.UID == "abc123" && usr.Name == "Bob"
+		})
+
+		mockRepo.On("Update", mock.Anything, "abc123", matcher).
+			Return(nil, errors.New("db error")).Once()
+
+		r := gin.New()
+		r.PUT("/users/:uid", GenerateCustomUpdateHandler(mockResource, mockRepo, "uid"))
+
+		payload := `{"name":"Bob"}`
+		req, _ := http.NewRequest(http.MethodPut, "/users/abc123", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+		mockResource.AssertExpectations(t)
+	})
+
+	// Subtest: payload missing ID field should be populated
+	t.Run("Adds ID when missing", func(t *testing.T) {
+		mockResource := new(MockResource)
+		mockRepo := new(MockRepository)
+
+		mockResource.On("GetModel").Return(&CustomUser{}).Maybe()
+		mockResource.On("GetIDFieldName").Return("UID").Maybe()
+
+		expected := &CustomUser{UID: "abc123", Name: "Alice"}
+
+		matcher := mock.MatchedBy(func(arg interface{}) bool {
+			usr, ok := arg.(*CustomUser)
+			return ok && usr.UID == "abc123" && usr.Name == "Alice"
+		})
+
+		mockRepo.On("Update", mock.Anything, "abc123", matcher).
+			Return(expected, nil).Once()
+
+		r := gin.New()
+		r.PUT("/users/:uid", GenerateCustomUpdateHandler(mockResource, mockRepo, "uid"))
+
+		payload := `{"name":"Alice"}`
+		req, _ := http.NewRequest(http.MethodPut, "/users/abc123", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		data := resp["data"].(map[string]interface{})
+		assert.Equal(t, "abc123", data["uid"])
+		assert.Equal(t, "Alice", data["name"])
+
+		mockRepo.AssertExpectations(t)
+		mockResource.AssertExpectations(t)
+	})
 }
