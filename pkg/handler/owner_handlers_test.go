@@ -233,6 +233,17 @@ func TestOwnerGetHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
+
+	t.Run("Missing ID", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		req := httptest.NewRequest(http.MethodGet, "/tests", nil)
+		c.Request = req
+
+		GenerateOwnerGetHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
 
 func TestOwnerUpdateHandler(t *testing.T) {
@@ -291,6 +302,19 @@ func TestOwnerUpdateHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
+
+	t.Run("Missing ID", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		reqBody := `{"name":"Updated"}`
+		req := httptest.NewRequest(http.MethodPut, "/tests", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
 
 func TestOwnerDeleteHandler(t *testing.T) {
@@ -339,6 +363,17 @@ func TestOwnerDeleteHandler(t *testing.T) {
 		GenerateOwnerDeleteHandler(res, mockRepo, "id")(c)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("Missing ID", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		req := httptest.NewRequest(http.MethodDelete, "/tests", nil)
+		c.Request = req
+
+		GenerateOwnerDeleteHandler(res, mockRepo, "id")(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
