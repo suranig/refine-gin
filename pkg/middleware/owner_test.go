@@ -128,6 +128,24 @@ func TestGetOwnerID(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, ErrOwnerIDNotFound, err)
 	})
+
+	// Additional check: calling GetOwnerID with no owner information
+	// should return ErrOwnerIDNotFound.
+	t.Run("No owner ID present", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := GetOwnerID(ctx)
+		assert.Error(t, err)
+		assert.Equal(t, ErrOwnerIDNotFound, err)
+	})
+
+	// Ensure a regular context containing an owner ID works without using a
+	// gin context.
+	t.Run("Context with owner ID only", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), OwnerContextKey, "ctx-owner-123")
+		ownerID, err := GetOwnerID(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, "ctx-owner-123", ownerID)
+	})
 }
 
 func TestExtractOwnerIDFromJWT(t *testing.T) {
