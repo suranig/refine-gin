@@ -95,14 +95,12 @@ func NewQueryOptions(c *gin.Context, res resource.Resource) QueryOptions {
 	// Get filterable fields from resource
 	defaultRes, isDefaultRes := res.(*resource.DefaultResource)
 	if isDefaultRes && defaultRes.FilterableFields != nil {
-		// Używamy listy filterowalnych pól z zasobu
 		for _, fieldName := range defaultRes.FilterableFields {
 			if value := c.DefaultQuery(fieldName, ""); value != "" {
 				opt.Filters[fieldName] = value
 			}
 		}
 	} else {
-		// Fallback - wszystkie pola są filtrowalne
 		for _, field := range res.GetFields() {
 			if value := c.DefaultQuery(field.Name, ""); value != "" {
 				opt.Filters[field.Name] = value
