@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -129,66 +130,262 @@ func TestGetRelatedCollection(t *testing.T) {
 	})
 }
 
-func TestGetRelatedObjectBelongsTo(t *testing.T) {
-	rel := resource.Relation{Name: "Owner", Field: "Owner", Type: resource.RelationTypeManyToOne}
+func TestGetRelatedObject_Complete(t *testing.T) {
+	// Test comprehensive coverage of getRelatedObject function for 100% coverage
 
-	t.Run("Struct", func(t *testing.T) {
-		parent := &RelationParent{OwnerID: 10}
-		repo := new(MockRepository)
-		repo.On("Get", mock.Anything, "10").Return(&RelationChild{ID: 10}, nil).Once()
-
-		result, err := getRelatedObject(parent, &rel, repo)
-		assert.NoError(t, err)
-		if assert.NotNil(t, result) {
-			assert.Equal(t, uint(10), result.(*RelationChild).ID)
+	t.Run("Map_OneToOne_FieldExists", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "profile",
+			Field: "Profile",
+			Type:  resource.RelationTypeOneToOne,
 		}
 
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("Map", func(t *testing.T) {
-		m := map[string]interface{}{"OwnerID": uint(20)}
-		repo := new(MockRepository)
-		repo.On("Get", mock.Anything, "20").Return(&RelationChild{ID: 20}, nil).Once()
-
-		result, err := getRelatedObject(m, &rel, repo)
-		assert.NoError(t, err)
-		if assert.NotNil(t, result) {
-			assert.Equal(t, uint(20), result.(*RelationChild).ID)
+		parentMap := map[string]interface{}{
+			"Profile": &RelationChild{ID: 123, Name: "Profile Data"},
 		}
 
-		repo.AssertExpectations(t)
+		result, err := getRelatedObject(parentMap, &relation, nil)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		profile := result.(*RelationChild)
+		assert.Equal(t, uint(123), profile.ID)
+		assert.Equal(t, "Profile Data", profile.Name)
 	})
 
-	t.Run("ForeignKeyMissing", func(t *testing.T) {
-		m := map[string]interface{}{}
-		_, err := getRelatedObject(m, &rel, nil)
+	t.Run("Map_OneToOne_FieldNotFound", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "profile",
+			Field: "Profile",
+			Type:  resource.RelationTypeOneToOne,
+		}
+
+		parentMap := map[string]interface{}{
+			"OtherField": "value",
+		}
+
+		result, err := getRelatedObject(parentMap, &relation, nil)
+
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "field Profile not found in map")
+		assert.Nil(t, result)
 	})
-}
 
-// Additional tests for getRelatedObject using map input
-func TestGetRelatedObjectFromMap(t *testing.T) {
-	// setup relation of type ManyToOne
-	rel := resource.Relation{Name: "Manager", Field: "Manager", Type: resource.RelationTypeManyToOne}
-
-	t.Run("LoadsRelatedObject", func(t *testing.T) {
-		m := map[string]interface{}{"ManagerID": uint(99)}
-		repo := new(MockRepository)
-		repo.On("Get", mock.Anything, "99").Return(&RelationChild{ID: 99}, nil).Once()
-
-		result, err := getRelatedObject(m, &rel, repo)
-		assert.NoError(t, err)
-		if assert.NotNil(t, result) {
-			assert.Equal(t, uint(99), result.(*RelationChild).ID)
+	t.Run("Map_ManyToOne_ForeignKeyExists", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
 		}
 
-		repo.AssertExpectations(t)
+		parentMap := map[string]interface{}{
+			"OwnerID": uint(456),
+		}
+
+		mockRepo := new(MockRepository)
+		expectedOwner := &RelationChild{ID: 456, Name: "Owner Data"}
+		mockRepo.On("Get", mock.Anything, "456").Return(expectedOwner, nil)
+
+		result, err := getRelatedObject(parentMap, &relation, mockRepo)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		owner := result.(*RelationChild)
+		assert.Equal(t, uint(456), owner.ID)
+		assert.Equal(t, "Owner Data", owner.Name)
+
+		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("ForeignKeyMissing", func(t *testing.T) {
-		m := map[string]interface{}{}
-		_, err := getRelatedObject(m, &rel, nil)
+	t.Run("Map_ManyToOne_ForeignKeyNil", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parentMap := map[string]interface{}{
+			"OwnerID": nil,
+		}
+
+		result, err := getRelatedObject(parentMap, &relation, nil)
+
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Map_ManyToOne_ForeignKeyZero", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parentMap := map[string]interface{}{
+			"OwnerID": 0,
+		}
+
+		result, err := getRelatedObject(parentMap, &relation, nil)
+
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Map_ManyToOne_ForeignKeyNotFound", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parentMap := map[string]interface{}{
+			"OtherField": "value",
+		}
+
+		result, err := getRelatedObject(parentMap, &relation, nil)
+
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "foreign key field OwnerID not found in map")
+		assert.Nil(t, result)
+	})
+
+	t.Run("Map_ManyToOne_RepositoryError", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parentMap := map[string]interface{}{
+			"OwnerID": uint(999),
+		}
+
+		mockRepo := new(MockRepository)
+		mockRepo.On("Get", mock.Anything, "999").Return(nil, fmt.Errorf("not found"))
+
+		result, err := getRelatedObject(parentMap, &relation, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+		assert.Nil(t, result)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Struct_OneToOne_Success", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "profile",
+			Field: "Profile",
+			Type:  resource.RelationTypeOneToOne,
+		}
+
+		parent := &RelationParent{
+			Profile: &RelationChild{ID: 789, Name: "Struct Profile"},
+		}
+
+		result, err := getRelatedObject(parent, &relation, nil)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		profile := result.(*RelationChild)
+		assert.Equal(t, uint(789), profile.ID)
+		assert.Equal(t, "Struct Profile", profile.Name)
+	})
+
+	t.Run("Struct_ManyToOne_Success", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parent := &RelationParent{
+			OwnerID: 101,
+		}
+
+		mockRepo := new(MockRepository)
+		expectedOwner := &RelationChild{ID: 101, Name: "Struct Owner"}
+		mockRepo.On("Get", mock.Anything, "101").Return(expectedOwner, nil)
+
+		result, err := getRelatedObject(parent, &relation, mockRepo)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		owner := result.(*RelationChild)
+		assert.Equal(t, uint(101), owner.ID)
+		assert.Equal(t, "Struct Owner", owner.Name)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Struct_ManyToOne_ZeroForeignKey", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parent := &RelationParent{
+			OwnerID: 0, // Zero value
+		}
+
+		result, err := getRelatedObject(parent, &relation, nil)
+
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Struct_ManyToOne_FieldNotFound", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "NonExistent",
+			Field: "NonExistent",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parent := &RelationParent{}
+
+		result, err := getRelatedObject(parent, &relation, nil)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Struct_ManyToOne_RepositoryError", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "Owner",
+			Field: "Owner",
+			Type:  resource.RelationTypeManyToOne,
+		}
+
+		parent := &RelationParent{
+			OwnerID: 999,
+		}
+
+		mockRepo := new(MockRepository)
+		mockRepo.On("Get", mock.Anything, "999").Return(nil, fmt.Errorf("repository error"))
+
+		result, err := getRelatedObject(parent, &relation, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "repository error")
+		assert.Nil(t, result)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("UnsupportedRelationType", func(t *testing.T) {
+		relation := resource.Relation{
+			Name:  "unsupported",
+			Field: "Unsupported",
+			Type:  "UnsupportedType",
+		}
+
+		parent := &RelationParent{}
+
+		result, err := getRelatedObject(parent, &relation, nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported relation type")
+		assert.Nil(t, result)
 	})
 }

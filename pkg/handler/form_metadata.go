@@ -292,6 +292,9 @@ func convertToMap(item interface{}) map[string]interface{} {
 			parts := utils.SplitTagParts(jsonTag)
 			if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
 				fieldName = parts[0]
+			} else if parts[0] == "-" {
+				// Skip fields marked as "-" in JSON tag
+				continue
 			}
 		}
 

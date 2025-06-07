@@ -4,10 +4,10 @@
 Increase the total test coverage from the current 87.0% to at least 94%.
 
 ## Current Coverage Status
-- Total: 87.6% ⬆️ (was 87.0%)
+- Total: 88.2% ⬆️ (was 87.0%)
 - auth: 89.4%
 - dto: 98.7% ✅
-- handler: 81.8% ⚠️
+- handler: 84.2% ⬆️ (was 81.8%)
 - middleware: 89.9%
 - naming: 97.1% ✅
 - query: 94.7% ✅
@@ -19,11 +19,15 @@ Increase the total test coverage from the current 87.0% to at least 94%.
 ## Focus Areas (Prioritized)
 We need to focus on packages with the lowest coverage first:
 
-### 1. Handler Package (81.8%)
-- [ ] Improve coverage for custom.go (especially AttachAction at 52.0%)
+### 1. Handler Package (84.2%) - IN PROGRESS
+- [x] Add basic tests for AttachAction error cases (52.0% -> improved)
+- [x] Add edge case tests for RegisterResourceFormEndpoints (54.1%)
+- [x] Add comprehensive tests for AttachAction, DetachAction, ListRelationAction (100% coverage)
+- [x] Add comprehensive tests for getRelatedObject function (65.5% -> 100%)
+- [x] Fix convertToMap function to properly handle json:"-" tags
 - [ ] Improve coverage for owner_handlers.go (especially GenerateOwnerCreateHandler at 64.7%)
 - [ ] Improve coverage for update.go (especially GenerateCustomUpdateHandler at 66.7%)
-- [ ] Improve coverage for form_metadata.go (RegisterResourceFormEndpoints at 54.1%)
+- [ ] Improve coverage for many.go and delete.go handlers
 
 ### 2. Repository Package (82.1%)
 - [ ] Improve coverage for owner_repository.go (especially Update at 63.8% and Create at 66.7%)
@@ -49,7 +53,7 @@ We need to focus on packages with the lowest coverage first:
 
 ## Progress Tracking
 
-### Resource Package Improvements
+### Resource Package Improvements ✅
 - [x] Identified functions with high cyclomatic complexity
 - [x] Added tests for helper functions in utils.go
 - [x] Fixed test failures in processArrayAccess
@@ -62,11 +66,25 @@ We need to focus on packages with the lowest coverage first:
 - [x] Improved tests for convertToNumber (80.0% -> 100%)
 - [x] Added basic tests for relation_validator.go functions
 - [x] Improved overall resource package coverage from 88.4% to 90.4%
-- [x] Improved total project coverage from 87.0% to 87.6%
+
+### Handler Package Improvements - IN PROGRESS
+- [x] Added basic error case tests for AttachAction handler
+- [x] Added edge case tests for RegisterResourceFormEndpoints
+- [x] Added comprehensive tests for AttachAction, DetachAction, ListRelationAction (100% coverage)
+- [x] Added comprehensive tests for getRelatedObject function (100% coverage)
+- [x] Fixed convertToMap function bug with json:"-" tags
+- [x] Improved overall handler package coverage from 81.8% to 84.2%
+- [x] Improved total project coverage from 87.0% to 88.2%
+- [ ] Continue with owner_handlers.go improvements
+- [ ] Work on update.go custom handler coverage
+- [ ] Add tests for many.go and delete.go handlers
 
 ### Next Steps
 - [x] Complete Resource Package improvements
-- [ ] Move to Handler Package improvements
+- [x] Start Handler Package improvements
+- [x] Add comprehensive tests for custom action functions
+- [x] Add comprehensive tests for getRelatedObject function
+- [ ] Continue Handler Package improvements (owner_handlers, update.go, many.go, delete.go)
 - [ ] Move to Repository Package improvements
 - [ ] Move to Utils Package improvements
 - [ ] Move to Auth Package improvements
@@ -80,7 +98,12 @@ We need to focus on packages with the lowest coverage first:
 - [x] Improved tests for convertToNumber function to 100% coverage
 - [x] Added basic tests for relation_validator.go
 - [x] Completed resource package coverage improvements (90.4%)
-- [ ] Handler package coverage improvements
+- [x] Added basic tests for handler AttachAction and RegisterResourceFormEndpoints
+- [x] Added comprehensive tests for AttachAction, DetachAction, ListRelationAction
+- [x] Added comprehensive tests for getRelatedObject function
+- [x] Fixed convertToMap function bug with json:"-" tags
+- [x] Improved handler package coverage to 84.2% and total coverage to 88.2%
+- [ ] Handler package coverage improvements (owner_handlers, update.go, many.go, delete.go)
 - [ ] Repository package coverage improvements
 - [ ] Utils package coverage improvements
 - [ ] Auth package coverage improvements

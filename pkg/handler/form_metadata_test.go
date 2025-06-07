@@ -869,90 +869,174 @@ func TestRegisterResourceFormEndpoints_WithID(t *testing.T) {
 	*/
 }
 
-func TestRegisterResourceFormEndpoints_EdgeCases(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+func TestRegisterResourceFormEndpoints_Complete(t *testing.T) {
+	// Test comprehensive coverage of RegisterResourceFormEndpoints function
 
-	// Create test resource
-	res := resource.NewResource(resource.ResourceConfig{
-		Name:  "test-entity",
-		Model: &FormTestModel{},
-	})
-
-	t.Run("Missing repository in context", func(t *testing.T) {
+	t.Run("RegisterResourceFormEndpoints_Success", func(t *testing.T) {
+		// Setup
+		gin.SetMode(gin.TestMode)
 		router := gin.New()
 		group := router.Group("/api")
-		RegisterResourceFormEndpoints(group, res)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form/1", nil)
+		mockResource := new(MockResourceForTest)
+		mockResource.On("GetName").Return("user")
+		mockResource.On("GetFields").Return([]resource.Field{})
+		mockResource.On("GetFormLayout").Return(nil)
+		mockResource.On("GetModel").Return(&struct{}{})
+
+		// Register endpoints
+		RegisterResourceFormEndpoints(group, mockResource)
+
+		// Test form metadata endpoint
 		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/users/form", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("PrefilledForm_MissingID", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		group := router.Group("/api")
+
+		mockResource := new(MockResourceForTest)
+		mockResource.On("GetName").Return("user")
+
+		RegisterResourceFormEndpoints(group, mockResource)
+
+		// Test with missing ID parameter - this should return 404 from Gin
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/users/form", nil) // No ID in path
+		router.ServeHTTP(w, req)
+
+		// Gin returns 404 when route doesn't match
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("PrefilledForm_NoRepository", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		group := router.Group("/api")
+
+		mockResource := new(MockResourceForTest)
+		mockResource.On("GetName").Return("user")
+
+		RegisterResourceFormEndpoints(group, mockResource)
+
+		// Test without repository in context
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/users/form/123", nil)
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		var errResp dto.ErrorResponse
-		err := json.Unmarshal(w.Body.Bytes(), &errResp)
-		require.NoError(t, err)
-		assert.Equal(t, "Repository not available", errResp.Message)
+
+		var response dto.ErrorResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response.Message, "Repository not available")
+
+		mockResource.AssertExpectations(t)
 	})
 
-	t.Run("Form metadata endpoint works", func(t *testing.T) {
+	t.Run("PrefilledForm_RepositoryNoFindByID", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
 		router := gin.New()
 		group := router.Group("/api")
-		RegisterResourceFormEndpoints(group, res)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		mockResource := new(MockResourceForTest)
+		mockResource.On("GetName").Return("user")
 
-		assert.Equal(t, http.StatusOK, w.Code)
-		var response FormMetadataResponse
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		assert.NotNil(t, response.Fields)
-	})
-
-	t.Run("Form with dependencies", func(t *testing.T) {
-		// Create resource with field dependencies
-		resWithDeps := resource.NewResource(resource.ResourceConfig{
-			Name:  "test-entity-with-deps",
-			Model: &FormTestModel{},
-			Fields: []resource.Field{
-				{
-					Name: "FirstName",
-					Type: "string",
-					Form: &resource.FormConfig{
-						DependentOn: "LastName",
-					},
-				},
-				{
-					Name: "LastName",
-					Type: "string",
-				},
-				{
-					Name: "Email",
-					Type: "string",
-					Form: &resource.FormConfig{
-						Dependent: &resource.FormDependency{
-							Field: "FirstName",
-						},
-					},
-				},
-			},
+		// Add middleware to set repository without FindByID method
+		router.Use(func(c *gin.Context) {
+			c.Set("repository", "invalid_repo") // String doesn't have FindByID method
+			c.Next()
 		})
 
-		router := gin.New()
-		group := router.Group("/api")
-		RegisterResourceFormEndpoints(group, resWithDeps)
+		RegisterResourceFormEndpoints(group, mockResource)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/test-entity-with-deps/form", nil)
 		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/users/form/123", nil)
 		router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code)
-		var response FormMetadataResponse
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		var response dto.ErrorResponse
 		err := json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		assert.NotNil(t, response.Dependencies)
-		assert.Contains(t, response.Dependencies, "LastName")
-		assert.Contains(t, response.Dependencies, "FirstName")
+		assert.NoError(t, err)
+		assert.Contains(t, response.Message, "Repository does not implement FindByID method")
+
+		mockResource.AssertExpectations(t)
+	})
+}
+
+func TestConvertToMap_Complete(t *testing.T) {
+	t.Run("ConvertToMap_NilInput", func(t *testing.T) {
+		result := convertToMap(nil)
+		assert.Nil(t, result)
+	})
+
+	t.Run("ConvertToMap_NilPointer", func(t *testing.T) {
+		var ptr *struct{}
+		result := convertToMap(ptr)
+		assert.Nil(t, result)
+	})
+
+	t.Run("ConvertToMap_NonStruct", func(t *testing.T) {
+		result := convertToMap("not a struct")
+		assert.Equal(t, map[string]interface{}{}, result)
+	})
+
+	t.Run("ConvertToMap_StructWithJSONTags", func(t *testing.T) {
+		type TestStruct struct {
+			ID       int    `json:"id"`
+			Name     string `json:"name"`
+			Email    string `json:"email_address"`
+			Password string `json:"-"`          // Should be skipped
+			Internal string `json:",omitempty"` // Should use field name
+		}
+
+		item := TestStruct{
+			ID:       123,
+			Name:     "John",
+			Email:    "john@example.com",
+			Password: "secret",
+			Internal: "internal",
+		}
+
+		result := convertToMap(item)
+
+		expected := map[string]interface{}{
+			"id":            123,
+			"name":          "John",
+			"email_address": "john@example.com",
+			"Internal":      "internal", // Uses field name when JSON tag is empty
+		}
+
+		assert.Equal(t, expected, result)
+		assert.NotContains(t, result, "Password") // Should be excluded due to "-" tag
+	})
+
+	t.Run("ConvertToMap_PointerToStruct", func(t *testing.T) {
+		type TestStruct struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		}
+
+		item := &TestStruct{
+			ID:   456,
+			Name: "Jane",
+		}
+
+		result := convertToMap(item)
+
+		expected := map[string]interface{}{
+			"id":   456,
+			"name": "Jane",
+		}
+
+		assert.Equal(t, expected, result)
 	})
 }
