@@ -315,3 +315,72 @@ func TestRegisterOwnerResourceSwagger(t *testing.T) {
 		assert.Contains(t, operation.Responses, "403")
 	}
 }
+
+func TestUpdateBatchEndpoints(t *testing.T) {
+	info := DefaultSwaggerInfo()
+	openAPI := GenerateOpenAPI([]resource.Resource{}, info)
+
+	batchPath := "/notes/batch"
+	openAPI.Paths[batchPath] = PathItem{
+		"post": Operation{
+			Description: "batch create",
+			Responses:   map[string]Response{"200": {Description: "ok"}},
+		},
+		"put": Operation{
+			Description: "batch update",
+			Responses:   map[string]Response{"200": {Description: "ok"}},
+		},
+		"delete": Operation{
+			Description: "batch delete",
+			Responses:   map[string]Response{"200": {Description: "ok"}},
+		},
+	}
+
+	updateBatchEndpoints(openAPI, "notes")
+
+	pathItem := openAPI.Paths[batchPath]
+
+	postOp := pathItem["post"]
+	assert.NotEmpty(t, postOp.Security)
+	if assert.GreaterOrEqual(t, len(postOp.Security), 1) {
+		assert.Contains(t, postOp.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, postOp.Description, "The owner ID for all created resources will be set to the authenticated user's ID")
+
+	putOp := pathItem["put"]
+	assert.NotEmpty(t, putOp.Security)
+	if assert.GreaterOrEqual(t, len(putOp.Security), 1) {
+		assert.Contains(t, putOp.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, putOp.Description, "Only resources owned by the authenticated user can be updated")
+	assert.Contains(t, putOp.Responses, "403")
+
+	deleteOp := pathItem["delete"]
+	assert.NotEmpty(t, deleteOp.Security)
+	if assert.GreaterOrEqual(t, len(deleteOp.Security), 1) {
+		assert.Contains(t, deleteOp.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, deleteOp.Description, "Only resources owned by the authenticated user can be deleted")
+	assert.Contains(t, deleteOp.Responses, "403")
+
+	openAPI2 := GenerateOpenAPI([]resource.Resource{}, info)
+	openAPI2.Paths[batchPath] = PathItem{
+		"post": Operation{
+			Description: "batch create",
+			Responses:   map[string]Response{"200": {Description: "ok"}},
+		},
+	}
+
+	updateBatchEndpoints(openAPI2, "notes")
+	pi2 := openAPI2.Paths[batchPath]
+	_, hasPut := pi2["put"]
+	_, hasDelete := pi2["delete"]
+	assert.False(t, hasPut)
+	assert.False(t, hasDelete)
+	postOp2 := pi2["post"]
+	assert.NotEmpty(t, postOp2.Security)
+	if assert.GreaterOrEqual(t, len(postOp2.Security), 1) {
+		assert.Contains(t, postOp2.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, postOp2.Description, "The owner ID for all created resources will be set to the authenticated user's ID")
+}
