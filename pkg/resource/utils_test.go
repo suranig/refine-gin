@@ -1009,3 +1009,172 @@ func TestDetectTextComponent(t *testing.T) {
 	component = detectTextComponent(regularTextField)
 	assert.Equal(t, "TextArea", component)
 }
+
+func TestIsSlice(t *testing.T) {
+	// Test with slice
+	slice := []int{1, 2, 3}
+	assert.True(t, IsSlice(slice))
+
+	// Test with pointer to slice
+	slicePtr := &slice
+	assert.True(t, IsSlice(slicePtr))
+
+	// Test with non-slice
+	nonSlice := "string"
+	assert.False(t, IsSlice(nonSlice))
+
+	// Test with pointer to non-slice
+	nonSlicePtr := &nonSlice
+	assert.False(t, IsSlice(nonSlicePtr))
+
+	// Test with nil
+	assert.False(t, IsSlice(nil))
+
+	// Test with empty slice
+	emptySlice := []string{}
+	assert.True(t, IsSlice(emptySlice))
+
+	// Test with map
+	mapValue := map[string]int{"one": 1}
+	assert.False(t, IsSlice(mapValue))
+
+	// Test with struct
+	type TestStruct struct{}
+	structValue := TestStruct{}
+	assert.False(t, IsSlice(structValue))
+}
+
+func TestSetFieldValue(t *testing.T) {
+	// Test struct
+	type TestStruct struct {
+		Name       string
+		Age        int
+		IsActive   bool
+		Score      float64
+		unexported string // unexported field
+	}
+
+	// Create test instance
+	test := TestStruct{
+		Name:       "Initial",
+		Age:        30,
+		IsActive:   false,
+		Score:      75.5,
+		unexported: "hidden",
+	}
+
+	// Test setting string field
+	err := SetFieldValue(&test, "Name", "Updated")
+	assert.NoError(t, err)
+	assert.Equal(t, "Updated", test.Name)
+
+	// Test setting int field
+	err = SetFieldValue(&test, "Age", 40)
+	assert.NoError(t, err)
+	assert.Equal(t, 40, test.Age)
+
+	// Test setting bool field
+	err = SetFieldValue(&test, "IsActive", true)
+	assert.NoError(t, err)
+	assert.True(t, test.IsActive)
+
+	// Test setting float field
+	err = SetFieldValue(&test, "Score", 90.5)
+	assert.NoError(t, err)
+	assert.Equal(t, 90.5, test.Score)
+
+	// Test with non-existent field
+	err = SetFieldValue(&test, "NonExistent", "value")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+
+	// Test with unexported field
+	err = SetFieldValue(&test, "unexported", "value")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be set")
+
+	// Test with nil object
+	err = SetFieldValue(nil, "Name", "value")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be nil")
+
+	// Test with type conversion
+	err = SetFieldValue(&test, "Age", int64(50))
+	assert.NoError(t, err)
+	assert.Equal(t, 50, test.Age)
+
+	// Test with incompatible type
+	err = SetFieldValue(&test, "Age", "not a number")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be converted")
+}
+
+func TestGetFieldValue(t *testing.T) {
+	// Test struct
+	type TestStruct struct {
+		Name      string
+		Age       int
+		IsActive  bool
+		Score     float64
+		NestedPtr *TestStruct
+	}
+
+	// Create test instance
+	nested := TestStruct{
+		Name: "Nested",
+	}
+
+	test := TestStruct{
+		Name:      "Test",
+		Age:       30,
+		IsActive:  true,
+		Score:     75.5,
+		NestedPtr: &nested,
+	}
+
+	// Test getting string field
+	value, err := GetFieldValue(test, "Name")
+	assert.NoError(t, err)
+	assert.Equal(t, "Test", value)
+
+	// Test getting int field
+	value, err = GetFieldValue(test, "Age")
+	assert.NoError(t, err)
+	assert.Equal(t, 30, value)
+
+	// Test getting bool field
+	value, err = GetFieldValue(test, "IsActive")
+	assert.NoError(t, err)
+	assert.Equal(t, true, value)
+
+	// Test getting float field
+	value, err = GetFieldValue(test, "Score")
+	assert.NoError(t, err)
+	assert.Equal(t, 75.5, value)
+
+	// Test with pointer
+	value, err = GetFieldValue(&test, "Name")
+	assert.NoError(t, err)
+	assert.Equal(t, "Test", value)
+
+	// Test with pointer to nested struct
+	value, err = GetFieldValue(test, "NestedPtr")
+	assert.NoError(t, err)
+	assert.Equal(t, &nested, value)
+
+	// Test with non-existent field
+	_, err = GetFieldValue(test, "NonExistent")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+
+	// Test with nil object
+	_, err = GetFieldValue(nil, "Name")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be nil")
+
+	// Test with nil struct pointer
+	var nilPtr *TestStruct
+	_, err = GetFieldValue(nilPtr, "Name")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not valid")
+}
