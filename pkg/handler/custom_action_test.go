@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/suranig/refine-gin/pkg/resource"
@@ -227,4 +230,47 @@ func TestGetRelationByName(t *testing.T) {
 
 	result = getRelationByName(mockResource, "nonexistent")
 	assert.Nil(t, result)
+}
+
+// Helper functions for testing
+func createTestContext() (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	return c, w
+}
+
+func createJSONRequest(method, jsonBody string) *http.Request {
+	req, _ := http.NewRequest(method, "/", bytes.NewBufferString(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+func TestAttachActionHandler(t *testing.T) {
+	// Test basic error cases that don't require complex setup
+	t.Run("AttachAction_NoIDsProvided", func(t *testing.T) {
+		action := AttachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": []}`)
+
+		result, err := action.Handler(c, nil, nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no IDs provided")
+		assert.Nil(t, result)
+	})
+
+	t.Run("AttachAction_InvalidJSON", func(t *testing.T) {
+		action := AttachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"invalid": json}`)
+
+		result, err := action.Handler(c, nil, nil)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
 }
