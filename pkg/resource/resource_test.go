@@ -549,3 +549,32 @@ func TestGetEditableFields(t *testing.T) {
 	assert.NotContains(t, explicitEditable, "Email")
 	assert.NotContains(t, explicitEditable, "Role")
 }
+
+func TestGetFormLayoutDefaultGeneration(t *testing.T) {
+	fields := []Field{
+		{Name: "ID"},
+		{Name: "First"},
+		{Name: "Second"},
+		{Name: "Hidden", Hidden: true},
+		{Name: "Third"},
+	}
+
+	res := &DefaultResource{Name: "users", Model: TestUser{}, Fields: fields}
+
+	// No layout specified should return nil
+	assert.Nil(t, res.GetFormLayout())
+
+	layout := GenerateDefaultFormLayout(res.GetFields())
+	if layout == nil {
+		t.Fatal("GenerateDefaultFormLayout returned nil")
+	}
+
+	got := make([]string, 0, len(layout.FieldLayouts))
+	for _, fl := range layout.FieldLayouts {
+		got = append(got, fl.Field)
+	}
+
+	// ID and hidden fields should be skipped and order preserved
+	expected := []string{"First", "Second", "Third"}
+	assert.Equal(t, expected, got)
+}
