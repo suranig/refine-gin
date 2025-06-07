@@ -281,6 +281,24 @@ func TestExtractSort(t *testing.T) {
 	sortOption = ExtractSort(c, nil)
 	assert.Equal(t, "", sortOption.Field)
 	assert.Equal(t, "asc", sortOption.Order)
+
+	// Test Refine.dev array notation
+	c, _ = createTestContext("sort[0][field]=name&sort[0][order]=desc")
+	sortOption = ExtractSort(c, nil)
+	assert.Equal(t, "name", sortOption.Field)
+	assert.Equal(t, "desc", sortOption.Order)
+
+	// Test Refine.js object notation
+	c, _ = createTestContext("sort[field]=age&sort[order]=asc")
+	sortOption = ExtractSort(c, nil)
+	assert.Equal(t, "age", sortOption.Field)
+	assert.Equal(t, "asc", sortOption.Order)
+
+	// Test invalid order value defaults to asc
+	c, _ = createTestContext("sort=name&order=wrong")
+	sortOption = ExtractSort(c, nil)
+	assert.Equal(t, "name", sortOption.Field)
+	assert.Equal(t, "asc", sortOption.Order)
 }
 
 func TestExtractPaginate(t *testing.T) {
