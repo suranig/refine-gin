@@ -813,6 +813,126 @@ func TestValidateNestedJson(t *testing.T) {
 				"Invalid input: nil data or config",
 			},
 		},
+		{
+			name: "Unparseable JSON string",
+			data: `{"name": "Test", "age": 30,,}`,
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path:       "name",
+						Type:       "string",
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Invalid JSON string",
+			},
+		},
+		{
+			name: "Number exceeds max",
+			data: map[string]interface{}{
+				"score": 150,
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "score",
+						Type: "number",
+						Validation: &JsonValidation{
+							Required: true,
+							Min:      0,
+							Max:      100,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'score' value 150 is greater than maximum 100",
+			},
+		},
+		{
+			name: "String pattern mismatch",
+			data: map[string]interface{}{
+				"code": "abc123",
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "code",
+						Type: "string",
+						Validation: &JsonValidation{
+							Required: true,
+							Pattern:  "^[A-Z]{3}[0-9]{3}$",
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'code' value 'abc123' does not match pattern '^[A-Z]{3}[0-9]{3}$'",
+			},
+		},
+		{
+			name: "Array exceeds max length",
+			data: map[string]interface{}{
+				"items": []interface{}{"a", "b", "c"},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "items",
+						Type: "array",
+						Validation: &JsonValidation{
+							Required:  true,
+							MaxLength: 2,
+						},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Property 'items' has 3 items which is greater than maximum 2",
+			},
+		},
+		{
+			name: "Deep nested object missing field",
+			data: map[string]interface{}{
+				"profile": map[string]interface{}{
+					"address": map[string]interface{}{
+						"street": "123 Main St",
+						"zip":    "12345",
+					},
+				},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path: "profile",
+						Type: "object",
+						Properties: []JsonProperty{
+							{
+								Path: "address",
+								Type: "object",
+								Properties: []JsonProperty{
+									{Path: "street", Type: "string", Validation: &JsonValidation{Required: true}},
+									{Path: "city", Type: "string", Validation: &JsonValidation{Required: true}},
+									{Path: "zip", Type: "string", Validation: &JsonValidation{Required: true}},
+								},
+								Validation: &JsonValidation{Required: true},
+							},
+						},
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"profile.address.Required property 'city' not found",
+			},
+		},
 	}
 
 	for _, test := range tests {
