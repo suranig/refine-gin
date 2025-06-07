@@ -384,3 +384,39 @@ func TestUpdateBatchEndpoints(t *testing.T) {
 	}
 	assert.Contains(t, postOp2.Description, "The owner ID for all created resources will be set to the authenticated user's ID")
 }
+
+func TestUpdateBatchEndpointsMinimalOpenAPI(t *testing.T) {
+	openAPI := &OpenAPI{
+		Paths: map[string]PathItem{
+			"/books/batch": {
+				"post":   Operation{Responses: map[string]Response{"200": {}}},
+				"put":    Operation{Responses: map[string]Response{"200": {}}},
+				"delete": Operation{Responses: map[string]Response{"200": {}}},
+			},
+		},
+	}
+
+	updateBatchEndpoints(openAPI, "books")
+
+	pi := openAPI.Paths["/books/batch"]
+
+	postOp := pi["post"]
+	assert.NotEmpty(t, postOp.Security)
+	if assert.GreaterOrEqual(t, len(postOp.Security), 1) {
+		assert.Contains(t, postOp.Security[0], "bearerAuth")
+	}
+
+	putOp := pi["put"]
+	assert.NotEmpty(t, putOp.Security)
+	if assert.GreaterOrEqual(t, len(putOp.Security), 1) {
+		assert.Contains(t, putOp.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, putOp.Responses, "403")
+
+	delOp := pi["delete"]
+	assert.NotEmpty(t, delOp.Security)
+	if assert.GreaterOrEqual(t, len(delOp.Security), 1) {
+		assert.Contains(t, delOp.Security[0], "bearerAuth")
+	}
+	assert.Contains(t, delOp.Responses, "403")
+}

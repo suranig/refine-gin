@@ -1,6 +1,7 @@
 package swagger
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -328,4 +329,22 @@ func TestSwaggerHandler(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "text/html", w.Header().Get("Content-Type"))
 	assert.Contains(t, w.Body.String(), swaggerHTML)
+}
+
+func TestSwaggerHandlerServer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/swagger", SwaggerHandler())
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/swagger")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/html", resp.Header.Get("Content-Type"))
+	assert.Contains(t, string(body), swaggerHTML)
 }
