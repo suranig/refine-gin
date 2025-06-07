@@ -162,6 +162,23 @@ func TestExtractSubjectFromToken(t *testing.T) {
 	assert.Error(t, err)
 	assert.Empty(t, subject)
 
+	// Test with token signed using a different secret
+	otherSecret := "other-secret"
+	tokenString, _ = token.SignedString([]byte(otherSecret))
+	subject, err = ExtractSubjectFromToken(tokenString, secret)
+	assert.Error(t, err)
+	assert.Empty(t, subject)
+
+	// Test with malformed claims (subject is not a string)
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": 123,
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	tokenString, _ = token.SignedString([]byte(secret))
+	subject, err = ExtractSubjectFromToken(tokenString, secret)
+	assert.Error(t, err)
+	assert.Empty(t, subject)
+
 	// Test with token without subject
 	token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"name": "John Doe",
