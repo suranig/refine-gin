@@ -166,3 +166,29 @@ func TestGetRelatedObjectBelongsTo(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+// Additional tests for getRelatedObject using map input
+func TestGetRelatedObjectFromMap(t *testing.T) {
+	// setup relation of type ManyToOne
+	rel := resource.Relation{Name: "Manager", Field: "Manager", Type: resource.RelationTypeManyToOne}
+
+	t.Run("LoadsRelatedObject", func(t *testing.T) {
+		m := map[string]interface{}{"ManagerID": uint(99)}
+		repo := new(MockRepository)
+		repo.On("Get", mock.Anything, "99").Return(&RelationChild{ID: 99}, nil).Once()
+
+		result, err := getRelatedObject(m, &rel, repo)
+		assert.NoError(t, err)
+		if assert.NotNil(t, result) {
+			assert.Equal(t, uint(99), result.(*RelationChild).ID)
+		}
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("ForeignKeyMissing", func(t *testing.T) {
+		m := map[string]interface{}{}
+		_, err := getRelatedObject(m, &rel, nil)
+		assert.Error(t, err)
+	})
+}
