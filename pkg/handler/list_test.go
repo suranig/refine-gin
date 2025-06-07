@@ -192,6 +192,35 @@ func TestGenerateListHandler(t *testing.T) {
 		// Verify repository mock
 		mockRepo.AssertExpectations(t)
 	})
+
+	// Test case 4: Cache ETag handling
+	t.Run("Not modified when ETag matches", func(t *testing.T) {
+		items := []TestItem{{ID: 9, Name: "Cached", CreatedAt: time.Now()}}
+
+		mockRepo.On("List", mock.Anything, mock.AnythingOfType("query.QueryOptions")).
+			Return(items, 1, nil).Once()
+
+		r := gin.New()
+		r.GET("/items", GenerateListHandler(mockResource, mockRepo))
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/items", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		etag := w.Header().Get("ETag")
+		assert.NotEmpty(t, etag)
+
+		w2 := httptest.NewRecorder()
+		req2, _ := http.NewRequest("GET", "/items", nil)
+		req2.Header.Set("If-None-Match", etag)
+		r.ServeHTTP(w2, req2)
+
+		assert.Equal(t, http.StatusNotModified, w2.Code)
+		assert.Empty(t, w2.Body.Bytes())
+
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestGenerateListHandlerWithDTO(t *testing.T) {
