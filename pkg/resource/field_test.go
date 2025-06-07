@@ -222,20 +222,25 @@ func TestConvertToFloat(t *testing.T) {
 
 func TestEvaluateCondition(t *testing.T) {
 	tests := []struct {
-		name    string
-		field   interface{}
-		op      string
-		compare interface{}
-		want    bool
-		wantErr bool
+		name      string
+		field     interface{}
+		op        string
+		compare   interface{}
+		want      bool
+		wantErr   bool
+		errSubstr string
 	}{
-		{"eq string", "foo", "eq", "foo", true, false},
-		{"neq string", "foo", "neq", "bar", true, false},
-		{"gt numeric", 10, "gt", 5, true, false},
-		{"lt numeric string", "3", "lt", 5, true, false},
-		{"contains", "hello world", "contains", "world", true, false},
-		{"invalid operator", "a", "unknown", "b", false, true},
-		{"bad number", "abc", "gt", 1, false, true},
+		{"eq string", "foo", "eq", "foo", true, false, ""},
+		{"neq string", "foo", "neq", "bar", true, false, ""},
+		{"gt numeric", 10, "gt", 5, true, false, ""},
+		{"lt numeric string", "3", "lt", 5, true, false, ""},
+		{"gte numeric", 5, "gte", 5, true, false, ""},
+		{"lte numeric", 4, "lte", 5, true, false, ""},
+		{"startsWith", "foobar", "startsWith", "foo", true, false, ""},
+		{"endsWith", "foobar", "endsWith", "bar", true, false, ""},
+		{"contains", "hello world", "contains", "world", true, false, ""},
+		{"invalid operator", "a", "unknown", "b", false, true, "unsupported operator"},
+		{"bad number", "abc", "gt", 1, false, true, "cannot convert"},
 	}
 
 	for _, tt := range tests {
@@ -243,6 +248,9 @@ func TestEvaluateCondition(t *testing.T) {
 			got, err := evaluateCondition(fmt.Sprintf("%v", tt.field), tt.op, tt.compare)
 			if tt.wantErr {
 				assert.Error(t, err)
+				if tt.errSubstr != "" {
+					assert.Contains(t, err.Error(), tt.errSubstr)
+				}
 				return
 			}
 			assert.NoError(t, err)
