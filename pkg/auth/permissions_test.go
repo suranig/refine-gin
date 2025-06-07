@@ -105,6 +105,69 @@ func TestPermissionMiddleware(t *testing.T) {
 	assert.False(t, c.IsAborted(), "Middleware should not abort for unspecified permissions")
 }
 
+func TestPermissionMiddleware_ContextErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware := PermissionMiddleware()
+
+	mockResource := new(MockResource)
+	mockResource.On("GetName").Return("tests")
+
+	tests := []struct {
+		name    string
+		setup   func(*gin.Context)
+		message string
+	}{
+		{
+			name: "missing resource",
+			setup: func(c *gin.Context) {
+				c.Set("operation", resource.OperationRead)
+				c.Set("claims", jwt.MapClaims{"roles": []interface{}{"admin"}})
+			},
+			message: "resource not found in context",
+		},
+		{
+			name: "missing operation",
+			setup: func(c *gin.Context) {
+				c.Set("resource", mockResource)
+				c.Set("claims", jwt.MapClaims{"roles": []interface{}{"admin"}})
+			},
+			message: "operation not found in context",
+		},
+		{
+			name: "missing claims",
+			setup: func(c *gin.Context) {
+				c.Set("resource", mockResource)
+				c.Set("operation", resource.OperationRead)
+			},
+			message: "no authentication claims found",
+		},
+		{
+			name: "invalid claims type",
+			setup: func(c *gin.Context) {
+				c.Set("resource", mockResource)
+				c.Set("operation", resource.OperationRead)
+				c.Set("claims", "notmap")
+			},
+			message: "invalid authentication claims",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("GET", "/", nil)
+			tt.setup(c)
+
+			middleware(c)
+
+			assert.True(t, c.IsAborted())
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Contains(t, w.Body.String(), tt.message)
+		})
+	}
+}
+
 func TestFilterFieldsByPermission(t *testing.T) {
 	// Create test fields with permissions
 	fields := []resource.FieldMetadata{
