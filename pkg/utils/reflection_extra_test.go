@@ -134,3 +134,52 @@ func TestCreateNewSliceOfModel(t *testing.T) {
 		t.Fatalf("expected nil for nil input")
 	}
 }
+
+func TestSetIDCustomFields(t *testing.T) {
+	type StringID struct{ UID string }
+	strObj := &StringID{}
+	if err := SetID(strObj, "abc", "UID"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strObj.UID != "abc" {
+		t.Fatalf("expected UID to be abc, got %s", strObj.UID)
+	}
+
+	type IntID struct{ UID int }
+	intObj := &IntID{}
+	if err := SetID(intObj, 123, "UID"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if intObj.UID != 123 {
+		t.Fatalf("expected UID to be 123, got %d", intObj.UID)
+	}
+
+	type UintID struct{ UID uint }
+	uintObj := &UintID{}
+	if err := SetID(uintObj, uint(456), "UID"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if uintObj.UID != uint(456) {
+		t.Fatalf("expected UID to be 456, got %d", uintObj.UID)
+	}
+}
+
+func TestSetIDCustomFieldErrors(t *testing.T) {
+	type NoIDStruct struct{ Name string }
+	noID := &NoIDStruct{}
+	if err := SetID(noID, "1", "UID"); err == nil {
+		t.Fatalf("expected error for missing field")
+	}
+
+	type IntID struct{ UID int }
+	intObj := &IntID{}
+	if err := SetID(intObj, "abc", "UID"); err == nil {
+		t.Fatalf("expected conversion error")
+	}
+
+	type SliceID struct{ UID []string }
+	sliceObj := &SliceID{}
+	if err := SetID(sliceObj, "val", "UID"); err == nil {
+		t.Fatalf("expected type mismatch error")
+	}
+}
