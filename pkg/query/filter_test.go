@@ -89,3 +89,60 @@ func TestParseRefineFiltersMixedSyntax(t *testing.T) {
 	assert.Equal(t, "gte", af.Operator)
 	assert.Equal(t, "30", af.Value)
 }
+
+func TestApplyAdvancedFiltersOperators(t *testing.T) {
+	db := setupInMemoryDB(t)
+	res := createTestResource()
+
+	t.Run("between", func(t *testing.T) {
+		filters := []Filter{{Field: "age", Operator: "between", Value: "25,35"}}
+		var results []TestModel
+		err := applyAdvancedFilters(db.Model(&TestModel{}), filters, res).Find(&results).Error
+		assert.NoError(t, err)
+		// unsupported operator falls back to equality
+		assert.Len(t, results, 0)
+	})
+
+	t.Run("null true", func(t *testing.T) {
+		filters := []Filter{{Field: "email", Operator: "null", Value: true}}
+		var results []TestModel
+		err := applyAdvancedFilters(db.Model(&TestModel{}), filters, res).Find(&results).Error
+		assert.NoError(t, err)
+		assert.Len(t, results, 0)
+	})
+
+	t.Run("null false", func(t *testing.T) {
+		filters := []Filter{{Field: "email", Operator: "null", Value: false}}
+		var results []TestModel
+		err := applyAdvancedFilters(db.Model(&TestModel{}), filters, res).Find(&results).Error
+		assert.NoError(t, err)
+		assert.Len(t, results, 5)
+	})
+
+	t.Run("containsi", func(t *testing.T) {
+		filters := []Filter{{Field: "name", Operator: "containsi", Value: "alice"}}
+		var results []TestModel
+		err := applyAdvancedFilters(db.Model(&TestModel{}), filters, res).Find(&results).Error
+		assert.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "Alice Johnson", results[0].Name)
+	})
+
+	t.Run("comparison operators", func(t *testing.T) {
+		cases := []Filter{
+			{Field: "age", Operator: "gt", Value: 30},
+			{Field: "age", Operator: "gte", Value: 30},
+			{Field: "age", Operator: "lt", Value: 40},
+			{Field: "age", Operator: "lte", Value: 40},
+			{Field: "name", Operator: "eq", Value: "John Doe"},
+			{Field: "name", Operator: "ne", Value: "Non"},
+			{Field: "name", Operator: "startswith", Value: "Ja"},
+			{Field: "name", Operator: "endswith", Value: "Doe"},
+			{Field: "name", Operator: "in", Value: []string{"Bob Smith", "Alice Johnson"}},
+		}
+		for _, f := range cases {
+			var out []TestModel
+			assert.NoError(t, applyAdvancedFilters(db.Model(&TestModel{}), []Filter{f}, res).Find(&out).Error)
+		}
+	})
+}

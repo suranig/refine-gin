@@ -396,3 +396,100 @@ func TestApplyFilters(t *testing.T) {
 		ApplyFilters(dbQuery, filters)
 	})
 }
+
+func TestApplyFiltersOperatorsCoverage(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	assert.NoError(t, err)
+	assert.NoError(t, db.AutoMigrate(&TestModel{}))
+
+	filters := []Filter{
+		{Field: "name", Operator: "eq", Value: "John"},
+		{Field: "name", Operator: "ne", Value: "John"},
+		{Field: "age", Operator: "gt", Value: "30"},
+		{Field: "age", Operator: "gte", Value: "30"},
+		{Field: "age", Operator: "lt", Value: "30"},
+		{Field: "age", Operator: "lte", Value: "30"},
+		{Field: "name", Operator: "like", Value: "Jo"},
+		{Field: "name", Operator: "ncontains", Value: "Doe"},
+		{Field: "name", Operator: "containss", Value: "Jo"},
+		{Field: "name", Operator: "ncontainss", Value: "Jo"},
+		{Field: "name", Operator: "in", Value: []string{"John", "Jane"}},
+		{Field: "name", Operator: "nin", Value: []string{"Bob"}},
+		{Field: "name", Operator: "startswith", Value: "Jo"},
+		{Field: "name", Operator: "nstartswith", Value: "Jo"},
+		{Field: "name", Operator: "endswith", Value: "Doe"},
+		{Field: "name", Operator: "nendswith", Value: "Doe"},
+		{Field: "name", Operator: "isnull", Value: nil},
+		{Field: "name", Operator: "nnull", Value: nil},
+		{Field: "age", Operator: "between", Value: "20,30"},
+		{Field: "age", Operator: "nbetween", Value: "40,50"},
+	}
+
+	assert.NotPanics(t, func() {
+		ApplyFilters(db.Model(&TestModel{}), filters)
+	})
+}
+
+func TestParseQueryOptionsAdvanced(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	res := createTestResource()
+
+	tests := []struct {
+		name    string
+		query   string
+		filters []Filter
+		sort    string
+	}{
+		{
+			name:    "format1 multi sort",
+			query:   "filter[name][contains]=John&sort=age,name&order=desc,asc",
+			filters: []Filter{{Field: "name", Operator: "contains", Value: "John"}},
+			sort:    "age desc, name asc",
+		},
+		{
+			name:    "format2 single",
+			query:   "filters[age]=30&operators[age]=gte",
+			filters: []Filter{{Field: "age", Operator: "gte", Value: "30"}},
+			sort:    "id",
+		},
+		{
+			name:  "mixed filters",
+			query: "filter[email][contains]=example.com&filters[name]=Alice&operators[name]=eq&sort=name,age&order=desc",
+			filters: []Filter{
+				{Field: "email", Operator: "contains", Value: "example.com"},
+				{Field: "name", Operator: "eq", Value: "Alice"},
+			},
+			sort: "name desc, age asc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := createTestContext(tt.query)
+			opts := ParseQueryOptions(c, res)
+
+			assert.Equal(t, len(tt.filters), len(opts.AdvancedFilters))
+			for i, f := range tt.filters {
+				assert.Equal(t, f.Field, opts.AdvancedFilters[i].Field)
+				assert.Equal(t, f.Operator, opts.AdvancedFilters[i].Operator)
+				assert.Equal(t, f.Value, opts.AdvancedFilters[i].Value)
+			}
+			assert.Equal(t, tt.sort, opts.Sort)
+		})
+	}
+}
+
+func TestParsePaginationResponseAndToResult(t *testing.T) {
+	opts := QueryOptions{Page: 2, PerPage: 5}
+	resp := ParsePaginationResponse(opts, 12)
+
+	assert.Equal(t, 2, resp["page"])
+	assert.Equal(t, 5, resp["per_page"])
+	assert.Equal(t, int64(12), resp["total"])
+	assert.Equal(t, 3, resp["last_page"])
+
+	data := []string{"a", "b"}
+	result := ToResult(data, resp)
+	assert.Equal(t, data, result["data"])
+	assert.Equal(t, resp, result["meta"])
+}
