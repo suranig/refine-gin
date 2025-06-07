@@ -89,6 +89,76 @@ type OwnerTestEntity struct {
 	OwnerID string `json:"ownerId" gorm:"column:owner_id"`
 }
 
+type OwnerJSONConfig struct {
+	Enabled bool   `json:"enabled"`
+	Note    string `json:"note"`
+}
+
+type OwnerJSONEntity struct {
+	ID        uint            `gorm:"primaryKey"`
+	Name      string          `json:"name"`
+	Config    OwnerJSONConfig `json:"config" gorm:"serializer:json"`
+	OwnerID   string          `json:"ownerId" gorm:"column:owner_id"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func TestOwnerRepository_UpdateJSONMap(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerJSONEntity{}))
+
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "json-owner",
+		Model: &OwnerJSONEntity{},
+	})
+	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+	repoIface, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	initial := OwnerJSONEntity{
+		Name:    "orig",
+		OwnerID: "owner-json",
+		Config:  OwnerJSONConfig{Enabled: true, Note: "start"},
+	}
+	require.NoError(t, db.Create(&initial).Error)
+
+	t.Run("OwnerMatches", func(t *testing.T) {
+		ctx := ownerContext("owner-json")
+		updates := map[string]interface{}{
+			"id":   initial.ID + 999,
+			"name": "updated",
+			"config": map[string]interface{}{
+				"enabled": false,
+				"note":    "changed",
+			},
+		}
+
+		res, err := repoIface.Update(ctx, initial.ID, updates)
+		require.NoError(t, err)
+
+		upd := res.(*OwnerJSONEntity)
+		assert.Equal(t, initial.ID, upd.ID)
+		assert.Equal(t, "updated", upd.Name)
+		assert.False(t, upd.Config.Enabled)
+		assert.Equal(t, "changed", upd.Config.Note)
+
+		var check OwnerJSONEntity
+		require.NoError(t, db.First(&check, initial.ID).Error)
+		assert.Equal(t, upd.Name, check.Name)
+		assert.Equal(t, upd.Config, check.Config)
+	})
+
+	t.Run("RecordNotFound", func(t *testing.T) {
+		ctx := ownerContext("owner-json")
+		_, err := repoIface.Update(ctx, initial.ID+12345, map[string]interface{}{
+			"name":   "missing",
+			"config": map[string]interface{}{"enabled": true},
+		})
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+}
+
 // Setup test database and resources
 func setupOwnerTest(t *testing.T) (*gorm.DB, resource.Resource, resource.OwnerResource) {
 	// Create in-memory SQLite database with unique identifier

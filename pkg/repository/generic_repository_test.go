@@ -604,4 +604,40 @@ func TestGenericRepository_Update(t *testing.T) {
 		_, err := repo.Update(ctx, initial.ID, updates)
 		assert.Error(t, err)
 	})
+
+	t.Run("MapUpdateWithIDIgnored", func(t *testing.T) {
+		db := setupJSONTestDB(t)
+		initial := createJSONTestData(t, db)
+
+		jsonResource := resource.NewResource(resource.ResourceConfig{
+			Name:  "jsons",
+			Model: TestJSONModel{},
+		})
+		repo := NewGenericRepository(db, jsonResource)
+
+		updates := map[string]interface{}{
+			"id":   initial.ID + 1000,
+			"name": "second",
+			"config": map[string]interface{}{
+				"enabled": true,
+				"note":    "second-note",
+			},
+		}
+
+		ctx := context.Background()
+		result, err := repo.Update(ctx, initial.ID, updates)
+		require.NoError(t, err)
+
+		updated := result.(*TestJSONModel)
+		assert.Equal(t, initial.ID, updated.ID)
+		assert.Equal(t, "second", updated.Name)
+		assert.True(t, updated.Config.Enabled)
+		assert.Equal(t, "second-note", updated.Config.Note)
+
+		var check TestJSONModel
+		err = db.First(&check, initial.ID).Error
+		require.NoError(t, err)
+		assert.Equal(t, updated.Name, check.Name)
+		assert.Equal(t, updated.Config, check.Config)
+	})
 }
