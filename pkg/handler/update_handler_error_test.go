@@ -1,5 +1,7 @@
 package handler
 
+// Tests for error scenarios in GenerateUpdateHandler.
+
 import (
 	"bytes"
 	"encoding/json"
