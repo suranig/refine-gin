@@ -181,6 +181,214 @@ func TestOwnerCreateHandler(t *testing.T) {
 	})
 }
 
+func TestOwnerGetHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		req := httptest.NewRequest(http.MethodGet, "/tests/1", nil)
+		c.Request = req
+
+		item := OwnerTestModel{ID: 1, Name: "Test", OwnerID: "test-owner"}
+		mockRepo.On("Get", mock.Anything, "1").Return(item, nil)
+		dtoItem := map[string]interface{}{"id": float64(1), "name": "Test", "ownerId": "test-owner"}
+		mockDTO.On("TransformFromModel", item).Return(dtoItem, nil)
+
+		GenerateOwnerGetHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].(map[string]interface{})
+		assert.Equal(t, float64(1), data["id"])
+		assert.Equal(t, "Test", data["name"])
+	})
+
+	t.Run("Not found", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+		req := httptest.NewRequest(http.MethodGet, "/tests/2", nil)
+		c.Request = req
+
+		mockRepo.On("Get", mock.Anything, "2").Return(nil, errors.New("record not found"))
+
+		GenerateOwnerGetHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("Owner mismatch", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "3"}}
+		req := httptest.NewRequest(http.MethodGet, "/tests/3", nil)
+		c.Request = req
+
+		mockRepo.On("Get", mock.Anything, "3").Return(nil, repository.ErrOwnerMismatch)
+
+		GenerateOwnerGetHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}
+
+func TestOwnerUpdateHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		reqBody := `{"name":"Updated"}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/1", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		updated := OwnerTestModel{ID: 1, Name: "Updated", OwnerID: "test-owner"}
+		mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(updated, nil)
+		dtoItem := map[string]interface{}{"id": float64(1), "name": "Updated", "ownerId": "test-owner"}
+		mockDTO.On("TransformFromModel", updated).Return(dtoItem, nil)
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].(map[string]interface{})
+		assert.Equal(t, "Updated", data["name"])
+	})
+
+	t.Run("Owner mismatch", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+		reqBody := `{"name":"Other"}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/2", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("Update", mock.Anything, "2", mock.Anything).Return(nil, repository.ErrOwnerMismatch)
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("Not found", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "3"}}
+		reqBody := `{"name":"Other"}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/3", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("Update", mock.Anything, "3", mock.Anything).Return(nil, errors.New("record not found"))
+
+		GenerateOwnerUpdateHandler(res, mockRepo, mockDTO, "id")(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestOwnerDeleteHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		req := httptest.NewRequest(http.MethodDelete, "/tests/1", nil)
+		c.Request = req
+
+		mockRepo.On("Delete", mock.Anything, "1").Return(nil)
+
+		GenerateOwnerDeleteHandler(res, mockRepo, "id")(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].(map[string]interface{})
+		assert.Equal(t, true, data["success"])
+	})
+
+	t.Run("Owner mismatch", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+		req := httptest.NewRequest(http.MethodDelete, "/tests/2", nil)
+		c.Request = req
+
+		mockRepo.On("Delete", mock.Anything, "2").Return(repository.ErrOwnerMismatch)
+
+		GenerateOwnerDeleteHandler(res, mockRepo, "id")(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("Not found", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "3"}}
+		req := httptest.NewRequest(http.MethodDelete, "/tests/3", nil)
+		c.Request = req
+
+		mockRepo.On("Delete", mock.Anything, "3").Return(errors.New("record not found"))
+
+		GenerateOwnerDeleteHandler(res, mockRepo, "id")(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
 func TestOwnerResourceRegistration(t *testing.T) {
-	t.Skip("Implementation pending - RegisterOwnerResource needs to be properly tested once completed")
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	mockRepo := new(MockRepository)
+
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owners",
+		Model: &OwnerTestModel{},
+		Operations: []resource.Operation{
+			resource.OperationList,
+			resource.OperationRead,
+			resource.OperationCreate,
+			resource.OperationUpdate,
+			resource.OperationDelete,
+			resource.OperationCount,
+			resource.OperationCreateMany,
+			resource.OperationUpdateMany,
+			resource.OperationDeleteMany,
+		},
+	})
+	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+
+	api := r.Group("/api")
+	RegisterOwnerResource(api, ownerRes, mockRepo)
+
+	routes := r.Routes()
+
+	expected := map[string]bool{
+		"GET /api/owners":          false,
+		"GET /api/owners/:id":      false,
+		"POST /api/owners":         false,
+		"PUT /api/owners/:id":      false,
+		"DELETE /api/owners/:id":   false,
+		"GET /api/owners/count":    false,
+		"POST /api/owners/batch":   false,
+		"PUT /api/owners/batch":    false,
+		"DELETE /api/owners/batch": false,
+	}
+
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		if _, ok := expected[key]; ok {
+			expected[key] = true
+		}
+	}
+
+	for k, v := range expected {
+		assert.True(t, v, "Route %s not registered", k)
+	}
 }
