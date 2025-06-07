@@ -526,9 +526,16 @@ func TestOwnerRepository_CreateMany(t *testing.T) {
 			assert.Equal(t, "enforced-owner", item.OwnerID)
 		}
 
+		for _, item := range items {
+			assert.Equal(t, "enforced-owner", item.OwnerID)
+		}
+
 		var dbItems []OwnerTestEntity
 		require.NoError(t, db.Where("owner_id = ?", "enforced-owner").Find(&dbItems).Error)
 		assert.Equal(t, 2, len(dbItems))
+		for _, dbItem := range dbItems {
+			assert.Equal(t, "enforced-owner", dbItem.OwnerID)
+		}
 	})
 }
 
