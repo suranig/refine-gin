@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -245,8 +246,21 @@ func createJSONRequest(method, jsonBody string) *http.Request {
 	return req
 }
 
-func TestAttachActionHandler(t *testing.T) {
-	// Test basic error cases that don't require complex setup
+func TestAttachActionHandler_Complete(t *testing.T) {
+	// Test AttachAction handler with all possible scenarios for 100% coverage
+	t.Run("AttachAction_InvalidJSON", func(t *testing.T) {
+		action := AttachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"invalid": json}`)
+
+		result, err := action.Handler(c, nil, nil)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+
 	t.Run("AttachAction_NoIDsProvided", func(t *testing.T) {
 		action := AttachAction("items")
 
@@ -261,16 +275,355 @@ func TestAttachActionHandler(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
-	t.Run("AttachAction_InvalidJSON", func(t *testing.T) {
+	t.Run("AttachAction_ParentResourceNotFound", func(t *testing.T) {
+		mockRepo := new(MockRepository)
+		mockRepo.On("Get", mock.Anything, "999").Return(nil, fmt.Errorf("not found"))
+
 		action := AttachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "999"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, nil, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "resource not found")
+		assert.Nil(t, result)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("AttachAction_RelationNotFound", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		mockResource.On("GetRelations").Return([]resource.Relation{})
+
+		parentObj := &RelationParent{ID: 1}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+
+		action := AttachAction("nonexistent")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "relation nonexistent not found")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("AttachAction_UnsupportedRelationType", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "unsupported",
+			Type:  "UnsupportedType",
+			Field: "Unsupported",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		parentObj := &RelationParent{ID: 1}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+
+		action := AttachAction("unsupported")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported relation type")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("AttachAction_UpdateFails", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		parentObj := &RelationParent{ID: 1}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+		mockRepo.On("Get", mock.Anything, "2").Return(&RelationChild{ID: 2}, nil)
+		mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(nil, fmt.Errorf("update failed"))
+
+		action := AttachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "update failed")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestDetachActionHandler_Complete(t *testing.T) {
+	t.Run("DetachAction_RelationNotFound", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+
+		mockResource.On("GetRelations").Return([]resource.Relation{})
+
+		action := DetachAction("nonexistent")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, mockResource, nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "relation nonexistent not found")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("DetachAction_InvalidJSON", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		action := DetachAction("items")
 
 		c, _ := createTestContext()
 		c.Params = []gin.Param{{Key: "id", Value: "1"}}
 		c.Request = createJSONRequest("POST", `{"invalid": json}`)
 
-		result, err := action.Handler(c, nil, nil)
+		result, err := action.Handler(c, mockResource, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("DetachAction_NoIDsProvided", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		action := DetachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": []}`)
+
+		result, err := action.Handler(c, mockResource, nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no IDs provided to detach")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("DetachAction_ParentResourceNotFound", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		mockRepo.On("Get", mock.Anything, "999").Return(nil, fmt.Errorf("not found"))
+
+		action := DetachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "999"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("DetachAction_UnsupportedRelationType", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "unsupported",
+			Type:  "UnsupportedType",
+			Field: "Unsupported",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		parentObj := &RelationParent{ID: 1}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+
+		action := DetachAction("unsupported")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [1, 2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported relation type")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("DetachAction_UpdateFails", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		parentObj := &RelationParent{ID: 1, Items: []*RelationChild{{ID: 2}}}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+		mockRepo.On("Update", mock.Anything, "1", mock.Anything).Return(nil, fmt.Errorf("update failed"))
+
+		action := DetachAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+		c.Request = createJSONRequest("POST", `{"ids": [2]}`)
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "update failed")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestListRelationActionHandler_Complete(t *testing.T) {
+	t.Run("ListRelationAction_RelationNotFound", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+
+		mockResource.On("GetRelations").Return([]resource.Relation{})
+
+		action := ListRelationAction("nonexistent")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+
+		result, err := action.Handler(c, mockResource, nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "relation nonexistent not found")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+	})
+
+	t.Run("ListRelationAction_ParentResourceNotFound", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "items",
+			Type:  resource.RelationTypeOneToMany,
+			Field: "Items",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		mockRepo.On("Get", mock.Anything, "999").Return(nil, fmt.Errorf("not found"))
+
+		action := ListRelationAction("items")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "999"}}
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("ListRelationAction_UnsupportedRelationType", func(t *testing.T) {
+		mockResource := new(MockResourceForTest)
+		mockRepo := new(MockRepository)
+
+		relation := resource.Relation{
+			Name:  "unsupported",
+			Type:  "UnsupportedType",
+			Field: "Unsupported",
+		}
+
+		mockResource.On("GetRelations").Return([]resource.Relation{relation})
+
+		parentObj := &RelationParent{ID: 1}
+		mockRepo.On("Get", mock.Anything, "1").Return(parentObj, nil)
+
+		action := ListRelationAction("unsupported")
+
+		c, _ := createTestContext()
+		c.Params = []gin.Param{{Key: "id", Value: "1"}}
+
+		result, err := action.Handler(c, mockResource, mockRepo)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported relation type")
+		assert.Nil(t, result)
+
+		mockResource.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
 	})
 }
