@@ -129,6 +129,17 @@ func TestFieldConfiguration(t *testing.T) {
 	assert.Equal(t, "left", idField.List.Fixed)
 }
 
+func TestGetFieldNonExistent(t *testing.T) {
+	res := &DefaultResource{
+		Name:   "users",
+		Model:  TestUser{},
+		Fields: []Field{{Name: "ID"}, {Name: "Name"}},
+	}
+
+	field := res.GetField("NonExistent")
+	assert.Nil(t, field)
+}
+
 func TestSearchableFields(t *testing.T) {
 	// Create resource with specific searchable fields
 	config := ResourceConfig{
