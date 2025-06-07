@@ -1,8 +1,11 @@
 package swagger
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
@@ -310,6 +313,19 @@ func TestFieldToSchema(t *testing.T) {
 }
 
 func TestSwaggerHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
 	handler := SwaggerHandler()
 	assert.NotNil(t, handler, "Swagger handler should not be nil")
+
+	r := gin.New()
+	r.GET("/swagger", handler)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/swagger", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/html", w.Header().Get("Content-Type"))
+	assert.Contains(t, w.Body.String(), swaggerHTML)
 }
