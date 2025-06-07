@@ -335,3 +335,60 @@ func TestApplyOwnerFilterFiltersByOwner(t *testing.T) {
 	_, err = repo.applyOwnerFilter(context.Background(), db)
 	assert.Equal(t, ErrOwnerIDNotFound, err)
 }
+
+func TestOwnerRepository_OwnerSpecificOperations(t *testing.T) {
+	db, _, ownerRes := setupOwnerTest(t)
+	repoIface, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Insert test records
+	createOwnerTestData(t, db)
+
+	// Fetch example records for owner-a and owner-b
+	var itemA OwnerTestEntity
+	require.NoError(t, db.First(&itemA, "owner_id = ?", "owner-a").Error)
+
+	t.Run("Get returns a record only when the owner matches", func(t *testing.T) {
+		// Correct owner can retrieve the record
+		res, err := repoIface.Get(ownerContext("owner-a"), itemA.ID)
+		require.NoError(t, err)
+		assert.Equal(t, itemA.ID, res.(*OwnerTestEntity).ID)
+
+		// Other owners should receive ErrOwnerMismatch
+		_, err = repoIface.Get(ownerContext("owner-b"), itemA.ID)
+		assert.Equal(t, ErrOwnerMismatch, err)
+	})
+
+	t.Run("Update fails with ErrOwnerMismatch for a mismatched owner", func(t *testing.T) {
+		_, err := repoIface.Update(ownerContext("owner-b"), itemA.ID, map[string]interface{}{"name": "changed"})
+		assert.Equal(t, ErrOwnerMismatch, err)
+	})
+
+	t.Run("Delete respects ownership", func(t *testing.T) {
+		// Attempt delete with wrong owner
+		err := repoIface.Delete(ownerContext("owner-b"), itemA.ID)
+		assert.Equal(t, ErrOwnerMismatch, err)
+
+		// Ensure record still exists
+		var exists bool
+		require.NoError(t, db.Model(&OwnerTestEntity{}).Where("id = ?", itemA.ID).Select("count(*) > 0").Find(&exists).Error)
+		assert.True(t, exists)
+
+		// Deleting with correct owner should succeed
+		require.NoError(t, repoIface.Delete(ownerContext("owner-a"), itemA.ID))
+
+		// Verify removal
+		err = db.First(&OwnerTestEntity{}, itemA.ID).Error
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+
+	t.Run("Count applies the owner filter correctly", func(t *testing.T) {
+		countA, err := repoIface.Count(ownerContext("owner-a"), query.QueryOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), countA)
+
+		countB, err := repoIface.Count(ownerContext("owner-b"), query.QueryOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), countB)
+	})
+}

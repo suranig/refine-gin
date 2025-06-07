@@ -754,11 +754,12 @@ func (r *OwnerGenericRepository) Count(ctx context.Context, options query.QueryO
 	}
 
 	// Use GenericRepository to complete the operation with modified query
+	origDB := r.DB
 	r.DB = tx
 	total, err := r.GenericRepository.Count(ctx, options)
 
 	// Reset DB to original
-	r.DB = r.GenericRepository.DB
+	r.DB = origDB
 
 	return total, err
 }
