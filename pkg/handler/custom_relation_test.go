@@ -166,3 +166,39 @@ func TestGetRelatedObjectBelongsTo(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestGetRelatedObjectHasOne(t *testing.T) {
+	rel := resource.Relation{Name: "profile", Field: "Profile", Type: resource.RelationTypeOneToOne}
+
+	t.Run("Struct", func(t *testing.T) {
+		parent := &RelationParent{Profile: &RelationChild{ID: 3}}
+		result, err := getRelatedObject(parent, &rel, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, parent.Profile, result)
+	})
+
+	t.Run("Map", func(t *testing.T) {
+		m := map[string]interface{}{"Profile": &RelationChild{ID: 4}}
+		result, err := getRelatedObject(m, &rel, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, m["Profile"], result)
+	})
+
+	t.Run("FieldMissingStruct", func(t *testing.T) {
+		parent := &RelationParent{}
+		_, err := getRelatedObject(parent, &rel, nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("FieldMissingMap", func(t *testing.T) {
+		m := map[string]interface{}{}
+		_, err := getRelatedObject(m, &rel, nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("UnsupportedType", func(t *testing.T) {
+		badRel := resource.Relation{Name: "tags", Field: "Tags", Type: resource.RelationTypeManyToMany}
+		_, err := getRelatedObject(&RelationParent{}, &badRel, nil)
+		assert.Error(t, err)
+	})
+}

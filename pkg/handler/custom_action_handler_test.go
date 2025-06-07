@@ -541,6 +541,7 @@ type TestUser struct {
 	ID       int
 	Comments []TestComment
 	Profile  *TestProfile
+	Tags     []int
 }
 
 // RecordingRepository is a simple repository that records Update calls
@@ -622,6 +623,7 @@ func TestDetachActionHandler(t *testing.T) {
 		ID:       1,
 		Comments: []TestComment{{ID: 1}, {ID: 2}, {ID: 3}},
 		Profile:  &TestProfile{ID: 10},
+		Tags:     []int{1, 2, 3},
 	}
 
 	repo := NewRecordingRepository(user)
@@ -630,16 +632,20 @@ func TestDetachActionHandler(t *testing.T) {
 	relations := []resource.Relation{
 		{Name: "comments", Type: handler.HasMany, Field: "Comments"},
 		{Name: "profile", Type: handler.HasOne, Field: "Profile"},
+		{Name: "tags", Type: handler.ManyToMany, Field: "Tags"},
 	}
 	res.On("GetRelations").Return(relations)
 	res.On("HasRelation", "comments").Return(true)
 	res.On("HasRelation", "profile").Return(true)
+	res.On("HasRelation", "tags").Return(true)
 	res.On("GetRelation", "comments").Return(relations[0])
 	res.On("GetRelation", "profile").Return(relations[1])
+	res.On("GetRelation", "tags").Return(relations[2])
 
 	r := gin.New()
 	r.POST("/users/:id/actions/detach-comments", handler.GenerateCustomActionHandler(res, repo, handler.DetachAction("comments")))
 	r.POST("/users/:id/actions/detach-profile", handler.GenerateCustomActionHandler(res, repo, handler.DetachAction("profile")))
+	r.POST("/users/:id/actions/detach-tags", handler.GenerateCustomActionHandler(res, repo, handler.DetachAction("tags")))
 
 	t.Run("successful detach", func(t *testing.T) {
 		body := strings.NewReader(`{"ids": [2]}`)
@@ -669,11 +675,36 @@ func TestDetachActionHandler(t *testing.T) {
 		assert.Nil(t, repo.data["1"].Profile)
 	})
 
+	t.Run("detach many-to-many", func(t *testing.T) {
+		repo.UpdateCalled = false
+		body := strings.NewReader(`{"ids": [2]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-tags", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, repo.UpdateCalled)
+		assert.ElementsMatch(t, []int{1, 3}, repo.data["1"].Tags)
+	})
+
 	t.Run("missing ids", func(t *testing.T) {
 		repo.UpdateCalled = false
 		body := strings.NewReader(`{"ids": []}`)
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.False(t, repo.UpdateCalled)
+	})
+
+	t.Run("missing ids many-to-many", func(t *testing.T) {
+		repo.UpdateCalled = false
+		body := strings.NewReader(`{"ids": []}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/detach-tags", body)
 		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
