@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	monkey "github.com/bouk/monkey"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/resource"
+	"gorm.io/gorm"
 )
 
 // User model for testing updates
@@ -266,6 +268,62 @@ func TestGenerateUpdateHandler(t *testing.T) {
 		assert.Equal(t, "Resource not found", response["error"])
 
 		// Verify repository mock
+		mockRepo.AssertExpectations(t)
+		mockDTO.AssertExpectations(t)
+	})
+
+	// Test case 5: Relation validation error
+	t.Run("Relation validation error", func(t *testing.T) {
+		mockRepo := new(MockRepository)
+		mockRes := new(MockResource)
+		mockDTO := new(MockDTOManager)
+
+		// Configure resource expectations
+		mockRes.On("GetName").Return("users").Maybe()
+		mockRes.On("GetModel").Return(UpdateUser{}).Maybe()
+		mockRes.On("GetIDFieldName").Return("ID").Maybe()
+		mockRes.On("GetEditableFields").Return([]string{"name", "email"}).Maybe()
+		mockRes.On("GetFields").Return([]resource.Field{
+			{Name: "id", Type: "int"},
+			{Name: "name", Type: "string"},
+			{Name: "email", Type: "string"},
+		}).Maybe()
+		mockRes.On("GetRelations").Return([]resource.Relation{{Name: "owner", Type: resource.RelationTypeManyToOne, Resource: "owners", Field: "OwnerID"}}).Maybe()
+
+		// Patch ValidateRelations to return an error
+		patch := monkey.Patch(resource.ValidateRelations, func(db *gorm.DB, obj interface{}) error {
+			return errors.New("invalid relation")
+		})
+		defer patch.Unpatch()
+
+		// DTO expectations
+		updateDTO := &UserUpdateDTO{Name: "New", Email: "new@example.com"}
+		jsonData, _ := json.Marshal(updateDTO)
+		modelData := map[string]interface{}{"name": "New", "email": "new@example.com"}
+		mockDTO.On("GetUpdateDTO").Return(&UserUpdateDTO{}).Once()
+		mockDTO.On("TransformToModel", mock.AnythingOfType("*handler.UserUpdateDTO")).Return(modelData, nil).Once()
+
+		// Repository expectations
+		mockRepo.On("Query", mock.Anything).Return(&gorm.DB{}).Once()
+
+		// Setup the handler
+		r := gin.New()
+		r.PUT("/users/:id", GenerateUpdateHandler(mockRes, mockRepo, mockDTO))
+
+		// Make the request
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/users/1", bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		// Expect bad request with validation error
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response["error"], "invalid relation")
+
 		mockRepo.AssertExpectations(t)
 		mockDTO.AssertExpectations(t)
 	})
