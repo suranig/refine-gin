@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1229,5 +1230,101 @@ func TestOwnerRepository_GetIDFieldName(t *testing.T) {
 
 		fieldName := customRepo.GetIDFieldName()
 		assert.Equal(t, "CustomID", fieldName)
+	})
+}
+
+// TestOwnerRepository_BulkCreateAndUpdate tests BulkCreate and BulkUpdate methods
+func TestOwnerRepository_BulkCreateAndUpdate(t *testing.T) {
+	// Create a fresh database for this test
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+
+	// Create owner resource with default config
+	ownerConfig := resource.DefaultOwnerConfig()
+	// Ensure we're using the correct DB column name
+	ownerConfig.OwnerField = "OwnerID" // Field name in struct
+	ownerRes := resource.NewOwnerResource(res, ownerConfig)
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Test BulkCreate with owner context
+	t.Run("BulkCreate sets owner ID from context", func(t *testing.T) {
+		ctx := ownerContext("bulk-create-owner")
+
+		// Create test data
+		testItems := []OwnerTestEntity{
+			{Name: "Bulk Create Item 1"},
+			{Name: "Bulk Create Item 2"},
+			{Name: "Bulk Create Item 3"},
+		}
+
+		err := repo.BulkCreate(ctx, testItems)
+		require.NoError(t, err)
+
+		// Verify items were created with correct owner ID
+		var createdItems []OwnerTestEntity
+		err = db.Where("owner_id = ?", "bulk-create-owner").Find(&createdItems).Error
+		require.NoError(t, err)
+
+		assert.Equal(t, 3, len(createdItems))
+		for _, item := range createdItems {
+			assert.Equal(t, "bulk-create-owner", item.OwnerID)
+			assert.True(t, strings.HasPrefix(item.Name, "Bulk Create Item"))
+		}
+	})
+
+	// Test BulkUpdate with owner context
+	t.Run("BulkUpdate only updates owned items", func(t *testing.T) {
+		// Create test data with different owners
+		initialItems := []OwnerTestEntity{
+			{Name: "Bulk Update Item 1", OwnerID: "bulk-update-owner"},
+			{Name: "Bulk Update Item 2", OwnerID: "bulk-update-owner"},
+			{Name: "Bulk Update Item 3", OwnerID: "other-owner"},
+		}
+
+		result := db.Create(&initialItems)
+		require.NoError(t, result.Error)
+
+		// Get context with owner ID
+		ctx := ownerContext("bulk-update-owner")
+
+		// Update all items matching condition - use simple condition
+		condition := map[string]interface{}{}
+
+		updates := map[string]interface{}{
+			"name": "Bulk Updated",
+		}
+
+		err := repo.BulkUpdate(ctx, condition, updates)
+		require.NoError(t, err)
+
+		// Verify only owned items were updated
+		var updatedItems []OwnerTestEntity
+		err = db.Where("name = ?", "Bulk Updated").Find(&updatedItems).Error
+		require.NoError(t, err)
+
+		// Should have updated only the 2 items owned by bulk-update-owner
+		assert.Equal(t, 2, len(updatedItems))
+
+		// All updated items should belong to the owner
+		for _, item := range updatedItems {
+			assert.Equal(t, "bulk-update-owner", item.OwnerID)
+		}
+
+		// Verify item with other-owner was not updated
+		var otherItem OwnerTestEntity
+		err = db.Where("owner_id = ?", "other-owner").First(&otherItem).Error
+		require.NoError(t, err)
+
+		assert.Equal(t, "Bulk Update Item 3", otherItem.Name)
 	})
 }
