@@ -462,6 +462,114 @@ func TestOwnerDeleteManyHandler(t *testing.T) {
 	})
 }
 
+func TestOwnerCountHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		// Setup
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		// Setup request with query parameters
+		req := httptest.NewRequest(http.MethodGet, "/tests/count?filter[name]=test", nil)
+		c.Request = req
+
+		// Mock repository response
+		mockRepo.On("Count", mock.Anything, mock.Anything).Return(int64(5), nil)
+
+		// Call handler
+		handler := GenerateOwnerCountHandler(res, mockRepo)
+		handler(c)
+
+		// Assertions
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, float64(5), response["data"])
+
+		// Check for ETag header
+		etag := w.Header().Get("ETag")
+		assert.NotEmpty(t, etag)
+
+		// Check for Cache-Control header
+		cacheControl := w.Header().Get("Cache-Control")
+		assert.NotEmpty(t, cacheControl)
+	})
+
+	t.Run("ETag match - returns 304", func(t *testing.T) {
+		// Najpierw wykonujemy zapytanie by otrzymać ETag
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		// Setup
+		mockRepo := new(MockRepository)
+		res := resource.NewResource(resource.ResourceConfig{
+			Name:  "tests",
+			Model: &OwnerTestModel{},
+		})
+
+		// Add owner ID to context middleware
+		router.Use(func(c *gin.Context) {
+			c.Set(middleware.OwnerContextKey, "test-owner")
+			c.Next()
+		})
+
+		// Register the handler
+		router.GET("/tests/count", GenerateOwnerCountHandler(res, mockRepo))
+
+		// Setup repository mock
+		mockRepo.On("Count", mock.Anything, mock.Anything).Return(int64(5), nil).Once()
+
+		// First request to get ETag
+		w1 := httptest.NewRecorder()
+		req1, _ := http.NewRequest("GET", "/tests/count", nil)
+		router.ServeHTTP(w1, req1)
+
+		// Verify first response
+		assert.Equal(t, http.StatusOK, w1.Code)
+		etag := w1.Header().Get("ETag")
+		assert.NotEmpty(t, etag)
+
+		// Second request with ETag
+		w2 := httptest.NewRecorder()
+		req2, _ := http.NewRequest("GET", "/tests/count", nil)
+		req2.Header.Set("If-None-Match", etag)
+		router.ServeHTTP(w2, req2)
+
+		// Verify second response
+		assert.Equal(t, http.StatusNotModified, w2.Code)
+		assert.Empty(t, w2.Body.String())
+
+		// Verify mocks
+		mockRepo.AssertNumberOfCalls(t, "Count", 1) // Should be called only once
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		// Setup
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		// Setup request
+		req := httptest.NewRequest(http.MethodGet, "/tests/count", nil)
+		c.Request = req
+
+		// Mock repository error
+		mockRepo.On("Count", mock.Anything, mock.Anything).Return(int64(0), errors.New("database error"))
+
+		// Call handler
+		handler := GenerateOwnerCountHandler(res, mockRepo)
+		handler(c)
+
+		// Assertions
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "database error", response["error"])
+	})
+}
+
 func TestOwnerResourceRegistration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

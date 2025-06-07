@@ -6,12 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
 
@@ -384,4 +386,183 @@ func TestValidateNestedJsonFields(t *testing.T) {
 
 	// Verify expectations
 	mockResource.AssertExpectations(t)
+}
+
+// TestUpdateHandlerDirectly tests the UpdateHandler function directly
+func TestUpdateHandlerDirectly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Setup mock resource and repository
+	mockResource := new(MockResource)
+	mockRepo := new(MockRepository)
+
+	// Define model
+	type TestUpdateModel struct {
+		ID   uint   `json:"id"`
+		Name string `json:"name"`
+	}
+	mockResource.On("GetModel").Return(TestUpdateModel{}).Maybe()
+	mockResource.On("GetName").Return("test-update").Maybe()
+	mockResource.On("GetIDFieldName").Return("ID").Maybe()
+
+	// Test case: Successful update with data in Refine format
+	t.Run("Successful update with data in Refine format", func(t *testing.T) {
+		// Setup gin context with ID param
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "123"}}
+
+		// Setup request with JSON body
+		reqBody := `{"data":{"name":"Updated Item"}}`
+		c.Request, _ = http.NewRequest(http.MethodPut, "/test-update/123", strings.NewReader(reqBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		// Mock repository response
+		updatedItem := &TestUpdateModel{ID: 123, Name: "Updated Item"}
+		mockRepo.On("Update", mock.Anything, "123", mock.Anything).Return(updatedItem, nil).Once()
+
+		// Call handler
+		UpdateHandler(c, mockResource, mockRepo)
+
+		// Assertions
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Check response structure
+		assert.Contains(t, response, "data")
+		data, ok := response["data"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, float64(123), data["id"])
+		assert.Equal(t, "Updated Item", data["name"])
+
+		// Verify mock calls
+		mockRepo.AssertExpectations(t)
+	})
+
+	// Test case: Successful update with direct data format
+	t.Run("Successful update with direct data format", func(t *testing.T) {
+		// Setup gin context with ID param
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "456"}}
+
+		// Setup request with JSON body (direct format, not wrapped in data field)
+		reqBody := `{"name":"Direct Update"}`
+		c.Request, _ = http.NewRequest(http.MethodPut, "/test-update/456", strings.NewReader(reqBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		// Mock repository response
+		updatedItem := &TestUpdateModel{ID: 456, Name: "Direct Update"}
+		mockRepo.On("Update", mock.Anything, "456", mock.Anything).Return(updatedItem, nil).Once()
+
+		// Call handler
+		UpdateHandler(c, mockResource, mockRepo)
+
+		// Assertions
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Check response structure
+		assert.Contains(t, response, "data")
+		data, ok := response["data"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, float64(456), data["id"])
+		assert.Equal(t, "Direct Update", data["name"])
+
+		// Verify mock calls
+		mockRepo.AssertExpectations(t)
+	})
+
+	// Test case: Record not found
+	t.Run("Record not found", func(t *testing.T) {
+		// Setup gin context with ID param
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+
+		// Setup request with JSON body
+		reqBody := `{"data":{"name":"Not Found"}}`
+		c.Request, _ = http.NewRequest(http.MethodPut, "/test-update/999", strings.NewReader(reqBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		// Mock repository response - not found error
+		mockRepo.On("Update", mock.Anything, "999", mock.Anything).Return(nil, errors.New("record not found")).Once()
+
+		// Call handler
+		UpdateHandler(c, mockResource, mockRepo)
+
+		// Assertions
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Check error message
+		assert.Contains(t, response, "error")
+		assert.Equal(t, "Resource not found", response["error"])
+
+		// Verify mock calls
+		mockRepo.AssertExpectations(t)
+	})
+
+	// Test case: Invalid JSON
+	t.Run("Invalid JSON", func(t *testing.T) {
+		// Setup gin context with ID param
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "123"}}
+
+		// Setup request with invalid JSON body
+		reqBody := `{"data":{"name":"Invalid JSON}`
+		c.Request, _ = http.NewRequest(http.MethodPut, "/test-update/123", strings.NewReader(reqBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		// Call handler - repository mock should not be called
+		UpdateHandler(c, mockResource, mockRepo)
+
+		// Assertions
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Check error message
+		assert.Contains(t, response, "error")
+	})
+
+	// Test case: Other error
+	t.Run("Other repository error", func(t *testing.T) {
+		// Setup gin context with ID param
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "789"}}
+
+		// Setup request with JSON body
+		reqBody := `{"data":{"name":"Error Item"}}`
+		c.Request, _ = http.NewRequest(http.MethodPut, "/test-update/789", strings.NewReader(reqBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		// Mock repository response - other error
+		mockRepo.On("Update", mock.Anything, "789", mock.Anything).Return(nil, errors.New("database error")).Once()
+
+		// Call handler
+		UpdateHandler(c, mockResource, mockRepo)
+
+		// Assertions
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Check error message
+		assert.Contains(t, response, "error")
+		assert.Equal(t, "database error", response["error"])
+
+		// Verify mock calls
+		mockRepo.AssertExpectations(t)
+	})
 }
