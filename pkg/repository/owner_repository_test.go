@@ -633,6 +633,66 @@ func TestOwnerRepository_DeleteMany(t *testing.T) {
 	})
 }
 
+// TestOwnerRepository_DeleteManyErrors verifies that DeleteMany returns errors
+// when records don't belong to the caller or do not exist and that no data is
+// removed in those cases.
+func TestOwnerRepository_DeleteManyErrors(t *testing.T) {
+	// Create a fresh database for this test with a unique identifier
+	db, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&OwnerTestEntity{}))
+
+	// Create resource and owner resource with enforcement enabled
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "owner-test-entity",
+		Model: &OwnerTestEntity{},
+	})
+	ownerRes := resource.NewOwnerResource(res, resource.DefaultOwnerConfig())
+
+	// Create repository
+	repo, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+
+	// Insert one record for the owner and one for another owner
+	items := []OwnerTestEntity{
+		{Name: "Owner Item", OwnerID: "owner-a"},
+		{Name: "Other Owner Item", OwnerID: "owner-b"},
+	}
+	require.NoError(t, db.Create(&items).Error)
+
+	otherID := items[1].ID
+	missingID := otherID + 1000 // guaranteed non-existent
+
+	// Ensure initial count is two
+	var initialCount int64
+	db.Model(&OwnerTestEntity{}).Count(&initialCount)
+	require.Equal(t, int64(2), initialCount)
+
+	ctx := ownerContext("owner-a")
+
+	t.Run("error for mismatched owner", func(t *testing.T) {
+		affected, err := repo.DeleteMany(ctx, []interface{}{otherID})
+		assert.Equal(t, ErrOwnerMismatch, err)
+		assert.Equal(t, int64(0), affected)
+
+		// No records should be removed
+		var count int64
+		db.Model(&OwnerTestEntity{}).Count(&count)
+		assert.Equal(t, initialCount, count)
+	})
+
+	t.Run("error for missing record", func(t *testing.T) {
+		affected, err := repo.DeleteMany(ctx, []interface{}{missingID})
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+		assert.Equal(t, int64(0), affected)
+
+		// Ensure still no deletions
+		var count int64
+		db.Model(&OwnerTestEntity{}).Count(&count)
+		assert.Equal(t, initialCount, count)
+	})
+}
+
 // TestOwnerRepository_WithTransaction tests the WithTransaction method
 func TestOwnerRepository_WithTransaction(t *testing.T) {
 	// Create a fresh database for this test with a unique identifier
