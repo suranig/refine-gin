@@ -235,17 +235,17 @@ func TestNamingConventionMiddleware_MalformedJSON(t *testing.T) {
 	r := gin.New()
 	r.Use(NamingConventionMiddleware(naming.SnakeCase))
 
-	// Handler just echoes back the raw body it receives
+	// Echo back the raw request body so we can verify it is unchanged
 	r.POST("/malformed", func(c *gin.Context) {
-		bodyBytes, _ := io.ReadAll(c.Request.Body)
-		c.String(http.StatusOK, string(bodyBytes))
+		body, err := io.ReadAll(c.Request.Body)
+		assert.NoError(t, err)
+		c.Data(http.StatusOK, "application/json", body)
 	})
 
-	malformed := `{"name": "John", "age": 30,}`
+	malformed := "{invalid json"
 	req := httptest.NewRequest(http.MethodPost, "/malformed", bytes.NewBufferString(malformed))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
