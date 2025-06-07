@@ -1250,6 +1250,52 @@ func TestMapValidationToAntDesignRules(t *testing.T) {
 	assert.Nil(t, MapValidationToAntDesignRules(nil))
 }
 
+func TestMapValidationToAntDesignRulesAdvanced(t *testing.T) {
+	validation := &Validation{
+		Custom: "v > 10",
+		Conditional: &ConditionalValidation{
+			Field:    "status",
+			Operator: "eq",
+			Value:    "active",
+			Message:  "status must be active",
+		},
+		AsyncValidator: "http://example.com/validate",
+		Message:        "validation failed",
+	}
+
+	rules := MapValidationToAntDesignRules(validation)
+	assert.Len(t, rules, 3)
+
+	var customRule, conditionalRule, asyncRule *AntDesignRuleMetadata
+	for i := range rules {
+		r := &rules[i]
+		switch r.Type {
+		case "custom":
+			customRule = r
+		case "conditional":
+			conditionalRule = r
+		case "async":
+			asyncRule = r
+		}
+	}
+
+	assert.NotNil(t, customRule)
+	assert.Equal(t, validation.Custom, customRule.Value)
+	assert.Equal(t, "custom", customRule.Type)
+
+	assert.NotNil(t, conditionalRule)
+	assert.Equal(t, "conditional", conditionalRule.Type)
+	condVal, ok := conditionalRule.Value.(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, validation.Conditional.Field, condVal["field"])
+	assert.Equal(t, validation.Conditional.Operator, condVal["operator"])
+	assert.Equal(t, validation.Conditional.Value, condVal["value"])
+
+	assert.NotNil(t, asyncRule)
+	assert.Equal(t, "async", asyncRule.Type)
+	assert.Equal(t, validation.AsyncValidator, asyncRule.Value)
+}
+
 func TestAutoDetectAntDesignComponent(t *testing.T) {
 	// Test detection for various field types
 	testCases := []struct {
