@@ -235,10 +235,20 @@ func TestNamingConventionMiddleware_MalformedJSON(t *testing.T) {
 	r := gin.New()
 	r.Use(NamingConventionMiddleware(naming.SnakeCase))
 
-	// Echo back the raw request body so we can verify it is unchanged
+	// Echo back the raw request body so we can verify it is unchanged and
+	// ensure the handler is still invoked even when JSON binding fails.
 	r.POST("/malformed", func(c *gin.Context) {
 		body, err := io.ReadAll(c.Request.Body)
 		assert.NoError(t, err)
+
+		// Attempt to bind the JSON to prove the handler runs. This will
+		// fail for malformed JSON but should not affect our ability to
+		// read the original payload.
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+		var data map[string]interface{}
+		_ = c.ShouldBindJSON(&data)
+
+		// Respond with the body that was sent.
 		c.Data(http.StatusOK, "application/json", body)
 	})
 
@@ -248,6 +258,8 @@ func TestNamingConventionMiddleware_MalformedJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
+	// The middleware should not modify the body and should allow the handler
+	// to execute.
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, malformed, w.Body.String())
 }
