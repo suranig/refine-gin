@@ -502,9 +502,33 @@ func TestOwnerRepository_CreateMany(t *testing.T) {
 		}
 
 		// Verify in database
-		var count int64
-		db.Model(&OwnerTestEntity{}).Where("owner_id = ?", "batch-owner").Count(&count)
-		assert.Equal(t, int64(2), count)
+		var dbItems []OwnerTestEntity
+		require.NoError(t, db.Where("owner_id = ?", "batch-owner").Find(&dbItems).Error)
+		assert.Equal(t, 2, len(dbItems))
+		for _, dbItem := range dbItems {
+			assert.Equal(t, "batch-owner", dbItem.OwnerID)
+		}
+	})
+
+	t.Run("CreateMany enforces owner ID on all records", func(t *testing.T) {
+		ctx := ownerContext("enforced-owner")
+		items := []OwnerTestEntity{
+			{Name: "Override 1", OwnerID: "wrong"},
+			{Name: "Override 2", OwnerID: "also-wrong"},
+		}
+
+		result, err := repo.CreateMany(ctx, &items)
+		require.NoError(t, err)
+
+		resultItems := result.(*[]OwnerTestEntity)
+		assert.Equal(t, 2, len(*resultItems))
+		for _, item := range *resultItems {
+			assert.Equal(t, "enforced-owner", item.OwnerID)
+		}
+
+		var dbItems []OwnerTestEntity
+		require.NoError(t, db.Where("owner_id = ?", "enforced-owner").Find(&dbItems).Error)
+		assert.Equal(t, 2, len(dbItems))
 	})
 }
 
@@ -559,12 +583,29 @@ func TestOwnerRepository_UpdateMany(t *testing.T) {
 		db.Where("owner_id = ?", "update-owner").Find(&items)
 		for _, item := range items {
 			assert.Equal(t, "Updated Batch Item", item.Name)
+			assert.Equal(t, "update-owner", item.OwnerID)
 		}
 
 		// Check that other owner's data wasn't updated
 		var otherItem OwnerTestEntity
 		db.Where("owner_id = ?", "other-owner").First(&otherItem)
 		assert.Equal(t, "Other Owner Item", otherItem.Name)
+	})
+
+	t.Run("UpdateMany fails when any ID is not owned", func(t *testing.T) {
+		ctx := ownerContext("update-owner")
+		badIDs := []interface{}{testItems[0].ID, testItems[2].ID}
+		updated := map[string]interface{}{"name": "Should Not Update"}
+
+		count, err := repo.UpdateMany(ctx, badIDs, updated)
+		assert.Equal(t, ErrOwnerMismatch, err)
+		assert.Equal(t, int64(0), count)
+
+		var check OwnerTestEntity
+		require.NoError(t, db.First(&check, testItems[0].ID).Error)
+		assert.Equal(t, "Update Item 1", check.Name)
+		require.NoError(t, db.First(&check, testItems[2].ID).Error)
+		assert.Equal(t, "Other Owner Item", check.Name)
 	})
 }
 
@@ -1402,6 +1443,17 @@ func TestOwnerRepository_BulkCreateAndUpdate(t *testing.T) {
 		}
 	})
 
+	t.Run("BulkCreate returns error on DB failure", func(t *testing.T) {
+		badDB, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+		require.NoError(t, err)
+
+		badRepo, err := NewOwnerRepository(badDB, ownerRes)
+		require.NoError(t, err)
+
+		err = badRepo.BulkCreate(ownerContext("x"), []OwnerTestEntity{{Name: "fail"}})
+		assert.Error(t, err)
+	})
+
 	// Test BulkUpdate with owner context
 	t.Run("BulkUpdate only updates owned items", func(t *testing.T) {
 		// Create test data with different owners
@@ -1446,5 +1498,19 @@ func TestOwnerRepository_BulkCreateAndUpdate(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "Bulk Update Item 3", otherItem.Name)
+	})
+
+	t.Run("BulkUpdate returns error on DB failure", func(t *testing.T) {
+		badDB, err := gorm.Open(sqlite.Open(uniqueDBName()), &gorm.Config{})
+		require.NoError(t, err)
+
+		badRepo, err := NewOwnerRepository(badDB, ownerRes)
+		require.NoError(t, err)
+
+		condition := map[string]interface{}{"name": "something"}
+		updates := map[string]interface{}{"name": "changed"}
+
+		err = badRepo.BulkUpdate(ownerContext("x"), condition, updates)
+		assert.Error(t, err)
 	})
 }
