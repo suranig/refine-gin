@@ -431,10 +431,11 @@ func detachFromHasManyRelation(parentObj interface{}, relation *resource.Relatio
 	// Create a new slice without the specified IDs
 	newSlice := reflect.MakeSlice(field.Type(), 0, field.Len())
 
-	// Create a map of IDs to remove for faster lookup
-	idMap := make(map[interface{}]bool)
+	// Create a map of IDs to remove for faster lookup. Convert to strings so
+	// numeric types from JSON (float64) match struct field types like int/uint.
+	idMap := make(map[string]bool)
 	for _, id := range ids {
-		idMap[id] = true
+		idMap[fmt.Sprintf("%v", id)] = true
 	}
 
 	// Copy all elements except those with matching IDs
@@ -442,7 +443,7 @@ func detachFromHasManyRelation(parentObj interface{}, relation *resource.Relatio
 		item := field.Index(i)
 
 		// Get the ID of the item
-		var itemID interface{}
+		var itemIDStr string
 		if item.Kind() == reflect.Ptr {
 			item = item.Elem()
 		}
@@ -453,10 +454,10 @@ func detachFromHasManyRelation(parentObj interface{}, relation *resource.Relatio
 			continue
 		}
 
-		itemID = idField.Interface()
+		itemIDStr = fmt.Sprintf("%v", idField.Interface())
 
 		// If not in the remove list, keep it
-		if !idMap[itemID] {
+		if !idMap[itemIDStr] {
 			newSlice = reflect.Append(newSlice, field.Index(i))
 		}
 	}

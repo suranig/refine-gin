@@ -578,3 +578,37 @@ func TestGetFormLayoutDefaultGeneration(t *testing.T) {
 	expected := []string{"First", "Second", "Third"}
 	assert.Equal(t, expected, got)
 }
+
+func TestDefaultResourcePermissions(t *testing.T) {
+	// Resource with nil permissions should allow all operations
+	resNil := &DefaultResource{
+		Name:  "users",
+		Model: TestUser{},
+	}
+
+	assert.True(t, resNil.HasPermission(string(OperationCreate), "admin"))
+	assert.True(t, resNil.HasPermission(string(OperationDelete), "guest"))
+
+	// Resource with explicit permissions map
+	perms := map[string][]string{
+		string(OperationCreate): {"admin", "editor"},
+		string(OperationDelete): {"admin"},
+	}
+
+	res := &DefaultResource{
+		Name:        "users",
+		Model:       TestUser{},
+		Permissions: perms,
+	}
+
+	// Missing operation should default to allowing access
+	assert.True(t, res.HasPermission(string(OperationRead), "guest"))
+
+	// Role present in list
+	assert.True(t, res.HasPermission(string(OperationCreate), "admin"))
+	assert.True(t, res.HasPermission(string(OperationCreate), "editor"))
+
+	// Role absent from list
+	assert.False(t, res.HasPermission(string(OperationCreate), "guest"))
+	assert.False(t, res.HasPermission(string(OperationDelete), "editor"))
+}

@@ -704,6 +704,68 @@ func TestValidateNestedJson(t *testing.T) {
 			},
 		},
 		{
+			name: "Invalid JSON string",
+			data: `{"name": "Test Name", "age": 30`,
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path:       "name",
+						Type:       "string",
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"Invalid JSON string",
+			},
+		},
+		{
+			name: "Nested object missing required field",
+			data: map[string]interface{}{
+				"name": "Test Name",
+				"address": map[string]interface{}{
+					"street": "123 Main St",
+					"zip":    "12345",
+				},
+			},
+			config: &JsonConfig{
+				Properties: []JsonProperty{
+					{
+						Path:       "name",
+						Type:       "string",
+						Validation: &JsonValidation{Required: true},
+					},
+					{
+						Path: "address",
+						Type: "object",
+						Properties: []JsonProperty{
+							{
+								Path:       "street",
+								Type:       "string",
+								Validation: &JsonValidation{Required: true},
+							},
+							{
+								Path:       "city",
+								Type:       "string",
+								Validation: &JsonValidation{Required: true},
+							},
+							{
+								Path:       "zip",
+								Type:       "string",
+								Validation: &JsonValidation{Required: true},
+							},
+						},
+						Validation: &JsonValidation{Required: true},
+					},
+				},
+			},
+			expectedValid: false,
+			expectedErrors: []string{
+				"address.Required property 'city' not found",
+			},
+		},
+		{
 			name:          "Nil inputs",
 			data:          nil,
 			config:        nil,

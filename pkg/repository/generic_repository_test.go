@@ -79,6 +79,46 @@ func createTestData(t *testing.T, db *gorm.DB) (TestCategory, TestProduct) {
 	return category, product
 }
 
+// Structures for JSON field update tests
+type TestConfig struct {
+	Enabled bool   `json:"enabled"`
+	Note    string `json:"note"`
+}
+
+type TestJSONModel struct {
+	ID        uint       `gorm:"primarykey" json:"id"`
+	Name      string     `json:"name"`
+	Config    TestConfig `json:"config" gorm:"serializer:json"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+func setupJSONTestDB(t *testing.T) *gorm.DB {
+	dbName := fmt.Sprintf("file:jsondb%d?mode=memory&cache=shared", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to connect database: %v", err)
+	}
+	if err := db.AutoMigrate(&TestJSONModel{}); err != nil {
+		t.Fatalf("failed to migrate database: %v", err)
+	}
+	return db
+}
+
+func createJSONTestData(t *testing.T, db *gorm.DB) TestJSONModel {
+	m := TestJSONModel{
+		Name: "json model",
+		Config: TestConfig{
+			Enabled: true,
+			Note:    "initial",
+		},
+	}
+	if err := db.Create(&m).Error; err != nil {
+		t.Fatalf("failed to create json model: %v", err)
+	}
+	return m
+}
+
 func TestGenericRepository_Basic(t *testing.T) {
 	db := setupTestDB(t)
 	_, product := createTestData(t, db)
@@ -507,4 +547,61 @@ func TestGenericRepository_BulkUpdate_Error(t *testing.T) {
 
 	err = repo.BulkUpdate(ctx, map[string]interface{}{"name": "foo"}, map[string]interface{}{"price": 1})
 	assert.Error(t, err)
+}
+
+func TestGenericRepository_Update(t *testing.T) {
+	t.Run("MapUpdateWithJSON", func(t *testing.T) {
+		db := setupJSONTestDB(t)
+		initial := createJSONTestData(t, db)
+
+		jsonResource := resource.NewResource(resource.ResourceConfig{
+			Name:  "jsons",
+			Model: TestJSONModel{},
+		})
+		repo := NewGenericRepository(db, jsonResource)
+
+		updates := map[string]interface{}{
+			"name": "updated",
+			"config": map[string]interface{}{
+				"enabled": false,
+				"note":    "changed",
+			},
+		}
+
+		ctx := context.Background()
+		result, err := repo.Update(ctx, initial.ID, updates)
+		require.NoError(t, err)
+
+		updated := result.(*TestJSONModel)
+		assert.Equal(t, initial.ID, updated.ID)
+		assert.Equal(t, "updated", updated.Name)
+		assert.False(t, updated.Config.Enabled)
+		assert.Equal(t, "changed", updated.Config.Note)
+
+		// Verify persisted changes
+		var check TestJSONModel
+		err = db.First(&check, initial.ID).Error
+		require.NoError(t, err)
+		assert.Equal(t, updated.Name, check.Name)
+		assert.Equal(t, updated.Config, check.Config)
+	})
+
+	t.Run("InvalidMapData", func(t *testing.T) {
+		db := setupJSONTestDB(t)
+		initial := createJSONTestData(t, db)
+
+		jsonResource := resource.NewResource(resource.ResourceConfig{
+			Name:  "jsons",
+			Model: TestJSONModel{},
+		})
+		repo := NewGenericRepository(db, jsonResource)
+
+		updates := map[string]interface{}{
+			"config": "not a map",
+		}
+
+		ctx := context.Background()
+		_, err := repo.Update(ctx, initial.ID, updates)
+		assert.Error(t, err)
+	})
 }
