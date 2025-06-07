@@ -1348,6 +1348,54 @@ func TestAutoDetectAntDesignComponent(t *testing.T) {
 			},
 			expected: "JsonEditor",
 		},
+		{
+			name: "Multiselect field",
+			field: Field{
+				Name: "tags",
+				Type: "multiselect",
+			},
+			expected: "Select",
+		},
+		{
+			name: "Checkbox field",
+			field: Field{
+				Name: "agree",
+				Type: "checkbox",
+			},
+			expected: "Checkbox",
+		},
+		{
+			name: "Radio field",
+			field: Field{
+				Name: "gender",
+				Type: "radio",
+			},
+			expected: "Radio",
+		},
+		{
+			name: "Time field",
+			field: Field{
+				Name: "startTime",
+				Type: "time",
+			},
+			expected: "TimePicker",
+		},
+		{
+			name: "Datetime field",
+			field: Field{
+				Name: "createdAt",
+				Type: "datetime",
+			},
+			expected: "DatePicker",
+		},
+		{
+			name: "Unknown field type",
+			field: Field{
+				Name: "mystery",
+				Type: "unknown",
+			},
+			expected: "Input",
+		},
 	}
 
 	// Run test cases
