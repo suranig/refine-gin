@@ -886,7 +886,10 @@ func (r *OwnerGenericRepository) FindOneBy(ctx context.Context, condition map[st
 
 	// Add owner condition if enforced
 	if ownerID != nil && r.Resource != nil && r.Resource.IsOwnershipEnforced() {
-		condition[r.Resource.GetOwnerField()] = ownerID
+		// Get owner field name and convert to column name using GORM's naming strategy
+		ownerField := r.Resource.GetOwnerField()
+		ownerColumnName := r.DB.NamingStrategy.ColumnName("", ownerField)
+		condition[ownerColumnName] = ownerID
 	}
 
 	return r.GenericRepository.FindOneBy(ctx, condition)
@@ -902,7 +905,10 @@ func (r *OwnerGenericRepository) FindAllBy(ctx context.Context, condition map[st
 
 	// Add owner condition if enforced
 	if ownerID != nil && r.Resource != nil && r.Resource.IsOwnershipEnforced() {
-		condition[r.Resource.GetOwnerField()] = ownerID
+		// Get owner field name and convert to column name using GORM's naming strategy
+		ownerField := r.Resource.GetOwnerField()
+		ownerColumnName := r.DB.NamingStrategy.ColumnName("", ownerField)
+		condition[ownerColumnName] = ownerID
 	}
 
 	return r.GenericRepository.FindAllBy(ctx, condition)
@@ -975,7 +981,10 @@ func (r *OwnerGenericRepository) BulkUpdate(ctx context.Context, condition map[s
 
 	// Add owner condition if enforced
 	if ownerID != nil && r.Resource != nil && r.Resource.IsOwnershipEnforced() {
-		condition[r.Resource.GetOwnerField()] = ownerID
+		// Get owner field name and convert to column name using GORM's naming strategy
+		ownerField := r.Resource.GetOwnerField()
+		ownerColumnName := r.DB.NamingStrategy.ColumnName("", ownerField)
+		condition[ownerColumnName] = ownerID
 	}
 
 	return r.GenericRepository.BulkUpdate(ctx, condition, updates)

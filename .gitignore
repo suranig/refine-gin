@@ -49,3 +49,4 @@ build/
 
 # SQLite memory test files
 examples/relations/:memory:* 
+*:memory:* 
