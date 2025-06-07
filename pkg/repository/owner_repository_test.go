@@ -71,6 +71,25 @@ func TestOwnerRepository_UpdateSuccess(t *testing.T) {
 		assert.Equal(t, "owner-a", dbItem.OwnerID)
 	})
 
+	t.Run("Map input without owner_id keeps original owner", func(t *testing.T) {
+		ctx := ownerContext("owner-a")
+		updates := map[string]interface{}{
+			"name": "Omitted Owner",
+		}
+
+		res, err := repoIface.Update(ctx, item.ID, updates)
+		require.NoError(t, err)
+
+		upd := res.(*OwnerTestEntity)
+		assert.Equal(t, "Omitted Owner", upd.Name)
+		assert.Equal(t, "owner-a", upd.OwnerID)
+
+		var dbItem OwnerTestEntity
+		require.NoError(t, db.First(&dbItem, item.ID).Error)
+		assert.Equal(t, "Omitted Owner", dbItem.Name)
+		assert.Equal(t, "owner-a", dbItem.OwnerID)
+	})
+
 	t.Run("Update fails for mismatched owner", func(t *testing.T) {
 		_, err := repoIface.Update(ownerContext("owner-b"), item.ID, &OwnerTestEntity{Name: "Fail"})
 		assert.Equal(t, ErrOwnerMismatch, err)
@@ -79,6 +98,16 @@ func TestOwnerRepository_UpdateSuccess(t *testing.T) {
 	t.Run("Updating non-existent ID returns error", func(t *testing.T) {
 		_, err := repoIface.Update(ownerContext("owner-a"), uint(99999), map[string]interface{}{"name": "none"})
 		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+
+	t.Run("Invalid field triggers GORM error", func(t *testing.T) {
+		ctx := ownerContext("owner-a")
+		updates := map[string]interface{}{
+			"bogus": "value",
+		}
+
+		_, err := repoIface.Update(ctx, item.ID, updates)
+		assert.Error(t, err)
 	})
 }
 
