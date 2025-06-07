@@ -970,10 +970,25 @@ func TestConvertToNumber(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, float64(42), num)
 
+	// Test int64 input
+	num, err = convertToNumber(int64(42))
+	assert.NoError(t, err)
+	assert.Equal(t, float64(42), num)
+
+	// Test float32 input
+	num, err = convertToNumber(float32(42.5))
+	assert.NoError(t, err)
+	assert.Equal(t, float64(42.5), num)
+
 	// Test string input with valid number
 	num, err = convertToNumber("789.01")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(789.01), num)
+
+	// Test string input with integer
+	num, err = convertToNumber("42")
+	assert.NoError(t, err)
+	assert.Equal(t, float64(42), num)
 
 	// Test string input with invalid number
 	_, err = convertToNumber("not-a-number")
@@ -987,6 +1002,19 @@ func TestConvertToNumber(t *testing.T) {
 
 	// Test nil input
 	_, err = convertToNumber(nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "should be a number")
+
+	// Test with unsupported numeric types
+	_, err = convertToNumber(int32(42))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "should be a number")
+
+	_, err = convertToNumber(uint(42))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "should be a number")
+
+	_, err = convertToNumber(uint64(42))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "should be a number")
 }
