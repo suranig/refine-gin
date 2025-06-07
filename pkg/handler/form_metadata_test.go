@@ -868,3 +868,91 @@ func TestRegisterResourceFormEndpoints_WithID(t *testing.T) {
 		repo := repository.NewGenericRepository(db, &FormTestModel{})
 	*/
 }
+
+func TestRegisterResourceFormEndpoints_EdgeCases(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "test-entity",
+		Model: &FormTestModel{},
+	})
+
+	t.Run("Missing repository in context", func(t *testing.T) {
+		router := gin.New()
+		group := router.Group("/api")
+		RegisterResourceFormEndpoints(group, res)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form/1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var errResp dto.ErrorResponse
+		err := json.Unmarshal(w.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Equal(t, "Repository not available", errResp.Message)
+	})
+
+	t.Run("Form metadata endpoint works", func(t *testing.T) {
+		router := gin.New()
+		group := router.Group("/api")
+		RegisterResourceFormEndpoints(group, res)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entities/form", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response FormMetadataResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.NotNil(t, response.Fields)
+	})
+
+	t.Run("Form with dependencies", func(t *testing.T) {
+		// Create resource with field dependencies
+		resWithDeps := resource.NewResource(resource.ResourceConfig{
+			Name:  "test-entity-with-deps",
+			Model: &FormTestModel{},
+			Fields: []resource.Field{
+				{
+					Name: "FirstName",
+					Type: "string",
+					Form: &resource.FormConfig{
+						DependentOn: "LastName",
+					},
+				},
+				{
+					Name: "LastName",
+					Type: "string",
+				},
+				{
+					Name: "Email",
+					Type: "string",
+					Form: &resource.FormConfig{
+						Dependent: &resource.FormDependency{
+							Field: "FirstName",
+						},
+					},
+				},
+			},
+		})
+
+		router := gin.New()
+		group := router.Group("/api")
+		RegisterResourceFormEndpoints(group, resWithDeps)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test-entity-with-deps/form", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response FormMetadataResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.NotNil(t, response.Dependencies)
+		assert.Contains(t, response.Dependencies, "LastName")
+		assert.Contains(t, response.Dependencies, "FirstName")
+	})
+}
