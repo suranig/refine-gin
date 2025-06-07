@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/query"
 	"github.com/suranig/refine-gin/pkg/resource"
 	"gorm.io/driver/sqlite"
@@ -390,4 +392,119 @@ func TestGenericRepository_WithRelationsChaining(t *testing.T) {
 	assert.Len(t, *products, 1)
 	assert.Equal(t, category.ID, (*products)[0].Category.ID)
 	assert.Equal(t, category.Name, (*products)[0].Category.Name)
+}
+
+func TestGenericRepository_WithRelationsPreload(t *testing.T) {
+	db := setupTestDB(t)
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+	repoWith := repo.WithRelations("Category").(*GenericRepository)
+
+	_, ok := repoWith.DB.Statement.Preloads["Category"]
+	assert.True(t, ok)
+}
+
+func TestGenericRepository_GetWithRelations(t *testing.T) {
+	db := setupTestDB(t)
+	category, product := createTestData(t, db)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+	result, err := repo.GetWithRelations(ctx, product.ID, []string{"Category"})
+	assert.NoError(t, err)
+	prod := result.(*TestProduct)
+	assert.Equal(t, category.ID, prod.Category.ID)
+	assert.Equal(t, category.Name, prod.Category.Name)
+}
+
+func TestGenericRepository_ListWithRelations(t *testing.T) {
+	db := setupTestDB(t)
+	category, _ := createTestData(t, db)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+	options := query.QueryOptions{
+		Resource: productResource,
+		Page:     1,
+		PerPage:  10,
+	}
+	listResult, count, err := repo.ListWithRelations(ctx, options, []string{"Category"})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	products := listResult.(*[]TestProduct)
+	assert.Len(t, *products, 1)
+	assert.Equal(t, category.ID, (*products)[0].Category.ID)
+	assert.Equal(t, category.Name, (*products)[0].Category.Name)
+}
+
+func TestGenericRepository_WithTransactionRollbackOnError(t *testing.T) {
+	db := setupTestDB(t)
+	_, product := createTestData(t, db)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+
+	origPrice := product.Price
+	err := repo.WithTransaction(func(txRepo Repository) error {
+		product.Price = 1234.56
+		if _, err := txRepo.Update(ctx, product.ID, &product); err != nil {
+			return err
+		}
+		return errors.New("force rollback")
+	})
+	assert.Error(t, err)
+
+	after, err := repo.Get(ctx, product.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, origPrice, after.(*TestProduct).Price)
+}
+
+func TestGenericRepository_BulkCreate_Error(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+
+	items := []TestProduct{{Name: "Broken"}}
+	err = repo.BulkCreate(ctx, &items)
+	assert.Error(t, err)
+}
+
+func TestGenericRepository_BulkUpdate_Error(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+	repo := NewGenericRepository(db, productResource)
+	ctx := context.Background()
+
+	err = repo.BulkUpdate(ctx, map[string]interface{}{"name": "foo"}, map[string]interface{}{"price": 1})
+	assert.Error(t, err)
 }
