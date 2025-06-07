@@ -53,12 +53,14 @@ func TestCreateManyHandler(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusCreated, resp.Code)
 
-	var jsonResp BulkResponse
+	var jsonResp struct {
+		Data []TestModel `json:"data"`
+	}
 	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
 	assert.NoError(t, err)
 
 	// Verify the response contains the created items
-	assert.NotNil(t, jsonResp.Data)
+	assert.Equal(t, testItems, jsonResp.Data)
 
 	// Verify mocks were called as expected
 	mockDTOProvider.AssertExpectations(t)
@@ -311,6 +313,50 @@ func TestUpdateManyHandler_InvalidRequest(t *testing.T) {
 
 	// Check response indicates error
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestUpdateManyHandler_SingleIDValue(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	r, mockRepo, mockResource, mockDTOProvider := setupTest()
+
+	// Setup test data and mock expectations
+	updateDTO := TestModel{Name: "Updated Name"}
+	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
+	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
+	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(1), nil)
+	mockResource.On("GetEditableFields").Return([]string{"name"})
+
+	// Setup routes
+	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
+
+	// Create a request with a single ID value instead of an array
+	reqBody := BulkUpdateRequest{
+		IDs: "1",
+		Values: map[string]interface{}{
+			"name": "Updated Name",
+		},
+	}
+
+	reqData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+
+	// Serve the request
+	r.ServeHTTP(resp, req)
+
+	// Check response
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	var jsonResp map[string]map[string]interface{}
+	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), jsonResp["data"]["count"])
+
+	// Verify mocks were called
+	mockDTOProvider.AssertExpectations(t)
+	mockRepo.AssertExpectations(t)
 }
 
 func TestDeleteManyHandler_Error(t *testing.T) {
