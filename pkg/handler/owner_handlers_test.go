@@ -342,6 +342,126 @@ func TestOwnerDeleteHandler(t *testing.T) {
 	})
 }
 
+func TestOwnerCreateManyHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		reqBody := `[{"name":"Test 1"},{"name":"Test 2"}]`
+		req := httptest.NewRequest(http.MethodPost, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		created := []OwnerTestModel{
+			{ID: 1, Name: "Test 1", OwnerID: "test-owner"},
+			{ID: 2, Name: "Test 2", OwnerID: "test-owner"},
+		}
+		mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(created, nil)
+		dtoData := []map[string]interface{}{
+			{"id": float64(1), "name": "Test 1", "ownerId": "test-owner"},
+			{"id": float64(2), "name": "Test 2", "ownerId": "test-owner"},
+		}
+		mockDTO.On("TransformFromModel", created).Return(dtoData, nil)
+
+		GenerateOwnerCreateManyHandler(res, mockRepo, mockDTO)(c)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.NotNil(t, resp["data"])
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		reqBody := `[{"name":"Test 1"}]`
+		req := httptest.NewRequest(http.MethodPost, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(nil, errors.New("database error"))
+
+		GenerateOwnerCreateManyHandler(res, mockRepo, mockDTO)(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "database error", resp["error"])
+	})
+}
+
+func TestOwnerUpdateManyHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		reqBody := `{"ids":[1,2],"data":{"name":"Updated"}}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(2), nil)
+
+		GenerateOwnerUpdateManyHandler(res, mockRepo, mockDTO)(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp map[string]map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, float64(2), resp["data"]["affected"])
+	})
+
+	t.Run("ErrOwnerMismatch", func(t *testing.T) {
+		c, w, mockRepo, mockDTO, res := setupOwnerHandlerTest(t)
+
+		reqBody := `{"ids":[1,2],"data":{"name":"Updated"}}`
+		req := httptest.NewRequest(http.MethodPut, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), repository.ErrOwnerMismatch)
+
+		GenerateOwnerUpdateManyHandler(res, mockRepo, mockDTO)(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}
+
+func TestOwnerDeleteManyHandler(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		reqBody := `{"ids":[1,2]}`
+		req := httptest.NewRequest(http.MethodDelete, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(2), nil)
+
+		GenerateOwnerDeleteManyHandler(res, mockRepo)(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp map[string]map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, float64(2), resp["data"]["affected"])
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		c, w, mockRepo, _, res := setupOwnerHandlerTest(t)
+
+		reqBody := `{"ids":[1]}`
+		req := httptest.NewRequest(http.MethodDelete, "/tests/batch", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+
+		mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(0), errors.New("database error"))
+
+		GenerateOwnerDeleteManyHandler(res, mockRepo)(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "database error", resp["error"])
+	})
+}
+
 func TestOwnerResourceRegistration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
