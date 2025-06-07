@@ -483,6 +483,51 @@ func TestRegisterResourceFormEndpoints(t *testing.T) {
 	})
 }
 
+// TestResourceFormEndpoint_RepositoryErrors ensures proper error handling when
+// the provided repository does not implement the required FindByID method or
+// has an invalid signature.
+func TestResourceFormEndpoint_RepositoryErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create a simple resource for testing
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "resource",
+		Model: &FormTestModel{},
+	})
+
+	// Helper to perform a request with the given repository implementation
+	performRequest := func(repo interface{}) (*httptest.ResponseRecorder, dto.ErrorResponse) {
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set("repository", repo)
+			c.Next()
+		})
+
+		group := router.Group("/")
+		RegisterResourceFormEndpoints(group, res)
+
+		req := httptest.NewRequest(http.MethodGet, "/resources/form/1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		var errResp dto.ErrorResponse
+		_ = json.Unmarshal(w.Body.Bytes(), &errResp)
+		return w, errResp
+	}
+
+	t.Run("missing FindByID", func(t *testing.T) {
+		w, errResp := performRequest(&noFindByIDRepo{})
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, "Repository does not implement FindByID method", errResp.Message)
+	})
+
+	t.Run("bad signature", func(t *testing.T) {
+		w, errResp := performRequest(badSigRepo{})
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, "Unexpected repository method signature", errResp.Message)
+	})
+}
+
 func TestRegisterGlobalFormMetadataEndpoint_Advanced(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
