@@ -21,11 +21,9 @@ type APIConfigResponse struct {
 // GenerateAPIConfigHandler creates a handler for exposing API configuration
 func GenerateAPIConfigHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Pobierz wszystkie zasoby z rejestru
 		resources := make(map[string]resource.ResourceMetadata)
 		allResources := resource.GlobalResourceRegistry.GetAll()
 
-		// Wygeneruj ETag na podstawie liczby zasobów
 		etag := utils.GenerateETag(fmt.Sprintf("%d", len(allResources)))
 		ifNoneMatch := c.GetHeader("If-None-Match")
 

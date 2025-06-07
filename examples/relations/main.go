@@ -34,10 +34,8 @@ type Post struct {
 	CategoryID *uint     `json:"categoryId" gorm:"index"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
-	// Relacja "wiele do jednego" z kategorią
-	Category *Category `json:"-" gorm:"foreignKey:CategoryID" relation:"resource=categories;type=many-to-one;field=category"`
-	// Relacja "wiele do wielu" z tagami
-	Tags []Tag `json:"tags" gorm:"many2many:post_tags;" relation:"resource=tags;type=many-to-many;field=tags"`
+	Category   *Category `json:"-" gorm:"foreignKey:CategoryID" relation:"resource=categories;type=many-to-one;field=category"`
+	Tags       []Tag     `json:"tags" gorm:"many2many:post_tags;" relation:"resource=tags;type=many-to-many;field=tags"`
 }
 
 // Comment model
@@ -68,8 +66,7 @@ type Category struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
-	// Relation "jeden do wielu" z postami
-	Posts []Post `json:"posts" gorm:"foreignKey:CategoryID" relation:"resource=posts;type=one-to-many;field=posts"`
+	Posts     []Post    `json:"posts" gorm:"foreignKey:CategoryID" relation:"resource=posts;type=one-to-many;field=posts"`
 }
 
 // Tag model
@@ -78,8 +75,7 @@ type Tag struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
-	// Relacja "wiele do wielu" z postami
-	Posts []Post `json:"posts" gorm:"many2many:post_tags;" relation:"resource=posts;type=many-to-many;field=posts"`
+	Posts     []Post    `json:"posts" gorm:"many2many:post_tags;" relation:"resource=posts;type=many-to-many;field=posts"`
 }
 
 // UserRepository implements repository for User
@@ -267,20 +263,17 @@ func (r *UserRepository) DeleteMany(ctx context.Context, ids []interface{}) (int
 
 // Similar repositories for Post, Comment, and Profile...
 
-// InitDB inicjalizuje bazę danych
 func InitDB() (*gorm.DB, error) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	// Migracja schematów
 	err = db.AutoMigrate(&Category{}, &Post{}, &Tag{})
 	if err != nil {
 		return nil, err
 	}
 
-	// Dodanie przykładowych danych
 	categories := []Category{
 		{Name: "Technology"},
 		{Name: "Health"},
@@ -324,7 +317,6 @@ func InitDB() (*gorm.DB, error) {
 		db.Create(&posts[i])
 	}
 
-	// Dodanie powiązań między postami a tagami
 	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[0].ID, tags[0].ID)
 	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[0].ID, tags[1].ID)
 	db.Exec("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", posts[1].ID, tags[2].ID)
@@ -334,19 +326,15 @@ func InitDB() (*gorm.DB, error) {
 }
 
 func main() {
-	// Inicjalizacja bazy danych
 	db, err := InitDB()
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Utworzenie routera Gin
 	r := gin.Default()
 
-	// API grupa
 	api := r.Group("/api")
 
-	// Tworzenie zasobów
 	categoryResource := resource.NewResource(resource.ResourceConfig{
 		Name:  "categories",
 		Model: Category{},
@@ -398,7 +386,6 @@ func main() {
 		},
 	})
 
-	// Tworzenie repozytoriów
 	categoryRepo := repository.NewGenericRepositoryWithResource(db, resource.NewResource(resource.ResourceConfig{
 		Model: &Category{},
 	}))
@@ -411,12 +398,10 @@ func main() {
 		Model: &Tag{},
 	}))
 
-	// Rejestracja zasobów z obsługą relacji
 	handler.RegisterResourceForRefineWithRelations(api, categoryResource, categoryRepo, "id", []string{"posts"})
 	handler.RegisterResourceForRefineWithRelations(api, postResource, postRepo, "id", []string{"category", "tags"})
 	handler.RegisterResourceForRefineWithRelations(api, tagResource, tagRepo, "id", []string{"posts"})
 
-	// Niestandardowa akcja dla publikowania posta
 	publishAction := handler.CustomAction{
 		Name:       "publish",
 		Method:     "POST",
@@ -428,7 +413,6 @@ func main() {
 				return nil, err
 			}
 
-			// W rzeczywistej aplikacji można by zaktualizować status publikacji
 			return map[string]interface{}{
 				"success": true,
 				"message": "Post has been published",
@@ -437,10 +421,8 @@ func main() {
 		},
 	}
 
-	// Rejestracja niestandardowej akcji
 	handler.RegisterCustomActions(api, postResource, postRepo, []handler.CustomAction{publishAction})
 
-	// Uruchomienie serwera
 	log.Println("Server running on http://localhost:8080")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
