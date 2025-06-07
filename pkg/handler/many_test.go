@@ -313,6 +313,36 @@ func TestUpdateManyHandler_InvalidRequest(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
+func TestUpdateManyHandler_InvalidIDsFormat(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	r, _, mockResource, mockDTOProvider := setupTest()
+
+	mockResource.On("GetEditableFields").Return([]string{"name"})
+
+	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, nil, mockDTOProvider))
+
+	reqBody := BulkUpdateRequest{
+		Values: map[string]interface{}{
+			"name": "Updated",
+		},
+	}
+
+	reqData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+
+	r.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+
+	var jsonResp map[string]string
+	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
+	assert.NoError(t, err)
+	assert.Equal(t, "IDs must be an array or a single value", jsonResp["error"])
+}
+
 func TestDeleteManyHandler_Error(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
@@ -375,6 +405,34 @@ func TestDeleteManyHandler_InvalidRequest(t *testing.T) {
 
 	// Check response indicates error
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestDeleteManyHandler_InvalidIDsFormat(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	mockResource := new(MockResource)
+
+	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetIDFieldName").Return("ID")
+
+	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, nil))
+
+	reqBody := BulkDeleteRequest{}
+
+	reqData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("DELETE", "/tests/batch", bytes.NewBuffer(reqData))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+
+	r.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+
+	var jsonResp map[string]string
+	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
+	assert.NoError(t, err)
+	assert.Equal(t, "IDs must be an array or a single value", jsonResp["error"])
 }
 
 func TestDeleteManyHandler_SingleIDValue(t *testing.T) {
@@ -620,6 +678,59 @@ func TestCreateManyHandler_WithRelationValidation(t *testing.T) {
 	// Verify mocks were called
 	mockDTOProvider.AssertExpectations(t)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateManyHandler_RelationValidationFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	mockRepo := new(MockRepository)
+	mockDTOProvider := new(MockDTOProvider)
+
+	type RelModel struct {
+		ID       string
+		Category *string
+	}
+
+	res := &resource.DefaultResource{
+		Name:  "relmodels",
+		Model: RelModel{},
+		Relations: []resource.Relation{
+			{
+				Name:     "category",
+				Type:     resource.RelationTypeManyToOne,
+				Resource: "categories",
+				Field:    "Category",
+				Required: true,
+			},
+		},
+	}
+
+	resource.GlobalResourceRegistry = resource.NewResourceRegistry()
+	resource.GlobalResourceRegistry.Register(res)
+
+	items := []RelModel{{ID: "1", Category: nil}}
+	mockDTOProvider.On("TransformToModel", mock.Anything).Return(items, nil)
+	mockRepo.On("Query", mock.Anything).Return(nil)
+
+	r.POST("/tests/batch", GenerateCreateManyHandler(res, mockRepo, mockDTOProvider))
+
+	reqBody := BulkCreateRequest{
+		Values: []map[string]interface{}{{"id": "1"}},
+	}
+
+	reqData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+
+	r.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+
+	var jsonResp map[string]string
+	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
+	assert.NoError(t, err)
+	assert.Contains(t, jsonResp["error"], "relation category is required")
 }
 
 // MockRepository with CreateMany, UpdateMany, and DeleteMany methods
