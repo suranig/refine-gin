@@ -282,3 +282,15 @@ func TestConditionalValidatorValidate(t *testing.T) {
 	err = statusValidator.Validate(nil)
 	assert.NoError(t, err)
 }
+
+func TestCustomValidatorValidate(t *testing.T) {
+	validator := CustomValidator{Expression: "1 == 1", Message: "should pass"}
+	err := validator.Validate("anything")
+	assert.NoError(t, err)
+}
+
+func TestAsyncValidatorValidate(t *testing.T) {
+	validator := AsyncValidator{URL: "https://example.com", Message: "async"}
+	err := validator.Validate("sample")
+	assert.NoError(t, err)
+}
