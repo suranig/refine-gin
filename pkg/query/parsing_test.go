@@ -45,6 +45,7 @@ func TestParseQueryParam(t *testing.T) {
 		{"true", "bool", true, false},
 		{"maybe", "bool", false, true},
 		{"some", "string", "some", false},
+		{"sample", "unknown", "sample", false},
 	}
 
 	for _, tt := range tests {
