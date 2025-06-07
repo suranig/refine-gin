@@ -393,3 +393,41 @@ func TestOwnerResourceRegistration(t *testing.T) {
 		assert.True(t, v, "Route %s not registered", k)
 	}
 }
+
+func TestGenerateOwnerCountHandler(t *testing.T) {
+	t.Run("Cache and ETag", func(t *testing.T) {
+		// First request to get the count and ETag
+		c1, w1, mockRepo, _, res := setupOwnerHandlerTest(t)
+		req1 := httptest.NewRequest(http.MethodGet, "/tests/count", nil)
+		c1.Request = req1
+
+		mockRepo.On("Count", mock.Anything, mock.Anything).Return(int64(3), nil).Once()
+
+		handler := GenerateOwnerCountHandler(res, mockRepo)
+		handler(c1)
+
+		assert.Equal(t, http.StatusOK, w1.Code)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w1.Body.Bytes(), &resp))
+		assert.Equal(t, float64(3), resp["data"])
+
+		etag := w1.Header().Get("ETag")
+		assert.NotEmpty(t, etag)
+
+		// Second request with If-None-Match should return 304 without calling repo
+		w2 := httptest.NewRecorder()
+		c2, _ := gin.CreateTestContext(w2)
+		c2.Set(middleware.OwnerContextKey, "test-owner")
+		req2 := httptest.NewRequest(http.MethodGet, "/tests/count", nil)
+		req2.Header.Set("If-None-Match", etag)
+		c2.Request = req2
+
+		handler(c2)
+
+		assert.Equal(t, http.StatusNotModified, w2.Code)
+		assert.Empty(t, w2.Body.String())
+
+		mockRepo.AssertExpectations(t)
+	})
+}
