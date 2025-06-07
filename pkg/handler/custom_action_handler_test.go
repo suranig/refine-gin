@@ -612,12 +612,20 @@ type TestUser struct {
 // RecordingRepository is a simple repository that records Update calls
 type RecordingRepository struct {
 	data         map[string]*TestUser
+	comments     map[string]*TestComment
 	UpdatedData  interface{}
 	UpdateCalled bool
 }
 
 func NewRecordingRepository(user *TestUser) *RecordingRepository {
-	return &RecordingRepository{data: map[string]*TestUser{fmt.Sprintf("%v", user.ID): user}}
+	return &RecordingRepository{
+		data:     map[string]*TestUser{fmt.Sprintf("%v", user.ID): user},
+		comments: map[string]*TestComment{},
+	}
+}
+
+func (r *RecordingRepository) AddComment(c *TestComment) {
+	r.comments[fmt.Sprintf("%v", c.ID)] = c
 }
 
 func (r *RecordingRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
@@ -625,8 +633,12 @@ func (r *RecordingRepository) Create(ctx context.Context, data interface{}) (int
 }
 
 func (r *RecordingRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
-	if u, ok := r.data[fmt.Sprintf("%v", id)]; ok {
+	key := fmt.Sprintf("%v", id)
+	if u, ok := r.data[key]; ok {
 		return u, nil
+	}
+	if c, ok := r.comments[key]; ok {
+		return c, nil
 	}
 	return nil, fmt.Errorf("not found")
 }
@@ -760,5 +772,45 @@ func TestDetachActionHandler(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "relation ghost not found")
 		assert.False(t, repo.UpdateCalled)
+	})
+}
+
+func TestAttachActionHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &TestUser{
+		ID:       1,
+		Comments: []TestComment{{ID: 1}},
+	}
+	repo := NewRecordingRepository(user)
+	repo.AddComment(&TestComment{ID: 2})
+	repo.AddComment(&TestComment{ID: 3})
+
+	res := new(MockResource)
+	rel := resource.Relation{Name: "comments", Type: handler.HasMany, Field: "Comments"}
+	res.On("GetRelations").Return([]resource.Relation{rel})
+	res.On("HasRelation", "comments").Return(true)
+	res.On("GetRelation", "comments").Return(rel)
+
+	r := gin.New()
+	r.POST("/users/:id/actions/attach-comments", handler.GenerateCustomActionHandler(res, repo, handler.AttachAction("comments")))
+
+	t.Run("successful attach", func(t *testing.T) {
+		repo.UpdateCalled = false
+		body := strings.NewReader(`{"ids": [2,3]}`)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/users/1/actions/attach-comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, repo.UpdateCalled)
+
+		updated, ok := repo.UpdatedData.(*TestUser)
+		require.True(t, ok)
+		assert.Len(t, updated.Comments, 3)
+
+		stored := repo.data["1"]
+		assert.Len(t, stored.Comments, 3)
 	})
 }
