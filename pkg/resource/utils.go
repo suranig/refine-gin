@@ -567,6 +567,12 @@ func AutoDetectAntDesignComponent(field *Field) string {
 
 	// Map field type to Ant Design component
 	switch field.Type {
+	case "[]string":
+		return "Select"
+	case "bool":
+		return "Checkbox"
+	case "time.Time":
+		return "DatePicker"
 	case "string":
 		// Check if it's an enum/select type
 		if len(field.Options) > 0 || field.Select != nil {

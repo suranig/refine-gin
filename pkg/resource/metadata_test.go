@@ -1065,7 +1065,7 @@ func TestGenerateFieldsMetadataWithSpecialFields(t *testing.T) {
 	metadata := GenerateFieldsMetadata(fields)
 
 	// Verify metadata
-	assert.Len(t, metadata, 4)
+	assert.Len(t, metadata, 8)
 
 	// Check avatar field (file type)
 	avatarMeta := findFieldMetadata(metadata, "avatar")
@@ -1435,6 +1435,30 @@ func TestAutoDetectAntDesignComponent(t *testing.T) {
 			expected: "DatePicker",
 		},
 		{
+			name: "String slice field",
+			field: Field{
+				Name: "tagsList",
+				Type: "[]string",
+			},
+			expected: "Select",
+		},
+		{
+			name: "Bool field",
+			field: Field{
+				Name: "agreeTerms",
+				Type: "bool",
+			},
+			expected: "Checkbox",
+		},
+		{
+			name: "Time struct field",
+			field: Field{
+				Name: "eventDate",
+				Type: "time.Time",
+			},
+			expected: "DatePicker",
+		},
+		{
 			name: "Unknown field type",
 			field: Field{
 				Name: "mystery",
@@ -1502,13 +1526,36 @@ func TestGenerateFieldsMetadataWithAntDesign(t *testing.T) {
 			},
 			// No explicit Ant Design config - should be auto-generated
 		},
+		{
+			Name: "tagsList",
+			Type: "[]string",
+			Options: []Option{
+				{Value: "a", Label: "A"},
+				{Value: "b", Label: "B"},
+			},
+			// Should infer Select with multiple mode
+		},
+		{
+			Name: "agreeTerms",
+			Type: "bool",
+			// Should infer Checkbox component
+		},
+		{
+			Name: "eventDate",
+			Type: "time.Time",
+			// Should infer DatePicker component
+		},
+		{
+			Name: "custom",
+			Type: "unknownType",
+		},
 	}
 
 	// Generate metadata
 	metadata := GenerateFieldsMetadata(fields)
 
 	// Verify metadata
-	assert.Len(t, metadata, 4)
+	assert.Len(t, metadata, 8)
 
 	// Check name field with explicit config
 	nameMeta := findFieldMetadata(metadata, "name")
@@ -1557,4 +1604,26 @@ func TestGenerateFieldsMetadataWithAntDesign(t *testing.T) {
 	assert.Equal(t, "Administrator", options[0]["label"])
 	assert.Equal(t, "user", options[1]["value"])
 	assert.Equal(t, "Regular User", options[1]["label"])
+
+	// Check tagsList field
+	tagsMeta := findFieldMetadata(metadata, "tagsList")
+	assert.NotNil(t, tagsMeta)
+	assert.Equal(t, "Select", tagsMeta.AntDesign.ComponentType)
+	assert.Equal(t, "multiple", tagsMeta.AntDesign.Props["mode"])
+
+	// Check agreeTerms field
+	agreeMeta := findFieldMetadata(metadata, "agreeTerms")
+	assert.NotNil(t, agreeMeta)
+	assert.Equal(t, "Checkbox", agreeMeta.AntDesign.ComponentType)
+	assert.Equal(t, "checked", agreeMeta.AntDesign.FormItemProps["valuePropName"])
+
+	// Check eventDate field
+	eventMeta := findFieldMetadata(metadata, "eventDate")
+	assert.NotNil(t, eventMeta)
+	assert.Equal(t, "DatePicker", eventMeta.AntDesign.ComponentType)
+
+	// Check custom field fallback
+	customMeta := findFieldMetadata(metadata, "custom")
+	assert.NotNil(t, customMeta)
+	assert.Equal(t, "Input", customMeta.AntDesign.ComponentType)
 }

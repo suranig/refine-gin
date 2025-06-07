@@ -737,6 +737,24 @@ func generateDefaultAntDesignConfig(field *Field) *AntDesignConfigMetadata {
 
 	// Add field-specific props
 	switch field.Type {
+	case "[]string":
+		config.ComponentType = "Select"
+		config.Props["mode"] = "multiple"
+		if len(field.Options) > 0 {
+			options := make([]map[string]interface{}, 0, len(field.Options))
+			for _, opt := range field.Options {
+				options = append(options, map[string]interface{}{
+					"value": opt.Value,
+					"label": opt.Label,
+				})
+			}
+			config.Props["options"] = options
+		}
+	case "bool":
+		config.ComponentType = "Checkbox"
+		config.FormItemProps["valuePropName"] = "checked"
+	case "time.Time":
+		config.ComponentType = "DatePicker"
 	case "string":
 		if field.Form != nil && field.Form.Placeholder != "" {
 			config.Props["placeholder"] = field.Form.Placeholder
