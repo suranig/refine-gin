@@ -63,8 +63,8 @@ func JWTMiddleware(config JWTConfig) gin.HandlerFunc {
 
 		// Parse token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Validate signing method
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			// Validate signing method - allow only HS256
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 
@@ -142,8 +142,8 @@ func GenerateJWTWithStandardClaims(config JWTConfig, subject string, customClaim
 // ExtractSubjectFromToken extracts the subject from a JWT token
 func ExtractSubjectFromToken(tokenString string, secret string) (string, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		// Validate signing method - allow only HS256
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
@@ -176,8 +176,8 @@ func ExtractSubjectFromToken(tokenString string, secret string) (string, error) 
 // ExtractClaimsFromToken extracts all claims from a JWT token
 func ExtractClaimsFromToken(tokenString string, secret string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		// Validate signing method - allow only HS256
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 

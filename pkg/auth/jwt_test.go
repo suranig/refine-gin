@@ -197,4 +197,18 @@ func TestExtractClaimsFromToken(t *testing.T) {
 	claims, err = ExtractClaimsFromToken("invalid-token", secret)
 	assert.Error(t, err)
 	assert.Nil(t, claims)
+
+	// Test with token signed using a different algorithm
+	token = jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.MapClaims{
+		"sub":  "1",
+		"name": "John Doe",
+		"exp":  time.Now().Add(time.Hour).Unix(),
+	})
+
+	tokenString, _ = token.SignedString([]byte(secret))
+
+	claims, err = ExtractClaimsFromToken(tokenString, secret)
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.Contains(t, err.Error(), "unexpected signing method")
 }
