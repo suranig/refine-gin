@@ -214,3 +214,9 @@ func TestGetQueryOption(t *testing.T) {
 	assert.Equal(t, 10, opts.GetQueryOption("limit"))
 	assert.Nil(t, opts.GetQueryOption("missing"))
 }
+
+func TestGetQueryOptionReturnsNilForMissingKey(t *testing.T) {
+	opts := Options{QueryOptions: map[string]interface{}{"page": 1}}
+
+	assert.Nil(t, opts.GetQueryOption("limit"))
+}

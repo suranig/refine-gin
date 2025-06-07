@@ -665,3 +665,29 @@ func TestGenerateFieldsFromModelWithTags(t *testing.T) {
 		assert.NotEmpty(t, detailsField.Json.Properties)
 	}
 }
+
+func TestDefaultResourceHasPermissionCases(t *testing.T) {
+	t.Run("nil permissions", func(t *testing.T) {
+		r := &DefaultResource{}
+		assert.True(t, r.HasPermission(string(OperationCreate), "any"))
+		assert.True(t, r.HasPermission(string(OperationDelete), "other"))
+	})
+
+	perms := map[string][]string{
+		string(OperationCreate): {"admin", "editor"},
+	}
+
+	r := &DefaultResource{Permissions: perms}
+
+	t.Run("unknown operation", func(t *testing.T) {
+		assert.True(t, r.HasPermission(string(OperationDelete), "guest"))
+	})
+
+	t.Run("role present", func(t *testing.T) {
+		assert.True(t, r.HasPermission(string(OperationCreate), "admin"))
+	})
+
+	t.Run("role absent", func(t *testing.T) {
+		assert.False(t, r.HasPermission(string(OperationCreate), "guest"))
+	})
+}
