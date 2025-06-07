@@ -710,7 +710,7 @@ func TestCreateManyHandler_RelationValidationFailure(t *testing.T) {
 
 	items := []RelModel{{ID: "1", Category: nil}}
 	mockDTOProvider.On("TransformToModel", mock.Anything).Return(items, nil)
-	mockRepo.On("Query", mock.Anything).Return(nil)
+	mockRepo.On("Query", mock.Anything).Return(&gorm.DB{})
 
 	r.POST("/tests/batch", GenerateCreateManyHandler(res, mockRepo, mockDTOProvider))
 
