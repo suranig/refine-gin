@@ -357,3 +357,37 @@ func TestGenericRepository_RepositoryBulkOperations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), count) // 1 z createTestData + 1 z CreateMany (tylko ten z InStock=false)
 }
+
+func TestGenericRepository_WithRelationsChaining(t *testing.T) {
+	db := setupTestDB(t)
+	category, product := createTestData(t, db)
+
+	productResource := resource.NewResource(resource.ResourceConfig{
+		Name:  "products",
+		Model: TestProduct{},
+	})
+
+	repo := NewGenericRepository(db, productResource)
+
+	repoWith := repo.WithRelations("Category")
+	ctx := context.Background()
+
+	result, err := repoWith.Get(ctx, product.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, category.ID, result.(*TestProduct).Category.ID)
+	assert.Equal(t, category.Name, result.(*TestProduct).Category.Name)
+
+	options := query.QueryOptions{
+		Resource: productResource,
+		Page:     1,
+		PerPage:  10,
+	}
+	listResult, count, err := repoWith.List(ctx, options)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+
+	products := listResult.(*[]TestProduct)
+	assert.Len(t, *products, 1)
+	assert.Equal(t, category.ID, (*products)[0].Category.ID)
+	assert.Equal(t, category.Name, (*products)[0].Category.Name)
+}
