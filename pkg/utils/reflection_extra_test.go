@@ -183,3 +183,17 @@ func TestSetIDCustomFieldErrors(t *testing.T) {
 		t.Fatalf("expected type mismatch error")
 	}
 }
+
+func TestSetIDPointerAndUnexportedFieldErrors(t *testing.T) {
+	type TestStruct struct{ ID string }
+	// Passing non-pointer should return error
+	if err := SetID(TestStruct{}, "1", "ID"); err == nil || err.Error() != "object must be a pointer" {
+		t.Fatalf("expected object must be a pointer error, got %v", err)
+	}
+
+	type privateID struct{ id string }
+	priv := &privateID{}
+	if err := SetID(priv, "abc", "id"); err == nil || err.Error() != "id field cannot be set" {
+		t.Fatalf("expected id field cannot be set error, got %v", err)
+	}
+}
