@@ -271,6 +271,34 @@ func TestJWTAuthorizationProvider_IsOwnerInvalidRecord(t *testing.T) {
 	assert.True(t, provider.CanAccessRecord(c, mockResource, resource.OperationDelete, valid))
 }
 
+func TestJWTAuthorizationProvider_CanAccessRecordClaimsIssues(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := NewJWTAuthorizationProvider()
+	mockResource := new(MockResource)
+	mockResource.On("GetName").Return("tests")
+	mockResource.On("GetIDFieldName").Return("ID")
+	mockResource.On("GetField", mock.Anything).Return(nil)
+	mockResource.On("GetSearchable").Return([]string{})
+
+	// add a simple rule to ensure rules would allow access if claims were valid
+	provider.AddRule("tests", resource.OperationRead, func(claims jwt.MapClaims, record interface{}) bool {
+		return true
+	})
+
+	t.Run("missing claims", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(nil)
+		record := &TestRecord{ID: "1", UserID: "1", Name: "Test"}
+		assert.False(t, provider.CanAccessRecord(c, mockResource, resource.OperationRead, record))
+	})
+
+	t.Run("invalid claims type", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(nil)
+		c.Set("claims", "not a map")
+		record := &TestRecord{ID: "1", UserID: "1", Name: "Test"}
+		assert.False(t, provider.CanAccessRecord(c, mockResource, resource.OperationRead, record))
+	})
+}
+
 func TestAuthorizationMiddleware(t *testing.T) {
 	// Setup
 	mockProvider := new(MockAuthorizationProvider)
