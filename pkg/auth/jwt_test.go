@@ -51,6 +51,25 @@ func TestJWTMiddleware(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
+	// Test with token signed using unexpected algorithm
+	hs512Token := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.MapClaims{
+		"sub":  "1",
+		"name": "John Doe",
+		"exp":  time.Now().Add(time.Hour).Unix(),
+	})
+
+	hs512String, _ := hs512Token.SignedString([]byte(config.Secret))
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Set("Authorization", "Bearer "+hs512String)
+
+	middleware(c)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "unexpected signing method")
+
 	// Test with valid token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":   "1",
