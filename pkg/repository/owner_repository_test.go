@@ -89,6 +89,11 @@ type OwnerTestEntity struct {
 	OwnerID string `json:"ownerId" gorm:"column:owner_id"`
 }
 
+// Test model without the expected owner field
+type NoOwnerField struct {
+	ID uint
+}
+
 // Setup test database and resources
 func setupOwnerTest(t *testing.T) (*gorm.DB, resource.Resource, resource.OwnerResource) {
 	// Create in-memory SQLite database with unique identifier
@@ -403,6 +408,65 @@ func TestApplyOwnerFilterFiltersByOwner(t *testing.T) {
 	// Missing owner should produce ErrOwnerIDNotFound
 	_, err = repo.applyOwnerFilter(context.Background(), db)
 	assert.Equal(t, ErrOwnerIDNotFound, err)
+}
+
+// setOwnership should error when the model lacks the configured owner field
+func TestSetOwnershipMissingField(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&NoOwnerField{}))
+
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "no-owner",
+		Model: &NoOwnerField{},
+	})
+
+	ownerRes := &resource.DefaultOwnerResource{
+		Resource: res,
+		Config: resource.OwnerConfig{
+			OwnerField:       "OwnerID",
+			EnforceOwnership: true,
+		},
+	}
+
+	repoIface, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+	repo := repoIface.(*OwnerGenericRepository)
+
+	err = repo.setOwnership(ownerContext("abc"), &NoOwnerField{})
+	require.Error(t, err)
+	assert.EqualError(t, err, "owner field 'OwnerID' not found in record")
+}
+
+// verifyOwnership should error when the model lacks the configured owner field
+func TestVerifyOwnershipMissingField(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&NoOwnerField{}))
+
+	res := resource.NewResource(resource.ResourceConfig{
+		Name:  "no-owner",
+		Model: &NoOwnerField{},
+	})
+
+	ownerRes := &resource.DefaultOwnerResource{
+		Resource: res,
+		Config: resource.OwnerConfig{
+			OwnerField:       "OwnerID",
+			EnforceOwnership: true,
+		},
+	}
+
+	repoIface, err := NewOwnerRepository(db, ownerRes)
+	require.NoError(t, err)
+	repo := repoIface.(*OwnerGenericRepository)
+
+	rec := &NoOwnerField{}
+	require.NoError(t, db.Create(rec).Error)
+
+	err = repo.verifyOwnership(ownerContext("abc"), rec.ID)
+	require.Error(t, err)
+	assert.EqualError(t, err, "owner field 'OwnerID' not found in record")
 }
 
 func TestOwnerRepository_OwnerSpecificOperations(t *testing.T) {
