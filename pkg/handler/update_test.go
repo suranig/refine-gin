@@ -327,6 +327,47 @@ func TestGenerateUpdateHandler(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 		mockDTO.AssertExpectations(t)
 	})
+
+	// Test case 6: JSON validation error
+	t.Run("JSON validation error", func(t *testing.T) {
+		mockRepo := new(MockRepository)
+		mockDTO := new(MockDTOManager)
+
+		// Patch validateNestedJsonFields to return an error
+		patch := monkey.Patch(validateNestedJsonFields, func(resource.Resource, interface{}) error {
+			return errors.New("bad json")
+		})
+		defer patch.Unpatch()
+
+		// Create valid DTO and JSON payload
+		updateDTO := &UserUpdateDTO{Name: "Valid", Email: "valid@example.com"}
+		jsonData, _ := json.Marshal(updateDTO)
+		modelData := map[string]interface{}{"name": "Valid", "email": "valid@example.com"}
+
+		// DTO manager expectations
+		mockDTO.On("GetUpdateDTO").Return(&UserUpdateDTO{}).Once()
+		mockDTO.On("TransformToModel", mock.AnythingOfType("*handler.UserUpdateDTO")).Return(modelData, nil).Once()
+
+		// Setup the handler
+		r := gin.New()
+		r.PUT("/users/:id", GenerateUpdateHandler(mockResource, mockRepo, mockDTO))
+
+		// Make the request
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/users/1", bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		// Expect bad request with JSON validation error
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Equal(t, "JSON validation failed: bad json", response["error"])
+
+		mockDTO.AssertExpectations(t)
+	})
 }
 
 func TestValidateNestedJsonFields(t *testing.T) {
