@@ -16,6 +16,8 @@ func TestGetTypeMapping(t *testing.T) {
 		{"bool", TypeMapping{Category: TypeBoolean, IsPrimitive: true}},
 		{"[]byte", TypeMapping{Category: TypeArray, Format: "byte", IsPrimitive: false}},
 		{"*int", TypeMapping{Category: TypeObject, Format: "*int", IsPrimitive: false}},
+		{"*CustomStruct", TypeMapping{Category: TypeObject, Format: "*CustomStruct", IsPrimitive: false}},
+		{"[][]byte", TypeMapping{Category: TypeArray, Format: "[]byte", IsPrimitive: false}},
 	}
 
 	for _, tt := range tests {
@@ -50,5 +52,17 @@ func TestHelpers(t *testing.T) {
 	}
 	if GetArrayElementType("int") != "" {
 		t.Fatalf("expected empty element type for non array")
+	}
+	if IsArrayType("*CustomStruct") {
+		t.Fatalf("*CustomStruct should not be array")
+	}
+	if !IsArrayType("[][]byte") {
+		t.Fatalf("expected [][]byte array type")
+	}
+	if GetArrayElementType("[][]byte") != "[]byte" {
+		t.Fatalf("unexpected element type for [][]byte")
+	}
+	if GetArrayElementType("*CustomStruct") != "" {
+		t.Fatalf("expected empty element type for pointer struct")
 	}
 }
