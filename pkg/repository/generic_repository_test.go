@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	monkey "github.com/bouk/monkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/suranig/refine-gin/pkg/query"
@@ -621,6 +623,62 @@ func TestGenericRepository_Update(t *testing.T) {
 		ctx := context.Background()
 		_, err := repo.Update(ctx, initial.ID, updates)
 		assert.Error(t, err)
+	})
+
+	t.Run("MarshalExistingRecordError", func(t *testing.T) {
+		db := setupJSONTestDB(t)
+		initial := createJSONTestData(t, db)
+
+		jsonResource := resource.NewResource(resource.ResourceConfig{
+			Name:  "jsons",
+			Model: TestJSONModel{},
+		})
+		repo := NewGenericRepository(db, jsonResource)
+
+		updates := map[string]interface{}{
+			"name": "updated",
+		}
+
+		patch := monkey.Patch(json.Marshal, func(v interface{}) ([]byte, error) {
+			return nil, errors.New("marshal error")
+		})
+		defer patch.Unpatch()
+
+		ctx := context.Background()
+		_, err := repo.Update(ctx, initial.ID, updates)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to marshal existing record")
+	})
+
+	t.Run("UnmarshalUpdatesError", func(t *testing.T) {
+		db := setupJSONTestDB(t)
+		initial := createJSONTestData(t, db)
+
+		jsonResource := resource.NewResource(resource.ResourceConfig{
+			Name:  "jsons",
+			Model: TestJSONModel{},
+		})
+		repo := NewGenericRepository(db, jsonResource)
+
+		updates := map[string]interface{}{
+			"name": "updated",
+		}
+
+		originalUnmarshal := json.Unmarshal
+		call := 0
+		patch := monkey.Patch(json.Unmarshal, func(data []byte, v interface{}) error {
+			call++
+			if call == 2 {
+				return errors.New("unmarshal error")
+			}
+			return originalUnmarshal(data, v)
+		})
+		defer patch.Unpatch()
+
+		ctx := context.Background()
+		_, err := repo.Update(ctx, initial.ID, updates)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to unmarshal updates")
 	})
 }
 
