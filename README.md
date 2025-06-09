@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/suranig/refine-gin/graph/badge.svg)](https://codecov.io/gh/suranig/refine-gin)
 [![Go Report Card](https://goreportcard.com/badge/github.com/suranig/refine-gin)](https://goreportcard.com/report/github.com/suranig/refine-gin)
 [![GoDoc](https://godoc.org/github.com/suranig/refine-gin?status.svg)](https://godoc.org/github.com/suranig/refine-gin)
+[![Go Reference](https://pkg.go.dev/badge/github.com/suranig/refine-gin.svg)](https://pkg.go.dev/github.com/suranig/refine-gin)
 
 Refine-Gin is a library that integrates the Gin framework with Refine.js, enabling rapid development of RESTful APIs compatible with Refine.js conventions.
 
