@@ -123,26 +123,20 @@ func GenerateUpdateManyHandler(res resource.Resource, repo repository.Repository
 			return
 		}
 
-		// Convert IDs to a slice of interface{}
-		// Refine.dev sends IDs as an array or a single value, so we need to handle both cases
-		var ids []interface{}
-		switch v := req.IDs.(type) {
-		case []interface{}:
-			ids = v
-		case interface{}:
-			// Convert to JSON and back to ensure it's a slice
-			jsonData, err := json.Marshal(v)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid IDs format"})
-				return
+		// Parse and validate IDs using the new ID validation utilities
+		ids, err := utils.ParseAndValidateIDs(req.IDs)
+		if err != nil {
+			// Check if it's an ID validation error and return appropriate response
+			if utils.IsIDValidationError(err) {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": gin.H{
+						"code":    utils.GetIDValidationErrorCode(err),
+						"message": err.Error(),
+					},
+				})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			}
-
-			if err := json.Unmarshal(jsonData, &ids); err != nil {
-				// If it's not an array, it might be a single value
-				ids = []interface{}{v}
-			}
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs must be an array or a single value"})
 			return
 		}
 
@@ -220,25 +214,20 @@ func GenerateDeleteManyHandler(res resource.Resource, repo repository.Repository
 			return
 		}
 
-		// Convert IDs to a slice of interface{}
-		var ids []interface{}
-		switch v := req.IDs.(type) {
-		case []interface{}:
-			ids = v
-		case interface{}:
-			// Convert to JSON and back to ensure it's a slice
-			jsonData, err := json.Marshal(v)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid IDs format"})
-				return
+		// Parse and validate IDs using the new ID validation utilities
+		ids, err := utils.ParseAndValidateIDs(req.IDs)
+		if err != nil {
+			// Check if it's an ID validation error and return appropriate response
+			if utils.IsIDValidationError(err) {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": gin.H{
+						"code":    utils.GetIDValidationErrorCode(err),
+						"message": err.Error(),
+					},
+				})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			}
-
-			if err := json.Unmarshal(jsonData, &ids); err != nil {
-				// If it's not an array, it might be a single value
-				ids = []interface{}{v}
-			}
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs must be an array or a single value"})
 			return
 		}
 
