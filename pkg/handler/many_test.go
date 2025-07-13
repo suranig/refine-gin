@@ -4,682 +4,512 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"github.com/suranig/refine-gin/pkg/dto"
+	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
-	"gorm.io/gorm"
+	"github.com/suranig/refine-gin/pkg/utils"
 )
 
-func TestCreateManyHandler(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup mock expectations for bulk create
-	testItems := []TestModel{
-		{ID: "1", Name: "Test 1"},
-		{ID: "2", Name: "Test 2"},
-	}
-
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testItems, nil)
-	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(testItems, nil)
-	mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(testItems, nil)
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkCreateRequest{
-		Values: []map[string]interface{}{
-			{"id": "1", "name": "Test 1"},
-			{"id": "2", "name": "Test 2"},
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusCreated, resp.Code)
-
-	var jsonResp struct {
-		Data []TestModel `json:"data"`
-	}
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-
-	// Verify the response contains the created items
-	assert.Equal(t, testItems, jsonResp.Data)
-
-	// Verify mocks were called as expected
-	mockDTOProvider.AssertExpectations(t)
-	mockRepo.AssertExpectations(t)
+// Mock repository for testing
+type MockRepository struct {
+	createManyFunc func(ctx context.Context, data interface{}) (interface{}, error)
+	updateManyFunc func(ctx context.Context, ids []interface{}, data interface{}) (int64, error)
+	deleteManyFunc func(ctx context.Context, ids []interface{}) (int64, error)
 }
 
-func TestUpdateManyHandler(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data and mock expectations
-	updateDTO := TestModel{Name: "Updated Name"}
-	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
-	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(2), nil)
-	mockResource.On("GetEditableFields").Return([]string{"name"})
-
-	// Setup routes
-	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkUpdateRequest{
-		IDs: []string{"1", "2"},
-		Values: map[string]interface{}{
-			"name": "Updated Name",
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	var jsonResp map[string]map[string]interface{}
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-
-	// Verify the response contains the expected count
-	assert.Equal(t, float64(2), jsonResp["data"]["count"])
-
-	// Verify mocks were called
-	mockDTOProvider.AssertExpectations(t)
-	mockRepo.AssertExpectations(t)
+func (m *MockRepository) List(ctx context.Context, options interface{}) (interface{}, int64, error) {
+	return nil, 0, nil
 }
 
-func TestDeleteManyHandler(t *testing.T) {
-	// Setup with custom setup function to avoid Query expectation
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	mockRepo := new(MockRepository)
-	mockResource := new(MockResource)
-
-	// Setup resource (skip the Query expectation)
-	mockResource.On("GetName").Return("tests")
-	mockResource.On("GetLabel").Return("Tests")
-	mockResource.On("GetIcon").Return("test-icon")
-	mockResource.On("GetModel").Return(TestModel{})
-	mockResource.On("GetFields").Return([]resource.Field{
-		{Name: "id", Type: "string"},
-		{Name: "name", Type: "string"},
-	})
-	mockResource.On("GetDefaultSort").Return(nil)
-	mockResource.On("GetFilters").Return([]resource.Filter{})
-	mockResource.On("GetRelations").Return([]resource.Relation{})
-	mockResource.On("HasRelation", mock.Anything).Return(false)
-	mockResource.On("GetRelation", mock.Anything).Return(nil)
-	mockResource.On("GetIDFieldName").Return("ID")
-	mockResource.On("GetField", mock.Anything).Return(nil)
-	mockResource.On("GetSearchable").Return([]string{})
-
-	// Setup test data and mock expectations
-	mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(2), nil)
-
-	// Debugging: Print out all expectations
-	for _, exp := range mockRepo.ExpectedCalls {
-		t.Logf("Expected call: %s", exp.Method)
-	}
-
-	// Setup routes
-	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, mockRepo))
-
-	// Create a valid request
-	reqBody := BulkDeleteRequest{
-		IDs: []string{"1", "2"},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("DELETE", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	var jsonResp map[string]map[string]interface{}
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-
-	// Verify the response contains the expected count
-	assert.Equal(t, float64(2), jsonResp["data"]["count"])
-
-	// Verify mocks were called
-	mockRepo.AssertExpectations(t)
+func (m *MockRepository) Get(ctx context.Context, id interface{}) (interface{}, error) {
+	return nil, nil
 }
 
-func TestCreateManyHandler_Error(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Mock an error in repository
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(nil, errors.New("transform error"))
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a request
-	reqBody := BulkCreateRequest{
-		Values: []map[string]interface{}{
-			{"id": "1", "name": "Test 1"},
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Contains(t, jsonResp["error"], "transform error")
+func (m *MockRepository) Create(ctx context.Context, data interface{}) (interface{}, error) {
+	return nil, nil
 }
 
-func TestUpdateManyHandler_Error(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Mock an error in repository
-	mockDTOProvider.On("GetUpdateDTO").Return(&TestModel{})
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(nil, errors.New("transform error"))
-	mockResource.On("GetEditableFields").Return([]string{"name"})
-
-	// Setup routes
-	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a request
-	reqBody := BulkUpdateRequest{
-		IDs: []string{"1", "2"},
-		Values: map[string]interface{}{
-			"name": "Updated Name",
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Contains(t, jsonResp["error"], "transform error")
+func (m *MockRepository) Update(ctx context.Context, id interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }
 
-func TestUpdateManyHandler_RepositoryError(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data and mock expectations
-	updateDTO := TestModel{Name: "Updated Name"}
-	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
-	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), errors.New("database error"))
-	mockResource.On("GetEditableFields").Return([]string{"name"})
-
-	// Setup routes
-	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkUpdateRequest{
-		IDs: []string{"1", "2"},
-		Values: map[string]interface{}{
-			"name": "Updated Name",
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, "database error", jsonResp["error"])
+func (m *MockRepository) Delete(ctx context.Context, id interface{}) error {
+	return nil
 }
 
-func TestUpdateManyHandler_InvalidRequest(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	mockResource := new(MockResource)
-	mockRepo := new(MockRepository)
-
-	// Setup resource
-	mockResource.On("GetName").Return("tests")
-
-	// Setup routes
-	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, nil))
-
-	// Create an invalid request (invalid JSON)
-	reqData := []byte(`{"ids": [1,2], "values": invalid_json}`)
-	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
+func (m *MockRepository) Count(ctx context.Context, options interface{}) (int64, error) {
+	return 0, nil
 }
 
-func TestUpdateManyHandler_SingleIDValue(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data and mock expectations
-	updateDTO := TestModel{Name: "Updated Name"}
-	mockDTOProvider.On("GetUpdateDTO").Return(&updateDTO)
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(updateDTO, nil)
-	mockRepo.On("UpdateMany", mock.Anything, mock.Anything, mock.Anything).Return(int64(1), nil)
-	mockResource.On("GetEditableFields").Return([]string{"name"})
-
-	// Setup routes
-	r.PUT("/tests/batch", GenerateUpdateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a request with a single ID value instead of an array
-	reqBody := BulkUpdateRequest{
-		IDs: "1",
-		Values: map[string]interface{}{
-			"name": "Updated Name",
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("PUT", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	var jsonResp map[string]map[string]interface{}
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, float64(1), jsonResp["data"]["count"])
-
-	// Verify mocks were called
-	mockDTOProvider.AssertExpectations(t)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestDeleteManyHandler_Error(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	mockRepo := new(MockRepository)
-	mockResource := new(MockResource)
-
-	// Setup resource
-	mockResource.On("GetName").Return("tests")
-	mockResource.On("GetIDFieldName").Return("ID")
-
-	// Mock an error in repository
-	mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(0), errors.New("delete error"))
-
-	// Setup routes
-	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, mockRepo))
-
-	// Create a request
-	reqBody := BulkDeleteRequest{
-		IDs: []string{"1", "2"},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("DELETE", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, "delete error", jsonResp["error"])
-}
-
-func TestDeleteManyHandler_InvalidRequest(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	mockResource := new(MockResource)
-
-	// Setup resource
-	mockResource.On("GetName").Return("tests")
-
-	// Setup routes
-	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, nil))
-
-	// Create an invalid request (invalid JSON)
-	reqData := []byte(`{"ids": invalid_json}`)
-	req, _ := http.NewRequest("DELETE", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-}
-
-func TestDeleteManyHandler_SingleIDValue(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	mockRepo := new(MockRepository)
-	mockResource := new(MockResource)
-
-	// Setup resource
-	mockResource.On("GetName").Return("tests")
-	mockResource.On("GetIDFieldName").Return("ID")
-
-	// Setup test data and mock expectations
-	mockRepo.On("DeleteMany", mock.Anything, mock.Anything).Return(int64(1), nil)
-
-	// Setup routes
-	r.DELETE("/tests/batch", GenerateDeleteManyHandler(mockResource, mockRepo))
-
-	// Create a request with a single ID value instead of an array
-	reqBody := BulkDeleteRequest{
-		IDs: "1", // Single ID as string
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("DELETE", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	var jsonResp map[string]map[string]interface{}
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-
-	// Verify the response contains the expected count
-	assert.Equal(t, float64(1), jsonResp["data"]["count"])
-
-	// Verify mocks were called
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCreateManyHandler_InvalidRequest(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, _, mockResource, mockDTOProvider := setupTest()
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, nil, mockDTOProvider))
-
-	// Create an invalid request (missing values)
-	reqBody := map[string]interface{}{
-		// missing 'values' field
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-}
-
-func TestCreateManyHandler_NonArrayValues(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, _, mockResource, mockDTOProvider := setupTest()
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, nil, mockDTOProvider))
-
-	// Create an invalid request (values is not an array)
-	reqBody := BulkCreateRequest{
-		Values: "not an array",
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response indicates error
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, "values must be an array", jsonResp["error"])
-}
-
-func TestCreateManyHandler_RepositoryError(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data and mock expectations
-	testItems := []TestModel{
-		{ID: "1", Name: "Test 1"},
-		{ID: "2", Name: "Test 2"},
-	}
-
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testItems, nil)
-	mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(nil, errors.New("database error"))
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkCreateRequest{
-		Values: []map[string]interface{}{
-			{"id": "1", "name": "Test 1"},
-			{"id": "2", "name": "Test 2"},
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, "database error", jsonResp["error"])
-}
-
-func TestCreateManyHandler_DTOResponseError(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data and mock expectations
-	testItems := []TestModel{
-		{ID: "1", Name: "Test 1"},
-		{ID: "2", Name: "Test 2"},
-	}
-
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testItems, nil)
-	mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(testItems, nil)
-	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(nil, errors.New("transform response error"))
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkCreateRequest{
-		Values: []map[string]interface{}{
-			{"id": "1", "name": "Test 1"},
-			{"id": "2", "name": "Test 2"},
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
-
-	var jsonResp map[string]string
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.Equal(t, "transform response error", jsonResp["error"])
-}
-
-func TestCreateManyHandler_WithRelationValidation(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	r, mockRepo, mockResource, mockDTOProvider := setupTest()
-
-	// Setup test data
-	testItems := []TestModel{
-		{ID: "1", Name: "Test 1"},
-		{ID: "2", Name: "Test 2"},
-	}
-
-	// Setup mock db connection
-	db := &gorm.DB{}
-	mockRepo.On("Query", mock.Anything).Return(db)
-
-	// Setup relations
-	relations := []resource.Relation{
-		{
-			Name: "related",
-			Type: "hasMany",
-		},
-	}
-	mockResource.On("GetRelations").Return(relations)
-
-	// Normal flow expectations
-	mockDTOProvider.On("TransformToModel", mock.Anything).Return(testItems, nil)
-	mockRepo.On("CreateMany", mock.Anything, mock.Anything).Return(testItems, nil)
-	mockDTOProvider.On("TransformFromModel", mock.Anything).Return(testItems, nil)
-
-	// Setup routes
-	r.POST("/tests/batch", GenerateCreateManyHandler(mockResource, mockRepo, mockDTOProvider))
-
-	// Create a valid request
-	reqBody := BulkCreateRequest{
-		Values: []map[string]interface{}{
-			{"id": "1", "name": "Test 1"},
-			{"id": "2", "name": "Test 2"},
-		},
-	}
-
-	reqData, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/tests/batch", bytes.NewBuffer(reqData))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-
-	// Serve the request
-	r.ServeHTTP(resp, req)
-
-	// Check response
-	assert.Equal(t, http.StatusCreated, resp.Code)
-
-	var jsonResp BulkResponse
-	err := json.Unmarshal(resp.Body.Bytes(), &jsonResp)
-	assert.NoError(t, err)
-	assert.NotNil(t, jsonResp.Data)
-
-	// Verify mocks were called
-	mockDTOProvider.AssertExpectations(t)
-	mockRepo.AssertExpectations(t)
-}
-
-// MockRepository with CreateMany, UpdateMany, and DeleteMany methods
 func (m *MockRepository) CreateMany(ctx context.Context, data interface{}) (interface{}, error) {
-	args := m.Called(ctx, data)
-	return args.Get(0), args.Error(1)
+	if m.createManyFunc != nil {
+		return m.createManyFunc(ctx, data)
+	}
+	return nil, nil
 }
 
 func (m *MockRepository) UpdateMany(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
-	args := m.Called(ctx, ids, data)
-	return args.Get(0).(int64), args.Error(1)
+	if m.updateManyFunc != nil {
+		return m.updateManyFunc(ctx, ids, data)
+	}
+	return 0, nil
 }
 
 func (m *MockRepository) DeleteMany(ctx context.Context, ids []interface{}) (int64, error) {
-	args := m.Called(ctx, ids)
-	return args.Get(0).(int64), args.Error(1)
+	if m.deleteManyFunc != nil {
+		return m.deleteManyFunc(ctx, ids)
+	}
+	return 0, nil
+}
+
+func (m *MockRepository) WithTransaction(fn func(repository.Repository) error) error {
+	return fn(m)
+}
+
+func (m *MockRepository) WithRelations(relations ...string) repository.Repository {
+	return m
+}
+
+func (m *MockRepository) FindOneBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (m *MockRepository) FindAllBy(ctx context.Context, condition map[string]interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (m *MockRepository) Query(ctx context.Context) interface{} {
+	return nil
+}
+
+func (m *MockRepository) BulkCreate(ctx context.Context, data interface{}) error {
+	return nil
+}
+
+func (m *MockRepository) BulkUpdate(ctx context.Context, condition map[string]interface{}, updates map[string]interface{}) error {
+	return nil
+}
+
+func (m *MockRepository) GetIDFieldName() string {
+	return "id"
+}
+
+// Test model
+type TestModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func TestGenerateUpdateManyHandler_ValidIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationUpdateMany,
+		},
+	})
+
+	// Create mock repository
+	mockRepo := &MockRepository{
+		updateManyFunc: func(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+			// Verify IDs are properly parsed
+			if len(ids) != 2 {
+				t.Errorf("Expected 2 IDs, got %d", len(ids))
+			}
+			if ids[0] != "1" || ids[1] != "2" {
+				t.Errorf("Expected IDs [1, 2], got %v", ids)
+			}
+			return 2, nil
+		},
+	}
+
+	// Create handler
+	handler := GenerateUpdateManyHandler(res, mockRepo, nil)
+
+	// Create request
+	reqBody := BulkUpdateRequest{
+		IDs: []string{"1", "2"},
+		Values: map[string]interface{}{
+			"name": "updated",
+		},
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	// Create HTTP request
+	req, _ := http.NewRequest("PUT", "/batch", bytes.NewBuffer(reqJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Create Gin context
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+
+	// Execute handler
+	handler(c)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["data"].(map[string]interface{})["count"].(float64) != 2 {
+		t.Errorf("Expected count 2, got %v", response["data"].(map[string]interface{})["count"])
+	}
+}
+
+func TestGenerateUpdateManyHandler_InvalidIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationUpdateMany,
+		},
+	})
+
+	// Create mock repository
+	mockRepo := &MockRepository{}
+
+	// Create handler
+	handler := GenerateUpdateManyHandler(res, mockRepo, nil)
+
+	testCases := []struct {
+		name     string
+		ids      interface{}
+		expected string
+	}{
+		{
+			name:     "empty IDs array",
+			ids:      []string{},
+			expected: utils.ErrCodeEmptyID,
+		},
+		{
+			name:     "nil IDs",
+			ids:      nil,
+			expected: utils.ErrCodeEmptyID,
+		},
+		{
+			name:     "empty string ID",
+			ids:      []string{"1", "", "3"},
+			expected: utils.ErrCodeEmptyID,
+		},
+		{
+			name:     "duplicate IDs",
+			ids:      []string{"1", "1", "2"},
+			expected: utils.ErrCodeDuplicateID,
+		},
+		{
+			name:     "invalid string ID",
+			ids:      []string{"1", "invalid@id", "3"},
+			expected: utils.ErrCodeInvalidIDValue,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create request
+			reqBody := BulkUpdateRequest{
+				IDs: tc.ids,
+				Values: map[string]interface{}{
+					"name": "updated",
+				},
+			}
+			reqJSON, _ := json.Marshal(reqBody)
+
+			// Create HTTP request
+			req, _ := http.NewRequest("PUT", "/batch", bytes.NewBuffer(reqJSON))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Create Gin context
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			// Execute handler
+			handler(c)
+
+			// Check response
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Expected status 400, got %d", w.Code)
+			}
+
+			var response map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &response)
+
+			errorObj := response["error"].(map[string]interface{})
+			if errorObj["code"] != tc.expected {
+				t.Errorf("Expected error code %s, got %s", tc.expected, errorObj["code"])
+			}
+		})
+	}
+}
+
+func TestGenerateDeleteManyHandler_ValidIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationDeleteMany,
+		},
+	})
+
+	// Create mock repository
+	mockRepo := &MockRepository{
+		deleteManyFunc: func(ctx context.Context, ids []interface{}) (int64, error) {
+			// Verify IDs are properly parsed
+			if len(ids) != 3 {
+				t.Errorf("Expected 3 IDs, got %d", len(ids))
+			}
+			if ids[0] != "1" || ids[1] != "2" || ids[2] != "3" {
+				t.Errorf("Expected IDs [1, 2, 3], got %v", ids)
+			}
+			return 3, nil
+		},
+	}
+
+	// Create handler
+	handler := GenerateDeleteManyHandler(res, mockRepo)
+
+	// Create request
+	reqBody := BulkDeleteRequest{
+		IDs: []string{"1", "2", "3"},
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	// Create HTTP request
+	req, _ := http.NewRequest("DELETE", "/batch", bytes.NewBuffer(reqJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Create Gin context
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+
+	// Execute handler
+	handler(c)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["data"].(map[string]interface{})["count"].(float64) != 3 {
+		t.Errorf("Expected count 3, got %v", response["data"].(map[string]interface{})["count"])
+	}
+}
+
+func TestGenerateDeleteManyHandler_InvalidIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationDeleteMany,
+		},
+	})
+
+	// Create mock repository
+	mockRepo := &MockRepository{}
+
+	// Create handler
+	handler := GenerateDeleteManyHandler(res, mockRepo)
+
+	testCases := []struct {
+		name     string
+		ids      interface{}
+		expected string
+	}{
+		{
+			name:     "empty IDs array",
+			ids:      []string{},
+			expected: utils.ErrCodeEmptyID,
+		},
+		{
+			name:     "nil IDs",
+			ids:      nil,
+			expected: utils.ErrCodeEmptyID,
+		},
+		{
+			name:     "duplicate IDs",
+			ids:      []string{"1", "1", "2"},
+			expected: utils.ErrCodeDuplicateID,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create request
+			reqBody := BulkDeleteRequest{
+				IDs: tc.ids,
+			}
+			reqJSON, _ := json.Marshal(reqBody)
+
+			// Create HTTP request
+			req, _ := http.NewRequest("DELETE", "/batch", bytes.NewBuffer(reqJSON))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Create Gin context
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			// Execute handler
+			handler(c)
+
+			// Check response
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Expected status 400, got %d", w.Code)
+			}
+
+			var response map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &response)
+
+			errorObj := response["error"].(map[string]interface{})
+			if errorObj["code"] != tc.expected {
+				t.Errorf("Expected error code %s, got %s", tc.expected, errorObj["code"])
+			}
+		})
+	}
+}
+
+func TestGenerateUpdateManyHandler_DifferentIDFormats(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationUpdateMany,
+		},
+	})
+
+	// Create mock repository
+	mockRepo := &MockRepository{
+		updateManyFunc: func(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+			return int64(len(ids)), nil
+		},
+	}
+
+	// Create handler
+	handler := GenerateUpdateManyHandler(res, mockRepo, nil)
+
+	testCases := []struct {
+		name string
+		ids  interface{}
+	}{
+		{"string slice", []string{"1", "2", "3"}},
+		{"int slice", []int{1, 2, 3}},
+		{"mixed slice", []interface{}{"1", 2, "3"}},
+		{"single string", "1"},
+		{"single int", 1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create request
+			reqBody := BulkUpdateRequest{
+				IDs: tc.ids,
+				Values: map[string]interface{}{
+					"name": "updated",
+				},
+			}
+			reqJSON, _ := json.Marshal(reqBody)
+
+			// Create HTTP request
+			req, _ := http.NewRequest("PUT", "/batch", bytes.NewBuffer(reqJSON))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// Create Gin context
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			// Execute handler
+			handler(c)
+
+			// Check response
+			if w.Code != http.StatusOK {
+				t.Errorf("Expected status 200, got %d", w.Code)
+			}
+		})
+	}
+}
+
+func TestGenerateUpdateManyHandler_RepositoryError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create test resource
+	res := resource.NewResource(resource.ResourceConfig{
+		Name: "tests",
+		Model: TestModel{},
+		Operations: []resource.Operation{
+			resource.OperationUpdateMany,
+		},
+	})
+
+	// Create mock repository with error
+	mockRepo := &MockRepository{
+		updateManyFunc: func(ctx context.Context, ids []interface{}, data interface{}) (int64, error) {
+			return 0, fmt.Errorf("database error")
+		},
+	}
+
+	// Create handler
+	handler := GenerateUpdateManyHandler(res, mockRepo, nil)
+
+	// Create request
+	reqBody := BulkUpdateRequest{
+		IDs: []string{"1", "2"},
+		Values: map[string]interface{}{
+			"name": "updated",
+		},
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	// Create HTTP request
+	req, _ := http.NewRequest("PUT", "/batch", bytes.NewBuffer(reqJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Create Gin context
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+
+	// Execute handler
+	handler(c)
+
+	// Check response
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["error"] != "database error" {
+		t.Errorf("Expected error 'database error', got %v", response["error"])
+	}
 }

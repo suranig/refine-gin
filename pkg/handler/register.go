@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/suranig/refine-gin/pkg/dto"
 	"github.com/suranig/refine-gin/pkg/middleware"
+	"github.com/suranig/refine-gin/pkg/naming"
 	"github.com/suranig/refine-gin/pkg/repository"
 	"github.com/suranig/refine-gin/pkg/resource"
 )
@@ -168,10 +169,11 @@ func RegisterResourceForRefine(router *gin.RouterGroup, res resource.Resource, r
 	// Add OPTIONS method to cache config
 	cacheConfig.Methods = append(cacheConfig.Methods, "OPTIONS")
 
-	// Create resource router with naming convention middleware - default to camelCase for Refine.dev
+	// Create resource router with naming convention middleware using RefineConfig
+	refineConfig := naming.DefaultRefineConfig()
 	resourceRouter := router.Group("/"+res.GetName(),
-		middleware.NamingConventionMiddleware(resource.DefaultOptions().NamingConvention),
-		middleware.CacheByResource(res.GetName(), cacheConfig), // Dodaj middleware cache dla całego zasobu
+		middleware.NamingConventionMiddleware(string(refineConfig.NamingConvention)),
+		middleware.CacheByResource(res.GetName(), cacheConfig), // Add cache middleware for the entire resource
 	)
 
 	// Register OPTIONS handler for resource metadata
